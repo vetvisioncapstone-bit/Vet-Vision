@@ -1,0 +1,861 @@
+/* ==================== ANIMATIONS ==================== */
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-20px);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-15px);
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+@keyframes pawBounce {
+    0%, 100% {
+        transform: rotate(0deg) translateY(0);
+    }
+    25% {
+        transform: rotate(-15deg) translateY(-10px);
+    }
+    75% {
+        transform: rotate(15deg) translateY(-10px);
+    }
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes glow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+    }
+}
+
+@keyframes heartBeat {
+    0%, 100% {
+        transform: scale(1);
+    }
+    14% {
+        transform: scale(1.1);
+    }
+    28% {
+        transform: scale(1);
+    }
+    42% {
+        transform: scale(1.1);
+    }
+    70% {
+        transform: scale(1);
+    }
+}
+
+/* ==================== BASE STYLES ==================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f0f4f1;
+    height: 100vh;
+    animation: fadeIn 0.8s ease-in;
+}
+
+.container {
+    display: flex;
+    height: 100vh;
+    max-width: 100%;
+}
+
+/* ==================== LEFT SECTION ==================== */
+
+.left-section {
+    flex: 1;
+    background: #fbfdfb;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    position: relative;
+    overflow: hidden;
+    animation: slideInLeft 0.8s ease-out;
+}
+
+.left-section::before {
+    content: '';
+    position: absolute;
+    left: -15%;
+    bottom: -10%;
+    width: 85%;
+    height: 75%;
+    background: linear-gradient(135deg, #eaf6ec 0%, #d3ebd7 100%);
+    border-radius: 62% 38% 35% 65% / 58% 32% 68% 42%;
+    z-index: 0;
+}
+
+.paw-print {
+    position: absolute;
+    opacity: 0.15;
+    font-size: 80px;
+    color: #4caf50;
+    animation: pawBounce 4s ease-in-out infinite;
+}
+
+.paw-1 { 
+    top: 10%; 
+    left: 5%; 
+    transform: rotate(-20deg);
+    animation-delay: 0s;
+}
+
+.paw-2 { 
+    top: 70%; 
+    right: 10%; 
+    transform: rotate(30deg);
+    animation-delay: 0.5s;
+}
+
+.paw-3 { 
+    bottom: 20%; 
+    left: 15%; 
+    transform: rotate(-45deg);
+    animation-delay: 1s;
+}
+
+.left-content {
+    z-index: 2;
+    text-align: center;
+    animation: slideInUp 0.8s ease-out 0.2s backwards;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 40px;
+    font-size: 24px;
+    font-weight: bold;
+    color: #2d5f4f;
+    animation: slideInUp 0.8s ease-out 0.3s backwards;
+}
+
+.logo-img {
+    height: 48px;
+    display: inline-block;
+    animation: float 3s ease-in-out infinite;
+}
+
+.pet-image {
+    width: 420px;
+    height: 420px;
+    margin: 20px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: slideInUp 0.8s ease-out 0.4s backwards;
+    transition: transform 0.5s ease;
+}
+
+.pet-image:hover {
+    transform: scale(1.05);
+}
+
+.pet-image img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.tagline {
+    font-size: 18px;
+    color: #3d7a5d;
+    font-weight: 500;
+    margin-bottom: 10px;
+    line-height: 1.6;
+    animation: slideInUp 0.8s ease-out 0.5s backwards;
+    transition: all 0.3s ease;
+}
+
+.tagline:hover {
+    color: #2d5f4f;
+    transform: scale(1.02);
+}
+
+.tagline-highlight {
+    color: #4caf50;
+    font-weight: 700;
+    position: relative;
+    display: inline-block;
+}
+
+.tagline-highlight::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -4px;
+    width: 100%;
+    height: 3px;
+    background: #4caf50;
+    border-radius: 3px;
+}
+
+/* ==================== RIGHT SECTION ==================== */
+
+.right-section {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    background: #fbfdfb;
+    animation: slideInRight 0.8s ease-out;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 400px;
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: 0 2px 8px rgba(20, 40, 30, 0.05), 0 12px 32px rgba(20, 40, 30, 0.08);
+    animation: slideInUp 0.8s ease-out 0.2s backwards;
+}
+
+.welcome-text {
+    margin-bottom: 30px;
+}
+
+.welcome-text h1 {
+    font-size: 28px;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+    font-weight: bold;
+    animation: slideInRight 0.6s ease-out 0.3s backwards;
+}
+
+.welcome-text p {
+    color: #666;
+    font-size: 14px;
+    animation: slideInRight 0.6s ease-out 0.4s backwards;
+}
+
+.form-group {
+    margin-bottom: 20px;
+    animation: slideInUp 0.6s ease-out backwards;
+}
+
+.form-group:nth-child(1) {
+    animation-delay: 0.5s;
+}
+
+.form-group:nth-child(2) {
+    animation-delay: 0.6s;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 8px;
+    color: #333;
+    font-size: 14px;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.form-input {
+    width: 100%;
+    padding: 13px 15px 13px 42px;
+    border: 1px solid #e6e6e6;
+    border-radius: 10px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    background: #fafafa;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #4caf50;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+    animation: glow 1s ease-in-out infinite;
+}
+
+.form-input::placeholder {
+    color: #aaa;
+    transition: color 0.3s ease;
+}
+
+.form-input:focus::placeholder {
+    color: #4caf50;
+}
+
+.input-icon {
+    position: absolute;
+    left: 14px;
+    display: inline-flex;
+    color: #888;
+    opacity: 0.7;
+    pointer-events: none;
+    transition: all 0.3s ease;
+}
+
+.input-icon svg {
+    width: 17px;
+    height: 17px;
+}
+
+.input-wrapper:focus-within .input-icon {
+    color: #4caf50;
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.form-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    font-size: 14px;
+    animation: slideInUp 0.6s ease-out 0.7s backwards;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.checkbox-group:hover {
+    transform: translateX(5px);
+}
+
+.checkbox-group input[type="checkbox"] {
+    accent-color: #4caf50;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+    width: 18px;
+    height: 18px;
+}
+
+.checkbox-group input[type="checkbox"]:checked {
+    animation: pulse 0.3s ease;
+}
+
+.checkbox-group label {
+    cursor: pointer;
+    color: #333;
+    user-select: none;
+}
+
+.forgot-password {
+    color: #4caf50;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.forgot-password::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: #4caf50;
+    transition: width 0.3s ease;
+}
+
+.forgot-password:hover {
+    color: #388e3c;
+}
+
+.forgot-password:hover::after {
+    width: 100%;
+}
+
+.login-btn {
+    width: 100%;
+    padding: 14px;
+    background: #2d7a4d;
+    color: white;
+    border: none;
+    border-radius: 30px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+    animation: slideInUp 0.6s ease-out 0.8s backwards;
+}
+
+.login-btn:hover {
+    background: #1e5a3a;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(45, 122, 77, 0.4);
+}
+
+.login-btn:active {
+    transform: translateY(-1px);
+}
+
+.login-btn:disabled {
+    background: #999;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.login-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    transition: left 0.5s ease;
+}
+
+.login-btn:hover::before {
+    left: 100%;
+}
+
+.paw-icon {
+    display: inline-flex;
+    animation: pawBounce 1.5s ease-in-out infinite;
+}
+
+.paw-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.login-btn:hover .paw-icon {
+    animation: spin 0.6s ease-out;
+}
+
+.btn-text {
+    display: inline-block;
+    transition: all 0.3s ease;
+}
+
+/* Loading state for button */
+.login-btn.loading {
+    pointer-events: none;
+}
+
+.login-btn.loading .paw-icon {
+    animation: spin 1s linear infinite !important;
+}
+
+.login-btn.loading .btn-text {
+    opacity: 0;
+    position: absolute;
+}
+
+.footer-text {
+    text-align: center;
+    color: #999;
+    font-size: 12px;
+    margin-top: 20px;
+    animation: slideInUp 0.6s ease-out 0.9s backwards;
+    transition: all 0.3s ease;
+}
+
+.footer-text:hover {
+    color: #4caf50;
+    transform: scale(1.05);
+}
+
+.footer-icon {
+    margin-right: 4px;
+    display: inline-flex;
+    vertical-align: middle;
+    transition: transform 0.3s ease;
+}
+
+.footer-icon svg {
+    width: 13px;
+    height: 13px;
+}
+
+.footer-text:hover .footer-icon {
+    transform: scale(1.3);
+}
+
+/* ==================== RESPONSIVE DESIGN ==================== */
+
+@media (max-width: 768px) {
+    html, body {
+        height: auto;
+    }
+
+    .container {
+        height: auto;
+        min-height: 100vh;
+        flex-direction: column;
+    }
+
+    .left-section {
+        min-height: 40vh;
+        padding: 20px;
+        animation: slideInUp 0.8s ease-out;
+    }
+
+    .pet-image {
+        width: 260px;
+        height: 260px;
+    }
+
+    .tagline {
+        font-size: 16px;
+    }
+
+    .right-section {
+        min-height: 60vh;
+        padding: 30px 20px;
+        animation: slideInDown 0.8s ease-out;
+    }
+
+    .login-card {
+        max-width: 100%;
+    }
+
+    .paw-print {
+        font-size: 60px;
+    }
+}
+
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==================== PASSWORD VISIBILITY TOGGLE ==================== */
+
+.password-input-wrapper .form-input {
+    padding-right: 42px;
+}
+
+/* Hide the browser's own built-in reveal/clear icons (e.g. Edge) so only
+   our custom eye toggle shows in the password field. */
+.password-input-wrapper .form-input::-ms-reveal,
+.password-input-wrapper .form-input::-ms-clear {
+    display: none;
+}
+
+.password-input-wrapper .form-input::-webkit-credentials-auto-fill-button,
+.password-input-wrapper .form-input::-webkit-strong-password-auto-fill-button {
+    display: none !important;
+}
+
+.toggle-password {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #4caf50;
+    transition: all 0.3s ease;
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toggle-password svg {
+    width: 18px;
+    height: 18px;
+}
+
+.toggle-password .icon-eye-off,
+.toggle-password.is-visible .icon-eye {
+    display: none;
+}
+
+.toggle-password.is-visible .icon-eye-off {
+    display: block;
+}
+
+.toggle-password:hover {
+    color: #2d7a4d;
+    transform: translateY(-50%) scale(1.2);
+    animation: pulse 0.5s ease;
+}
+
+.toggle-password:active {
+    animation: spin 0.4s ease-out;
+}
+
+/* ==================== FORM VALIDATION STATES ==================== */
+
+.form-input.error {
+    border-color: #ff6b6b;
+    background: #fff5f5;
+}
+
+#email.error {
+    border-bottom: 3px solid #ff6b6b;
+}
+
+.form-input.error:focus {
+    box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
+}
+
+.email-input-wrapper .form-input {
+    padding-right: 42px;
+}
+
+.input-warning-icon {
+    position: absolute;
+    right: 14px;
+    display: none;
+    color: #ff6b6b;
+    pointer-events: none;
+}
+
+.input-warning-icon svg {
+    width: 17px;
+    height: 17px;
+}
+
+.form-input.error ~ .input-warning-icon {
+    display: inline-flex;
+}
+
+.field-hint {
+    display: none;
+    margin: -14px 0 20px;
+    font-size: 12px;
+    color: #ff6b6b;
+}
+
+.field-hint.show {
+    display: block;
+}
+
+.form-input.success {
+    border-color: #51cf66;
+    background: #f1fdf4;
+}
+
+.form-input.success:focus {
+    box-shadow: 0 0 0 3px rgba(81, 207, 102, 0.1);
+}
+
+/* ==================== LOGIN ERROR BANNER ==================== */
+
+.login-alert {
+    animation: slideInDown 0.4s ease-out;
+    padding: 13px 16px;
+    background: #fff5f5;
+    border: 2px solid #ff6b6b;
+    border-radius: 6px;
+    color: #c92a2a;
+    margin-bottom: 20px;
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+/* ==================== SUCCESS STATE ==================== */
+
+.success-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 30, 25, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 1000;
+    opacity: 0;
+    animation: fadeIn 0.25s ease-out forwards;
+}
+
+.success-overlay.closing {
+    animation: fadeOut 0.3s ease-in forwards;
+}
+
+.success-popup {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 36px 32px;
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+    transform: scale(0.9);
+    opacity: 0;
+    animation: popIn 0.35s ease-out 0.05s forwards;
+}
+
+.success-popup-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    background: #f1fdf4;
+    border: 2px solid #51cf66;
+    color: #2f9e44;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.success-popup-icon svg {
+    width: 28px;
+    height: 28px;
+}
+
+.success-popup h3 {
+    font-size: 19px;
+    font-weight: 700;
+    color: #2f9e44;
+    margin-bottom: 10px;
+}
+
+.success-popup p {
+    font-size: 14px;
+    color: #555;
+    line-height: 1.6;
+}
+
+.success-popup .remember-note {
+    margin-top: 6px;
+    color: #2f9e44;
+    font-weight: 500;
+}
+
+@keyframes fadeOut {
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes popIn {
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* ==================== SCROLLBAR STYLING ==================== */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4caf50;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #2d7a4d;
+}

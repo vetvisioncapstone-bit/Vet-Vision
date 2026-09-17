@@ -1,0 +1,26 @@
+@import './animations.css';
+@import './left-section.css';
+@import './right-section.css';
+@import './form-validation.css';
+@import './button.css';
+@import './success-overlay.css';
+@import './responsive.css';
+
+/* ==================== GLOBAL STYLES ==================== */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #f0f4f1;
+  height: 100vh;
+  animation: fadeIn 0.8s ease-in;
+}
+
+#root {
+  height: 100%;
+}

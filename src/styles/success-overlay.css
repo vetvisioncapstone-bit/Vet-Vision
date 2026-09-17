@@ -1,0 +1,68 @@
+/* ==================== SUCCESS OVERLAY ==================== */
+
+.success-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 30, 25, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 1000;
+    opacity: 0;
+    animation: fadeIn 0.25s ease-out forwards;
+}
+
+.success-overlay.closing {
+    animation: fadeOut 0.3s ease-in forwards;
+}
+
+.success-popup {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 36px 32px;
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+    transform: scale(0.9);
+    opacity: 0;
+    animation: popIn 0.35s ease-out 0.05s forwards;
+}
+
+.success-popup-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    background: #f1fdf4;
+    border: 2px solid #51cf66;
+    color: #2f9e44;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.success-popup-icon svg {
+    width: 28px;
+    height: 28px;
+}
+
+.success-popup h3 {
+    font-size: 19px;
+    font-weight: 700;
+    color: #2f9e44;
+    margin-bottom: 10px;
+}
+
+.success-popup p {
+    font-size: 14px;
+    color: #555;
+    line-height: 1.6;
+}
+
+.success-popup .remember-note {
+    margin-top: 6px;
+    color: #2f9e44;
+    font-weight: 500;
+}

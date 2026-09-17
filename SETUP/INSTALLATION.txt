@@ -1,0 +1,136 @@
+🚀 VET VISION REACT - INSTALLATION GUIDE
+
+═══════════════════════════════════════════════════════════════
+
+📋 THREE WAYS TO GET STARTED:
+
+═══════════════════════════════════════════════════════════════
+
+OPTION 1: FASTEST (Recommended)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Double-click: install-and-run.bat
+
+This script will:
+✓ Check for Node.js
+✓ Install all dependencies (npm install)
+✓ Start the dev server (npm run dev)
+✓ Open the app in your browser
+
+Just wait for it to start, then test the login!
+
+═══════════════════════════════════════════════════════════════
+
+OPTION 2: MANUAL (Two Steps)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Step 1: Double-click install.bat
+        (Installs dependencies only)
+
+Step 2: Double-click start.bat
+        (Starts the dev server)
+
+═══════════════════════════════════════════════════════════════
+
+OPTION 3: COMMAND LINE (Advanced)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Open Command Prompt (cmd.exe)
+2. Navigate to project:
+   cd "c:\Users\Jomar Ichiro\Desktop\VET Vision"
+3. Install:
+   npm install
+4. Start:
+   npm run dev
+
+═══════════════════════════════════════════════════════════════
+
+✅ REQUIREMENTS
+
+✓ Node.js 14+ installed
+  Check: node --version
+  Download: https://nodejs.org/
+
+✓ npm installed (comes with Node.js)
+  Check: npm --version
+
+✓ ~200MB disk space for node_modules
+
+═══════════════════════════════════════════════════════════════
+
+🔐 TEST CREDENTIALS
+
+After starting the dev server:
+
+Email:    junejerichohumarang@ecovet.ph
+Password: Vetvision2026!
+
+═══════════════════════════════════════════════════════════════
+
+⏱️ EXPECTED TIMES
+
+npm install:  2-5 minutes (first time only)
+npm run dev:  ~30 seconds to start
+Browser:      Automatically opens after server starts
+
+═══════════════════════════════════════════════════════════════
+
+🐛 TROUBLESHOOTING
+
+Problem: "npm is not recognized"
+Solution: Install Node.js from https://nodejs.org/
+
+Problem: Port 5173 already in use
+Solution: Kill existing process or use different port:
+         npm run dev -- --port 3000
+
+Problem: node_modules folder huge
+Solution: Normal! ~400MB is typical for React projects
+
+Problem: Batch script doesn't work
+Solution: Use Option 3 (Command Prompt) instead
+
+═══════════════════════════════════════════════════════════════
+
+📚 WHAT HAPPENS WHEN YOU START
+
+1. Vite dev server starts
+2. Browser opens to http://localhost:5173
+3. You see the login page
+4. Edit any file and see changes instantly (Hot Reload)
+
+═══════════════════════════════════════════════════════════════
+
+🎯 QUICK CHECKLIST
+
+Before starting:
+☐ Node.js installed (node --version)
+☐ In correct directory (VET Vision folder)
+☐ ~200MB free disk space
+
+Starting:
+☐ Double-click install-and-run.bat
+☐ Wait for "ready in Xms" message
+☐ Browser opens to http://localhost:5173
+☐ See the VET Vision login page
+
+Testing:
+☐ Enter test email & password
+☐ Try form validation
+☐ Check animations work
+☐ Test password visibility toggle
+
+═══════════════════════════════════════════════════════════════
+
+✨ YOU'RE READY!
+
+Pick one of the three options above and follow the steps.
+
+Questions? Check the documentation files:
+- SETUP_GUIDE.md
+- QUICK_START.md
+- README_REACT.md
+
+Happy coding! 🐾
+
+═══════════════════════════════════════════════════════════════
