@@ -1,6 +1,7 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
+import RequireRole from './components/shared/RequireRole'
 import AdminLayout from './components/shared/AdminLayout'
 import EmployeeLayout from './components/shared/EmployeeLayout'
 import AdminDashboard from './pages/admin/Dashboard'
@@ -25,7 +26,7 @@ function App() {
       <Routes>
         <Route path="/" element={<LoginPage />} />
 
-        <Route path="/admin" element={<AdminLayout />}>
+        <Route path="/admin" element={<RequireRole role="admin"><AdminLayout /></RequireRole>}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="sales-analytics" element={<AdminSalesAnalytics />} />
@@ -38,7 +39,7 @@ function App() {
           <Route path="system-settings" element={<AdminSystemSettings />} />
         </Route>
 
-        <Route path="/employee" element={<EmployeeLayout />}>
+        <Route path="/employee" element={<RequireRole role="employee"><EmployeeLayout /></RequireRole>}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<EmployeeDashboard />} />
           <Route path="feed" element={<EmployeeFeed />} />

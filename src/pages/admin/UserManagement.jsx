@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useStaffAccounts } from '../../hooks/useStaffAccounts'
 import { useToast } from '../../components/shared/Toast'
+import { errorMessage } from '../../api/client'
 import '../../styles/admin/user-management.css'
 
 const EMPTY_FORM = {
@@ -34,12 +35,20 @@ function isPasswordStrong(value) {
     /[^A-Za-z0-9]/.test(value)
 }
 
+function formatLastLogin(value) {
+  if (!value || value === 'Never') return 'Never'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return String(value)
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
 function isValidStaffEmail(email) {
   return email.toLowerCase().endsWith('@ecovet.ph')
 }
 
 export default function UserManagement() {
-  const [accounts, setAccounts] = useStaffAccounts()
+  const { items: accounts, loading, create, update, remove } = useStaffAccounts()
+  const [submitting, setSubmitting] = useState(false)
   const showToast = useToast()
 
   const [searchTerm, setSearchTerm] = useState('')
@@ -57,6 +66,8 @@ export default function UserManagement() {
   const photoInputRef = useRef(null)
 
   const isEditing = Boolean(editingId)
+  const editingAccount = isEditing ? accounts.find(a => a.id === editingId) : null
+  const passwordRequired = !isEditing || editingAccount?.hasLogin === false
 
   const visibleAccounts = useMemo(() => {
     if (!searchTerm) return accounts
@@ -81,12 +92,12 @@ export default function UserManagement() {
   // the password strong/match rules (which are optional-and-skipped when
   // editing and the password field was left blank) every time the form changes.
   useEffect(() => {
-    const passwordOptionalAndBlank = isEditing && form.password === ''
+    const passwordOptionalAndBlank = !passwordRequired && form.password === ''
     const strong = passwordOptionalAndBlank || isPasswordStrong(form.password)
     const match = passwordOptionalAndBlank || (form.password.length > 0 && form.password === form.confirmPassword)
     const formValid = formRef.current ? formRef.current.checkValidity() : false
     setCanSubmit(formValid && strong && match)
-  }, [form, isEditing])
+  }, [form, isEditing, passwordRequired])
 
   useEffect(() => {
     function handleKeyDown(e) {
@@ -164,13 +175,14 @@ export default function UserManagement() {
     if (photoInputRef.current) photoInputRef.current.value = ''
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
+    if (submitting) return
 
     const email = form.email.trim().toLowerCase()
     const password = form.password
     const confirmPassword = form.confirmPassword
-    const keepingExistingPassword = isEditing && password === ''
+    const keepingExistingPassword = !passwordRequired && password === ''
 
     if (!isValidStaffEmail(form.email.trim()) && form.email.trim() !== '') {
       setEmailValidation('error')
@@ -208,24 +220,31 @@ export default function UserManagement() {
       accountData.password = password
     }
 
-    if (isEditing) {
-      setAccounts(prev => prev.map(a => a.id === editingId ? { ...a, ...accountData } : a))
-      showToast(`"${accountData.name}"'s account was updated.`)
-    } else {
-      setAccounts(prev => {
-        const nextId = prev.reduce((max, a) => Math.max(max, a.id + 1), 1)
-        return [...prev, { id: nextId, role: 'Staff', lastLogin: 'Never', ...accountData }]
-      })
-      showToast(`"${accountData.name}" was added as staff.`)
+    setSubmitting(true)
+    try {
+      if (isEditing) {
+        await update(editingId, accountData)
+        showToast(`"${accountData.name}"'s account was updated.`)
+      } else {
+        await create(accountData)
+        showToast(`"${accountData.name}" was added as staff.`)
+      }
+      closeAccountModal()
+    } catch (err) {
+      showToast(errorMessage(err))
+    } finally {
+      setSubmitting(false)
     }
-
-    closeAccountModal()
   }
 
-  function handleDelete(account) {
+  async function handleDelete(account) {
     if (!confirm(`Remove "${account.name}"'s account?`)) return
-    setAccounts(prev => prev.filter(a => a.id !== account.id))
-    showToast(`"${account.name}" was removed.`)
+    try {
+      await remove(account.id)
+      showToast(`"${account.name}" was removed.`)
+    } catch (err) {
+      showToast(errorMessage(err))
+    }
   }
 
   function handleSort(columnLabel) {
@@ -274,7 +293,9 @@ export default function UserManagement() {
               </tr>
             </thead>
             <tbody>
-              {accounts.length === 0 ? (
+              {loading && accounts.length === 0 ? (
+                <tr><td colSpan="6" className="empty-state">Loading accounts...</td></tr>
+              ) : accounts.length === 0 ? (
                 <tr><td colSpan="6" className="empty-state">No accounts yet. Click "+ New" to add one.</td></tr>
               ) : visibleAccounts.length === 0 ? (
                 <tr><td colSpan="6" className="empty-state">No accounts match your search.</td></tr>
@@ -289,7 +310,7 @@ export default function UserManagement() {
                   <td>{a.email}</td>
                   <td>{a.branch}</td>
                   <td><span className="role-pill">{a.position || 'Staff'}</span></td>
-                  <td>{a.lastLogin}</td>
+                  <td>{formatLastLogin(a.lastLogin)}</td>
                   <td className="action-col">
                     <div className="account-row-actions" onClick={(e) => e.stopPropagation()}>
                       <button type="button" className="account-row-action-btn edit" aria-label="Edit account" onClick={() => openEditAccountModal(a)}>
@@ -401,11 +422,12 @@ export default function UserManagement() {
               <div className="account-form-col account-form-col-noheading">
                 <div className="form-group">
                   <label className="form-label" htmlFor="staffPassword">Password <span className="required">*</span></label>
-                  <p className="field-hint" hidden={!isEditing}>Leave blank to keep their current password.</p>
+                  <p className="field-hint" hidden={passwordRequired}>Leave blank to keep their current password.</p>
+                  <p className="field-hint" hidden={!(isEditing && passwordRequired)}>This account has no login yet. Set a password to create one.</p>
                   <div className="password-input-wrapper">
                     <input
                       type={showPassword ? 'text' : 'password'} id="staffPassword" className="form-input" minLength={8}
-                      required={!isEditing}
+                      required={passwordRequired}
                       value={form.password} onChange={(e) => setForm(f => ({ ...f, password: e.target.value }))}
                     />
                     <button
@@ -435,7 +457,7 @@ export default function UserManagement() {
                   <div className="password-input-wrapper">
                     <input
                       type={showConfirmPassword ? 'text' : 'password'} id="staffConfirmPassword" className="form-input"
-                      required={!isEditing}
+                      required={passwordRequired}
                       value={form.confirmPassword} onChange={(e) => setForm(f => ({ ...f, confirmPassword: e.target.value }))}
                     />
                     <button
@@ -516,7 +538,7 @@ export default function UserManagement() {
             </div>
 
             <div className="account-form-actions">
-              <button type="submit" className="account-submit-btn" disabled={!canSubmit}>{isEditing ? 'Save changes' : 'Submit'}</button>
+              <button type="submit" className="account-submit-btn" disabled={!canSubmit || submitting}>{isEditing ? 'Save changes' : 'Submit'}</button>
               <button type="button" className="account-cancel-btn" onClick={closeAccountModal}>Cancel</button>
             </div>
           </form>

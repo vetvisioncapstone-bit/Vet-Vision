@@ -88,20 +88,17 @@ function LoginForm({ onLogin }) {
     setIsLoading(true)
     setLoginError('')
 
-    // Simulate API call
-    setTimeout(() => {
-      const result = onLogin(email, password, remember)
-      
-      if (!result.success) {
-        setEmailError(true)
-        setPasswordError(true)
-        setLoginError(result.message)
-        shakeElement('email')
-        shakeElement('password')
-        setIsLoading(false)
-      }
-      // If success, loading state continues until redirect
-    }, 2000)
+    const result = await onLogin(email, password, remember)
+
+    if (!result.success) {
+      setEmailError(true)
+      setPasswordError(true)
+      setLoginError(result.message)
+      shakeElement('email')
+      shakeElement('password')
+      setIsLoading(false)
+    }
+    // If success, loading state continues until redirect
   }
 
   const resetForm = () => {

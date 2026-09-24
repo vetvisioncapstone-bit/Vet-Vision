@@ -66,3 +66,12 @@ def test_admin_deletes_consultation(staff_ibaan, admin):
     assert c.delete(f"/api/consultations/{cid}/").status_code == 403
     assert client_for(admin).delete(f"/api/consultations/{cid}/").status_code == 204
     assert not MedicalRecord.objects.exists()
+
+
+def test_status_filter_for_the_notification_bell(staff_ibaan):
+    c = client_for(staff_ibaan)
+    a = c.post("/api/patients/", PATIENT).data["id"]
+    c.post("/api/patients/", {**PATIENT, "ownerEmail": "b@example.com", "petName": "Two"})
+    c.post(f"/api/patients/{a}/consultations/", consult(followUp=True, followUpNote="Vaccination"))
+    rows = c.get("/api/patients/?status=Follow-up needed").data
+    assert [r["id"] for r in rows] == [a]

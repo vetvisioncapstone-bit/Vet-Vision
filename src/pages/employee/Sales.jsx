@@ -1,25 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useInventory } from '../../hooks/useInventory'
 import { useSales } from '../../hooks/useSales'
-import { useSession } from '../../hooks/useSession'
 import { useEmployeeContext } from '../../hooks/useEmployeeContext'
 import { useToast } from '../../components/shared/Toast'
+import { errorMessage } from '../../api/client'
 import '../../styles/employee/employee-sales.css'
 
 // ==================== HELPERS ====================
-// Ported from employee-sales.js - reads/writes 'vvInventoryProducts' (to
-// deduct stock on a completed sale) and owns 'vvSales' (branch-scoped),
-// which the employee dashboard's chart reads from.
+// Sales are recorded through the API; the server validates stock and the
+// database deducts it, so nothing is decremented client-side.
 
 function formatPrice(amount) {
   return `₱${Number(amount || 0).toFixed(2)}`
 }
 
 export default function Sales() {
-  const [products, setProducts] = useInventory()
-  const [sales, setSales] = useSales()
-  const { session } = useSession()
-  const { branch, name } = useEmployeeContext()
+  const { items: products, loading: inventoryLoading } = useInventory()
+  const { items: branchSales, loading: salesLoading, create: createSale } = useSales({ limit: 8 })
+  const { branch } = useEmployeeContext()
   const showToast = useToast()
 
   const [now, setNow] = useState(() => new Date())
@@ -32,12 +30,13 @@ export default function Sales() {
   const [selectedProductId, setSelectedProductId] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [price, setPrice] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const branchProducts = useMemo(() => products.filter(p => p.branch === branch), [products, branch])
   const inStockProducts = useMemo(() => branchProducts.filter(p => p.quantity > 0), [branchProducts])
 
-  function getCartQuantity(productId) {
-    const line = cartItems.find(i => i.productId === productId)
+  function getCartQuantity(inventoryId) {
+    const line = cartItems.find(i => i.inventoryId === inventoryId)
     return line ? line.quantity : 0
   }
 
@@ -46,7 +45,7 @@ export default function Sales() {
   }
 
   const selectedProduct = useMemo(
-    () => branchProducts.find(p => p.id === Number(selectedProductId)) || null,
+    () => branchProducts.find(p => p.id === selectedProductId) || null,
     [branchProducts, selectedProductId]
   )
   const available = selectedProduct ? getAvailableStock(selectedProduct) : null
@@ -63,8 +62,8 @@ export default function Sales() {
   }, [inStockProducts])
 
   function handleAddToCart() {
-    const productId = Number(selectedProductId)
-    const product = branchProducts.find(p => p.id === productId)
+    const inventoryId = selectedProductId
+    const product = branchProducts.find(p => p.id === inventoryId)
     const qty = Number(quantity)
     const unitPrice = Number(price)
 
@@ -88,13 +87,13 @@ export default function Sales() {
     }
 
     setCartItems(prev => {
-      const existingIndex = prev.findIndex(i => i.productId === productId)
+      const existingIndex = prev.findIndex(i => i.inventoryId === inventoryId)
       if (existingIndex >= 0) {
         const next = [...prev]
         next[existingIndex] = { ...next[existingIndex], quantity: next[existingIndex].quantity + qty, price: unitPrice }
         return next
       }
-      return [...prev, { productId, name: product.name, quantity: qty, price: unitPrice }]
+      return [...prev, { inventoryId, name: product.name, quantity: qty, price: unitPrice }]
     })
 
     setQuantity(1)
@@ -107,44 +106,20 @@ export default function Sales() {
 
   const cartTotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
 
-  function handleCompleteSale() {
-    if (cartItems.length === 0) return
-
-    for (const item of cartItems) {
-      const product = products.find(p => p.id === item.productId)
-      if (!product || product.quantity < item.quantity) {
-        showToast(`Not enough stock left for "${item.name}". Sale cancelled.`)
-        return
-      }
+  async function handleCompleteSale() {
+    if (cartItems.length === 0 || submitting) return
+    setSubmitting(true)
+    try {
+      const total = cartTotal
+      await createSale(cartItems.map(i => ({ inventoryId: i.inventoryId, quantity: i.quantity, price: i.price })))
+      showToast(`Sale completed — ${formatPrice(total)}.`)
+      setCartItems([])
+    } catch (err) {
+      showToast(errorMessage(err))
+    } finally {
+      setSubmitting(false)
     }
-
-    setProducts(prev => prev.map(p => {
-      const item = cartItems.find(i => i.productId === p.id)
-      return item ? { ...p, quantity: p.quantity - item.quantity } : p
-    }))
-
-    const total = cartTotal
-    const nextSaleId = sales.reduce((max, s) => Math.max(max, s.id + 1), 1)
-    setSales(prev => [...prev, {
-      id: nextSaleId,
-      branch,
-      staffId: session ? session.id : null,
-      staffName: name,
-      items: cartItems.slice(),
-      total,
-      createdAt: new Date().toISOString()
-    }])
-
-    showToast(`Sale completed — ${formatPrice(total)}.`)
-    setCartItems([])
   }
-
-  const branchSales = useMemo(() => {
-    return sales
-      .filter(s => s.branch === branch)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 8)
-  }, [sales, branch])
 
   return (
     <main className="content">
@@ -225,7 +200,7 @@ export default function Sales() {
                 </thead>
                 <tbody>
                   {cartItems.length === 0 ? (
-                    <tr><td colSpan="5" className="empty-state">No items added yet.</td></tr>
+                    <tr><td colSpan="5" className="empty-state">{inventoryLoading ? 'Loading...' : 'No items added yet.'}</td></tr>
                   ) : cartItems.map((item, index) => (
                     <tr key={index}>
                       <td>{item.name}</td>
@@ -248,7 +223,7 @@ export default function Sales() {
               <span>{formatPrice(cartTotal)}</span>
             </div>
 
-            <button type="button" className="complete-sale-btn" disabled={cartItems.length === 0} onClick={handleCompleteSale}>Complete sale</button>
+            <button type="button" className="complete-sale-btn" disabled={cartItems.length === 0 || submitting} onClick={handleCompleteSale}>{submitting ? 'Completing...' : 'Complete sale'}</button>
           </div>
         </div>
 
@@ -257,7 +232,9 @@ export default function Sales() {
           <div className="table-card">
             <h2>Recent sales</h2>
             <ul className="recent-sales-list">
-              {branchSales.length === 0 ? (
+              {salesLoading && branchSales.length === 0 ? (
+                <li className="empty-state">Loading...</li>
+              ) : branchSales.length === 0 ? (
                 <li className="empty-state">No sales recorded yet.</li>
               ) : branchSales.map(sale => (
                 <li className="recent-sale-item" key={sale.id}>

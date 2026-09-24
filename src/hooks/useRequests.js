@@ -1,78 +1,49 @@
-import { useCallback } from 'react'
-import { useLocalStorageState } from './useLocalStorageState'
+import { api } from '../api/client'
+import { invalidate, useResource } from '../api/store'
 import { useSession } from './useSession'
 
-export const DELETE_REQUESTS_KEY = 'vvDeleteRequests'
-export const RESTOCK_REQUESTS_KEY = 'vvRestockRequests'
-
-function makeRequestId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-// type: 'inventory-product' | 'patient' | 'consultation'.
-// extra: for 'consultation', { patientId } identifying the owning patient.
-export function useDeleteRequests() {
-  const [requests, setRequests] = useLocalStorageState(DELETE_REQUESTS_KEY, [])
+// Approval requests. Staff raise them; the admin queue is what the notification bell shows.
+// type: 'inventory-product' | 'patient' | 'consultation' (delete requests) | 'restock'.
+// targetId: the inventory row id / patient id / consultation id the request is about.
+// Queue item: { id, type, targetId, label, extra, productName, branch, requestedByName,
+//               requestedByBranch, requestedAt, status }.  Staff always get an empty queue.
+export function useApprovalRequests() {
   const { session } = useSession()
+  const { data, loading, error, reload } = useResource('/requests/', { enabled: !!session, refreshMs: 30000 })
+  const done = (targets = []) => Promise.all(['/requests/', ...targets].map(invalidate))
 
-  const raiseDeleteRequest = useCallback((type, targetId, label, extra) => {
-    setRequests(prev => [...prev, {
-      id: makeRequestId(),
-      type,
-      targetId,
-      label,
-      extra: extra || null,
-      requestedByName: session ? session.name : 'Unknown staff',
-      requestedByBranch: session ? session.branch : '',
-      requestedAt: new Date().toISOString()
-    }])
-  }, [session, setRequests])
-
-  const removeRequest = useCallback((requestId) => {
-    setRequests(prev => prev.filter(r => r.id !== requestId))
-  }, [setRequests])
-
-  return { deleteRequests: requests, raiseDeleteRequest, removeRequest }
+  return {
+    items: data || [],
+    loading,
+    error,
+    reload,
+    raise: async ({ type, targetId, label, extra }) => {
+      const r = await api.post('/requests/', { type, targetId: String(targetId), label, extra })
+      await done()
+      return r
+    },
+    // Approving a delete performs the delete on the server.
+    approve: async (id) => { await api.post(`/requests/${id}/approve/`); await done(['/inventory/', '/patients/']) },
+    deny: async (id) => { await api.post(`/requests/${id}/deny/`); await done() },
+    dismiss: async (id) => { await api.post(`/requests/${id}/dismiss/`); await done() }
+  }
 }
 
-export function useRestockRequests() {
-  const [requests, setRequests] = useLocalStorageState(RESTOCK_REQUESTS_KEY, [])
+// Which follow-up notifications this user has already opened ('petId|note' keys).
+export function useSeenFollowUps() {
   const { session } = useSession()
-
-  const raiseRestockRequest = useCallback((productId, productName, branch) => {
-    setRequests(prev => [...prev, {
-      id: makeRequestId(),
-      productId,
-      productName,
-      branch: branch || (session ? session.branch : ''),
-      requestedByName: session ? session.name : 'Unknown staff',
-      requestedAt: new Date().toISOString()
-    }])
-  }, [session, setRequests])
-
-  const dismissRestockRequest = useCallback((requestId) => {
-    setRequests(prev => prev.filter(r => r.id !== requestId))
-  }, [setRequests])
-
-  return { restockRequests: requests, raiseRestockRequest, dismissRestockRequest }
+  const { data } = useResource('/seen-followups/', { enabled: !!session })
+  return {
+    seenKeys: new Set(data || []),
+    markSeen: async (keys) => {
+      const fresh = keys.filter((k) => !(data || []).includes(k))
+      if (fresh.length === 0) return
+      await api.post('/seen-followups/', { keys: fresh })
+      await invalidate('/seen-followups/')
+    }
+  }
 }
-
-export const SEEN_FOLLOWUPS_KEY = 'vvSeenFollowUps'
 
 export function followUpSeenKey(patient) {
   return `${patient.id}|${patient.followUpNote || ''}`
-}
-
-export function useSeenFollowUps() {
-  const [seenKeysArray, setSeenKeysArray] = useLocalStorageState(SEEN_FOLLOWUPS_KEY, [])
-
-  const markSeen = useCallback((patients) => {
-    setSeenKeysArray(prev => {
-      const seen = new Set(prev)
-      patients.forEach(p => seen.add(followUpSeenKey(p)))
-      return [...seen]
-    })
-  }, [setSeenKeysArray])
-
-  return { seenKeys: new Set(seenKeysArray), markSeen }
 }

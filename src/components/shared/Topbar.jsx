@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../hooks/useSession'
-import { useAdminProfile } from '../../hooks/useAdminProfile'
 import { useNotifications } from '../../hooks/useNotifications'
-import { getInitialsFromName } from '../../utils/auth'
+import { getInitialsFromName } from '../../utils/initials'
+import { useToast } from './Toast'
+import { errorMessage } from '../../api/client'
 
 function formatDate(isoString) {
   if (!isoString) return '—'
@@ -19,16 +20,23 @@ function escapeText(str) {
 export default function Topbar({ role, onToggleSidebar }) {
   const navigate = useNavigate()
   const { session, clearSession } = useSession()
-  const [adminProfile] = useAdminProfile()
+  const showToast = useToast()
   const notif = useNotifications()
 
   const [aboutOpen, setAboutOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
 
-  const isEmployeeSession = role === 'employee' && session
-  const displayName = isEmployeeSession ? session.name : adminProfile.name
-  const displayPhoto = isEmployeeSession ? (session.photo || null) : adminProfile.photo
+  const displayName = session?.name || ''
+  const displayPhoto = session?.photo || null
+
+  async function runAction(fn, id) {
+    try {
+      await fn(id)
+    } catch (err) {
+      showToast(errorMessage(err))
+    }
+  }
   const initials = getInitialsFromName(displayName)
 
   function closeAllPopovers() {
@@ -120,8 +128,8 @@ export default function Topbar({ role, onToggleSidebar }) {
                   <p className="notif-item-title">Delete request: {escapeText(r.label)}</p>
                   <p className="notif-item-sub">{escapeText(r.requestedByName)}{r.requestedByBranch ? ` · ${escapeText(r.requestedByBranch)}` : ''}</p>
                   <div className="notif-item-actions">
-                    <button type="button" className="notif-action-btn approve" onClick={() => notif.approveDeleteRequest(r.id)}>Approve</button>
-                    <button type="button" className="notif-action-btn deny" onClick={() => notif.denyDeleteRequest(r.id)}>Deny</button>
+                    <button type="button" className="notif-action-btn approve" onClick={() => runAction(notif.approveDeleteRequest, r.id)}>Approve</button>
+                    <button type="button" className="notif-action-btn deny" onClick={() => runAction(notif.denyDeleteRequest, r.id)}>Deny</button>
                   </div>
                 </div>
               ))}
@@ -131,7 +139,7 @@ export default function Topbar({ role, onToggleSidebar }) {
                   <p className="notif-item-title">Restock requested: {escapeText(r.productName)}</p>
                   <p className="notif-item-sub">{escapeText(r.requestedByName)}{r.branch ? ` · ${escapeText(r.branch)}` : ''}</p>
                   <div className="notif-item-actions">
-                    <button type="button" className="notif-action-btn" onClick={() => notif.dismissRestockRequest(r.id)}>Dismiss</button>
+                    <button type="button" className="notif-action-btn" onClick={() => runAction(notif.dismissRestockRequest, r.id)}>Dismiss</button>
                   </div>
                 </div>
               ))}

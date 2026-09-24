@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useEmployeeContext } from '../../hooks/useEmployeeContext'
 import { useEventPosts, useEventAvailability } from '../../hooks/useEvents'
-import { getInitialsFromName } from '../../utils/auth'
+import { getInitialsFromName } from '../../utils/initials'
 import '../../styles/admin/events.css'
 
 // ==================== HELPERS ====================
@@ -30,8 +30,8 @@ function Avatar({ name, photo }) {
 
 export default function Feed() {
   const { branch } = useEmployeeContext()
-  const [posts] = useEventPosts()
-  const [availability] = useEventAvailability()
+  const { items: posts, loading: postsLoading } = useEventPosts()
+  const { availability } = useEventAvailability()
 
   const [calendarViewDate, setCalendarViewDate] = useState(() => {
     const d = new Date()
@@ -102,7 +102,9 @@ export default function Feed() {
           </div>
 
           <div className="events-feed">
-            {posts.length === 0 ? (
+            {postsLoading && posts.length === 0 ? (
+              <p className="empty-state">Loading...</p>
+            ) : posts.length === 0 ? (
               <p className="empty-state">No announcements yet.</p>
             ) : posts.map(post => (
               <div className="post-card" key={post.id}>

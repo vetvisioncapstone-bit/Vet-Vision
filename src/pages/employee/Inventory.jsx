@@ -2,14 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useInventory } from '../../hooks/useInventory'
 import { useToast } from '../../components/shared/Toast'
 import { useEmployeeContext } from '../../hooks/useEmployeeContext'
-import { useDeleteRequests, useRestockRequests } from '../../hooks/useRequests'
+import { useApprovalRequests } from '../../hooks/useRequests'
+import { errorMessage } from '../../api/client'
 import '../../styles/admin/inventory.css'
 import '../../styles/employee/employee-inventory.css'
 
 // ==================== HELPERS ====================
-// Ported from employee-inventory.js - reads/writes the same
-// 'vvInventoryProducts' key the admin Inventory page uses, scoped to this
-// employee's own branch.
+// Rows come from the API, already scoped to this employee's branch by the server.
 
 function getStatus(product) {
   if (product.quantity <= 0) return { label: 'Out of stock', cls: 'status-out-of-stock' }
@@ -30,11 +29,11 @@ const EMPTY_FORM = {
 }
 
 export default function Inventory() {
-  const [products, setProducts] = useInventory()
+  const { items: products, loading, create, update } = useInventory()
+  const [saving, setSaving] = useState(false)
   const showToast = useToast()
   const { branch } = useEmployeeContext()
-  const { raiseDeleteRequest } = useDeleteRequests()
-  const { raiseRestockRequest } = useRestockRequests()
+  const { raise } = useApprovalRequests()
 
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
@@ -49,7 +48,7 @@ export default function Inventory() {
   const [form, setForm] = useState(EMPTY_FORM)
   const fileInputRef = useRef(null)
 
-  const branchProducts = useMemo(() => products.filter(p => p.branch === branch), [products, branch])
+  const branchProducts = products
   const visibleProducts = useMemo(() => {
     return branchProducts.filter(p =>
       !searchTerm || p.name.toLowerCase().includes(searchTerm) || p.category.toLowerCase().includes(searchTerm)
@@ -57,8 +56,13 @@ export default function Inventory() {
   }, [branchProducts, searchTerm])
 
   const statTotalItems = branchProducts.length
-  const statLowStock = branchProducts.filter(p => getStatus(p).label === 'Low stock').length
-  const statOutOfStock = branchProducts.filter(p => getStatus(p).label === 'Out of stock').length
+  let statLowStock = 0
+  let statOutOfStock = 0
+  for (const p of branchProducts) {
+    const label = getStatus(p).label
+    if (label === 'Low stock') statLowStock++
+    else if (label === 'Out of stock') statOutOfStock++
+  }
 
   function openAddModal() {
     setEditingId(null)
@@ -101,13 +105,14 @@ export default function Inventory() {
     reader.readAsDataURL(file)
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
+    if (saving) return
 
     const productData = {
       name: form.name.trim(),
       category: form.category.trim(),
-      branch,
+      branch, // ignored by the server; staff are forced to their own branch
       quantity: Number(form.quantity),
       reorderPoint: Number(form.reorderPoint),
       delivery: form.delivery,
@@ -115,27 +120,40 @@ export default function Inventory() {
       photo: form.photo
     }
 
-    if (editingId) {
-      setProducts(prev => prev.map(p => p.id === editingId ? { ...p, ...productData } : p))
-      showToast(`"${productData.name}" was updated.`)
-    } else {
-      const nextId = products.reduce((max, p) => Math.max(max, p.id + 1), 1)
-      setProducts(prev => [...prev, { id: nextId, ...productData }])
-      showToast(`"${productData.name}" was added.`)
+    setSaving(true)
+    try {
+      if (editingId) {
+        await update(editingId, productData)
+        showToast(`"${productData.name}" was updated.`)
+      } else {
+        await create(productData)
+        showToast(`"${productData.name}" was added.`)
+      }
+      closeModal()
+    } catch (err) {
+      showToast(errorMessage(err))
+    } finally {
+      setSaving(false)
     }
-
-    closeModal()
   }
 
-  function handleDeleteRequest(product) {
+  async function handleDeleteRequest(product) {
     if (!confirm(`Send a request to the admin to delete "${product.name}"?`)) return
-    raiseDeleteRequest('inventory-product', product.id, product.name, { branch: product.branch })
-    showToast(`Delete request for "${product.name}" sent to the admin.`)
+    try {
+      await raise({ type: 'inventory-product', targetId: product.id, label: product.name })
+      showToast(`Delete request for "${product.name}" sent to the admin.`)
+    } catch (err) {
+      showToast(errorMessage(err))
+    }
   }
 
-  function handleRestockRequest(product) {
-    raiseRestockRequest(product.id, product.name, product.branch)
-    showToast(`Restock request for "${product.name}" sent to the admin.`)
+  async function handleRestockRequest(product) {
+    try {
+      await raise({ type: 'restock', targetId: product.id, label: product.name })
+      showToast(`Restock request for "${product.name}" sent to the admin.`)
+    } catch (err) {
+      showToast(errorMessage(err))
+    }
   }
 
   return (
@@ -196,7 +214,9 @@ export default function Inventory() {
               </tr>
             </thead>
             <tbody>
-              {branchProducts.length === 0 ? (
+              {loading && branchProducts.length === 0 ? (
+                <tr><td colSpan="6" className="empty-state">Loading…</td></tr>
+              ) : branchProducts.length === 0 ? (
                 <tr><td colSpan="6" className="empty-state">No products for this branch yet. Click "+ New" to add one.</td></tr>
               ) : visibleProducts.length === 0 ? (
                 <tr><td colSpan="6" className="empty-state">No products match your search.</td></tr>
@@ -298,7 +318,7 @@ export default function Inventory() {
 
             <p className="form-hint">Status is worked out from Quantity vs. Reorder point. Deleting a product needs the admin's approval - use the trash icon to send a request.</p>
 
-            <button type="submit" className="modal-submit-btn">{editingId ? 'Save changes' : 'Add product'}</button>
+            <button type="submit" className="modal-submit-btn" disabled={saving}>{editingId ? 'Save changes' : 'Add product'}</button>
           </form>
         </div>
       </div>

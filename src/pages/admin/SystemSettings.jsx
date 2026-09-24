@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useToast } from '../../components/shared/Toast'
-import { useAdminProfile } from '../../hooks/useAdminProfile'
-import { getInitialsFromName } from '../../utils/auth'
+import { useAuth } from '../../hooks/useAuth'
+import { api, errorMessage } from '../../api/client'
+import { getInitialsFromName } from '../../utils/initials'
 import '../../styles/admin/system-settings.css'
 
 // ==================== STATE ====================
@@ -48,7 +49,9 @@ const EMPTY_EDIT_FORM = { name: '', email: '', newPassword: '', confirmPassword:
 
 export default function SystemSettings() {
   const showToast = useToast()
-  const [adminProfile, setAdminProfile] = useAdminProfile()
+  const { user, setUser } = useAuth()
+  const adminProfile = { name: user?.name || '', email: user?.email || '', photo: user?.photo || null }
+  const [saving, setSaving] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
 
   // ---- in-memory settings ----
@@ -132,10 +135,7 @@ export default function SystemSettings() {
 
   function handleVerifySubmit(e) {
     e.preventDefault()
-    if (verifyPassword !== adminProfile.password) {
-      setVerifyError(true)
-      return
-    }
+    // The server checks the current password when the changes are saved.
     showAdminEditStep()
   }
 
@@ -160,8 +160,9 @@ export default function SystemSettings() {
     if (photoInputRef.current) photoInputRef.current.value = ''
   }
 
-  function handleEditSubmit(e) {
+  async function handleEditSubmit(e) {
     e.preventDefault()
+    if (saving) return
 
     const name = editForm.name.trim()
     const email = editForm.email.trim().toLowerCase()
@@ -181,12 +182,26 @@ export default function SystemSettings() {
       }
     }
 
-    const updated = { ...adminProfile, name, email, photo: photoDataUrl }
-    if (newPassword) updated.password = newPassword
+    const payload = { name, email, photo: photoDataUrl, currentPassword: verifyPassword }
+    if (newPassword) payload.newPassword = newPassword
 
-    setAdminProfile(updated)
-    closeAdminEditModal()
-    showToast('Admin account updated.')
+    setSaving(true)
+    try {
+      const updated = await api.patch('/auth/me/', payload)
+      setUser(updated)
+      closeAdminEditModal()
+      showToast('Admin account updated.')
+    } catch (err) {
+      if (err?.status === 400 && err.data?.currentPassword) {
+        showToast(errorMessage(err))
+        showAdminVerifyStep()
+        setVerifyError(true)
+      } else {
+        showToast(errorMessage(err))
+      }
+    } finally {
+      setSaving(false)
+    }
   }
 
   // ==================== NUMBER / SELECT / TOGGLE FIELDS ====================
@@ -507,7 +522,7 @@ export default function SystemSettings() {
                 <p className="settings-field-error" hidden={!editPasswordError}>{editPasswordError}</p>
 
                 <div className="settings-admin-actions">
-                  <button type="submit" className="settings-primary-btn">Save changes</button>
+                  <button type="submit" className="settings-primary-btn" disabled={saving}>Save changes</button>
                 </div>
               </form>
             )}

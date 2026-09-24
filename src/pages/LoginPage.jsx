@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import LeftSection from '../components/LeftSection'
 import RightSection from '../components/RightSection'
 import SuccessOverlay from '../components/SuccessOverlay'
-import { getAdminProfile, getStaffAccounts, setSession } from '../utils/auth'
+import { useAuth } from '../hooks/useAuth'
 import '../styles/LoginPage.css'
 
 function LoginPage() {
@@ -24,49 +24,18 @@ function LoginPage() {
     console.log('%cTry pressing Escape to clear the form!', 'font-size: 12px; color: #666; font-style: italic;')
   }, [])
 
-  const handleLogin = (email, password, remember) => {
-    const adminProfile = getAdminProfile()
-    let matchedSession = null
+  const { login } = useAuth()
 
-    // Check admin credentials
-    if (email.toLowerCase() === adminProfile.email.toLowerCase() && password === adminProfile.password) {
-      matchedSession = { 
-        role: 'admin', 
-        name: adminProfile.name, 
-        email: adminProfile.email 
-      }
-    } else {
-      // Check staff credentials
-      const staffAccount = getStaffAccounts().find(
-        a => a.email.toLowerCase() === email.toLowerCase() && a.password === password
-      )
-      if (staffAccount) {
-        matchedSession = {
-          role: 'employee',
-          id: staffAccount.id,
-          name: staffAccount.name,
-          email: staffAccount.email,
-          branch: staffAccount.branch,
-          photo: staffAccount.photo || null
-        }
-      }
-    }
+  const handleLogin = async (email, password, remember) => {
+    const result = await login(email.trim(), password)
+    if (!result.success) return result
 
-    if (!matchedSession) {
-      return { success: false, message: 'Incorrect email or password.' }
-    }
-
-    // Set session
-    setSession(matchedSession)
     setSuccessData({ email, remember })
     setShowSuccess(true)
 
-    // Navigate after delay
+    // Navigate after the success overlay has had a moment
     setTimeout(() => {
-      const destination = matchedSession.role === 'admin' 
-        ? '/admin/dashboard' 
-        : '/employee/dashboard'
-      navigate(destination)
+      navigate(result.session.role === 'admin' ? '/admin/dashboard' : '/employee/dashboard')
     }, 1500)
 
     return { success: true }

@@ -82,6 +82,9 @@ def _pets(request):
     records = Prefetch("records", queryset=MedicalRecord.objects.order_by("record_date", "record_id"))
     qs = Pet.objects.select_related("customer__branch").prefetch_related(records)
     qs = scope_branch(qs, request.user, field="customer__branch_id", requested_town=request.query_params.get("branch"))
+    status_filter = request.query_params.get("status")
+    if status_filter:
+        qs = qs.filter(status=status_filter)
     return qs.order_by(F("created_at").desc(nulls_last=True), "pet_id")
 
 

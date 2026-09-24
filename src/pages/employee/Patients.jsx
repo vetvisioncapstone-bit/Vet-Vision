@@ -1,15 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { usePatients } from '../../hooks/usePatients'
 import { useToast } from '../../components/shared/Toast'
 import { useEmployeeContext } from '../../hooks/useEmployeeContext'
-import { useDeleteRequests } from '../../hooks/useRequests'
+import { useApprovalRequests } from '../../hooks/useRequests'
+import { errorMessage } from '../../api/client'
 import '../../styles/admin/inventory.css'
 import '../../styles/employee/employee-patients.css'
 
 // ==================== HELPERS ====================
-// Ported from employee-patients.js - reads/writes the same 'vvPatients' key
-// the admin Patients page uses, scoped to this employee's own branch. Only
+// Ported from employee-patients.js - uses the same API-backed patients as the
+// admin Patients page; the server scopes them to this employee's own branch. Only
 // a simplified consultation form is kept here (no availed-items pricing,
 // no blood-test/waiver upload, no follow-up flagging, no print) - matching
 // the reduced scope of the original employee-patients.html.
@@ -27,9 +28,15 @@ function todayIso() {
 }
 
 function getLastVisitDate(patient) {
-  if (!patient.consultations || patient.consultations.length === 0) return patient.createdAt
-  return patient.consultations.reduce((latest, c) => (c.date > latest ? c.date : latest), patient.consultations[0].date)
+  if (!patient.consultations || patient.consultations.length === 0) return patient.createdAt || ''
+  return patient.consultations.reduce((latest, c) => ((c.date || '') > latest ? c.date : latest), patient.consultations[0].date || '')
 }
+
+function dash(value) {
+  return value === null || value === undefined || value === '' ? '—' : value
+}
+
+const PAGE_SIZE = 50
 
 function getStatusClass(status) {
   switch (status) {
@@ -47,10 +54,13 @@ const EMPTY_PATIENT_FORM = {
 const EMPTY_CONSULT_FORM = { date: '', weight: '', notes: '', remarks: '' }
 
 export default function Patients() {
-  const [patients, setPatients] = usePatients()
+  const { items: patients, loading, create, update, addConsultation } = usePatients()
   const showToast = useToast()
   const { branch } = useEmployeeContext()
-  const { raiseDeleteRequest } = useDeleteRequests()
+  const { raise } = useApprovalRequests()
+  const [saving, setSaving] = useState(false)
+  const [page, setPage] = useState(1)
+  const deepLinkHandledRef = useRef(false)
   const [searchParams] = useSearchParams()
 
   const [now, setNow] = useState(() => new Date())
@@ -72,15 +82,23 @@ export default function Patients() {
   const visiblePatients = useMemo(() => {
     return branchPatients.filter(p => {
       if (!searchTerm) return true
-      const ownerFullName = `${p.ownerName} ${p.ownerSurname}`.toLowerCase()
-      return p.petName.toLowerCase().includes(searchTerm)
+      const ownerFullName = `${p.ownerName || ''} ${p.ownerSurname || ''}`.toLowerCase()
+      return (p.petName || '').toLowerCase().includes(searchTerm)
         || ownerFullName.includes(searchTerm)
-        || p.ownerEmail.toLowerCase().includes(searchTerm)
+        || (p.ownerEmail || '').toLowerCase().includes(searchTerm)
     })
   }, [branchPatients, searchTerm])
 
+  const totalPages = Math.max(1, Math.ceil(visiblePatients.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const pagePatients = useMemo(
+    () => visiblePatients.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [visiblePatients, currentPage]
+  )
+  useEffect(() => { setPage(1) }, [searchTerm])
+
   const statTotalPatients = branchPatients.length
-  const statFollowUpNeeded = branchPatients.filter(p => p.status === 'Follow-up needed').length
+  const statFollowUpNeeded = useMemo(() => branchPatients.filter(p => p.status === 'Follow-up needed').length, [branchPatients])
 
   const detailPatient = useMemo(() => patients.find(p => p.id === detailPatientId) || null, [patients, detailPatientId])
 
@@ -93,18 +111,18 @@ export default function Patients() {
   function openEditModal(patient) {
     setEditingId(patient.id)
     setForm({
-      ownerName: patient.ownerName,
-      ownerSurname: patient.ownerSurname,
-      ownerEmail: patient.ownerEmail,
-      ownerAddress: patient.ownerAddress,
-      ownerMobile: patient.ownerMobile,
-      petName: patient.petName,
-      petSpecie: patient.petSpecie,
-      petBreed: patient.petBreed,
-      petSex: patient.petSex,
-      petDob: patient.petDob,
-      petAge: patient.petAge,
-      petMarking: patient.petMarking
+      ownerName: patient.ownerName || '',
+      ownerSurname: patient.ownerSurname || '',
+      ownerEmail: patient.ownerEmail || '',
+      ownerAddress: patient.ownerAddress || '',
+      ownerMobile: patient.ownerMobile || '',
+      petName: patient.petName || '',
+      petSpecie: patient.petSpecie || '',
+      petBreed: patient.petBreed || '',
+      petSex: patient.petSex || '',
+      petDob: patient.petDob || '',
+      petAge: patient.petAge ?? '',
+      petMarking: patient.petMarking || ''
     })
     setModalOpen(true)
   }
@@ -136,20 +154,14 @@ export default function Patients() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-
-    const ownerEmail = form.ownerEmail.trim().toLowerCase()
-    const duplicate = patients.find(p => p.ownerEmail === ownerEmail && p.id !== editingId)
-    if (duplicate) {
-      showToast('That owner email is already registered to another owner.')
-      return
-    }
+    if (saving) return
 
     const patientData = {
       ownerName: form.ownerName.trim(),
       ownerSurname: form.ownerSurname.trim(),
-      ownerEmail,
+      ownerEmail: form.ownerEmail.trim().toLowerCase(),
       ownerAddress: form.ownerAddress.trim(),
       ownerMobile: form.ownerMobile.trim(),
       petName: form.petName.trim(),
@@ -157,66 +169,83 @@ export default function Patients() {
       petBreed: form.petBreed.trim(),
       petSex: form.petSex,
       petDob: form.petDob,
-      petAge: Number(form.petAge),
+      petAge: form.petAge === '' ? null : Number(form.petAge),
       petMarking: form.petMarking.trim(),
       branch
     }
 
-    if (editingId) {
-      setPatients(prev => prev.map(p => p.id === editingId ? { ...p, ...patientData } : p))
-      showToast(`"${patientData.petName}" was updated.`)
-      closeModal()
-    } else {
-      const nextId = patients.reduce((max, p) => Math.max(max, p.id + 1), 1)
-      const newPatient = { id: nextId, ...patientData, status: 'Active', createdAt: todayIso(), consultations: [] }
-      setPatients(prev => [...prev, newPatient])
-      showToast(`"${patientData.petName}" was added.`)
-      closeModal()
-      openDetailModal(newPatient)
+    setSaving(true)
+    try {
+      if (editingId) {
+        await update(editingId, patientData)
+        showToast(`"${patientData.petName}" was updated.`)
+        closeModal()
+      } else {
+        const newPatient = await create(patientData)
+        showToast(`"${patientData.petName}" was added.`)
+        closeModal()
+        openDetailModal(newPatient)
+      }
+    } catch (err) {
+      showToast(errorMessage(err))
+    } finally {
+      setSaving(false)
     }
   }
 
-  function handleDeleteRequest(patient) {
+  async function handleDeleteRequest(patient) {
     if (!confirm(`Send a request to the admin to delete "${patient.petName}"'s record?`)) return
-    raiseDeleteRequest('patient', patient.id, `${patient.petName} (${patient.ownerName} ${patient.ownerSurname})`)
-    showToast(`Delete request for "${patient.petName}" sent to the admin.`)
-    closeDetailModal()
+    try {
+      await raise({
+        type: 'patient',
+        targetId: patient.id,
+        label: `${patient.petName} (${patient.ownerName} ${patient.ownerSurname})`
+      })
+      showToast(`Delete request for "${patient.petName}" sent to the admin.`)
+      closeDetailModal()
+    } catch (err) {
+      showToast(errorMessage(err))
+    }
   }
 
-  function handleConsultationSubmit(e) {
+  async function handleConsultationSubmit(e) {
     e.preventDefault()
-    if (!detailPatient) return
+    if (!detailPatient || saving) return
 
-    const nextConsultationId = patients.reduce(
-      (max, p) => (p.consultations || []).reduce((m, c) => Math.max(m, c.id + 1), max), 1
-    )
-
-    const consultation = {
-      id: nextConsultationId,
-      date: consultForm.date,
-      weight: consultForm.weight.trim(),
-      notes: consultForm.notes.trim(),
-      remarks: consultForm.remarks.trim()
+    setSaving(true)
+    try {
+      await addConsultation(detailPatient.id, {
+        date: consultForm.date,
+        weight: consultForm.weight.trim(),
+        notes: consultForm.notes.trim(),
+        remarks: consultForm.remarks.trim()
+      })
+      setConsultForm({ ...EMPTY_CONSULT_FORM, date: todayIso() })
+      showToast('Consultation logged.')
+    } catch (err) {
+      showToast(errorMessage(err))
+    } finally {
+      setSaving(false)
     }
-
-    setPatients(prev => prev.map(p => p.id === detailPatient.id
-      ? { ...p, consultations: [...(p.consultations || []), consultation] }
-      : p
-    ))
-    setConsultForm({ ...EMPTY_CONSULT_FORM, date: todayIso() })
-    showToast('Consultation logged.')
   }
 
   // Landing here from a notification bell click on another page links to
   // /employee/patients?followUp=<id> - jump straight to that patient.
   useEffect(() => {
-    const followUpParamId = Number(searchParams.get('followUp'))
-    if (followUpParamId) {
-      const targetPatient = patients.find(p => p.id === followUpParamId)
-      if (targetPatient) openDetailModal(targetPatient)
+    const followUpParamId = searchParams.get('followUp')
+    if (!followUpParamId) {
+      deepLinkHandledRef.current = false
+      return
     }
+    if (deepLinkHandledRef.current) return
+    const targetPatient = patients.find(p => p.id === followUpParamId)
+    if (targetPatient) {
+      deepLinkHandledRef.current = true
+      openDetailModal(targetPatient)
+    }
+    // Patients load asynchronously, so re-check when the list arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
+  }, [searchParams, patients])
 
   return (
     <main className="content">
@@ -271,15 +300,17 @@ export default function Patients() {
               </tr>
             </thead>
             <tbody>
-              {branchPatients.length === 0 ? (
+              {loading && patients.length === 0 ? (
+                <tr><td colSpan="6" className="empty-state">Loading patients...</td></tr>
+              ) : branchPatients.length === 0 ? (
                 <tr><td colSpan="6" className="empty-state">No patients for this branch yet. Click "+ New" to add one.</td></tr>
               ) : visiblePatients.length === 0 ? (
                 <tr><td colSpan="6" className="empty-state">No patients match your search.</td></tr>
-              ) : visiblePatients.map(p => (
+              ) : pagePatients.map(p => (
                 <tr className="patient-row" key={p.id} onClick={() => openDetailModal(p)}>
-                  <td>{p.petName}</td>
-                  <td>{p.ownerName} {p.ownerSurname}</td>
-                  <td>{p.petSpecie}</td>
+                  <td>{dash(p.petName)}</td>
+                  <td>{dash(`${p.ownerName || ''} ${p.ownerSurname || ''}`.trim())}</td>
+                  <td>{dash(p.petSpecie)}</td>
                   <td>{formatDate(getLastVisitDate(p))}</td>
                   <td><span className={`status-pill ${getStatusClass(p.status)}`}>{p.status}</span></td>
                   <td className="action-col"></td>
@@ -288,6 +319,20 @@ export default function Patients() {
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+          <div className="table-footer">
+            <p className="table-footer-count">Showing {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, visiblePatients.length)} of {visiblePatients.length} entries</p>
+            <div className="pagination">
+              <button className="page-btn" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} aria-label="Previous page">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+              <button className="page-btn active" disabled>{currentPage} / {totalPages}</button>
+              <button className="page-btn" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)} aria-label="Next page">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add / Edit patient modal */}
@@ -375,7 +420,7 @@ export default function Patients() {
 
             <div className="patient-form-actions">
               <button type="button" className="patient-cancel-btn" onClick={closeModal}>Cancel</button>
-              <button type="submit" className="patient-save-btn">{editingId ? 'Save changes' : 'Save'}</button>
+              <button type="submit" className="patient-save-btn" disabled={saving}>{editingId ? 'Save changes' : 'Save'}</button>
             </div>
           </form>
         </div>
@@ -397,9 +442,9 @@ export default function Patients() {
 
             <div className="modal-body detail-modal-body">
               <div className="detail-info-grid">
-                <p className="detail-info-sub">{detailPatient.ownerEmail}</p>
-                <p className="detail-info-sub">{detailPatient.ownerMobile}</p>
-                <p className="detail-info-sub">{detailPatient.petSpecie} — {detailPatient.petBreed}</p>
+                <p className="detail-info-sub">{dash(detailPatient.ownerEmail)}</p>
+                <p className="detail-info-sub">{dash(detailPatient.ownerMobile)}</p>
+                <p className="detail-info-sub">{dash(detailPatient.petSpecie)} — {dash(detailPatient.petBreed)}</p>
                 <span className={`status-pill ${getStatusClass(detailPatient.status)}`}>{detailPatient.status}</span>
                 <div className="detail-action-btns">
                   <button type="button" className="detail-edit-btn" onClick={() => { closeDetailModal(); openEditModal(detailPatient) }}>
@@ -433,7 +478,7 @@ export default function Patients() {
                   <input type="text" className="form-input" value={consultForm.remarks} onChange={(e) => setConsultForm(f => ({ ...f, remarks: e.target.value }))} />
                 </div>
                 <div className="consultation-form-actions">
-                  <button type="submit" className="patient-save-btn">Save consultation</button>
+                  <button type="submit" className="patient-save-btn" disabled={saving}>Save consultation</button>
                 </div>
               </form>
 
@@ -441,7 +486,7 @@ export default function Patients() {
               <div className="consultation-history">
                 {(!detailPatient.consultations || detailPatient.consultations.length === 0) ? (
                   <p className="empty-state">No consultations logged yet.</p>
-                ) : [...detailPatient.consultations].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).map(c => (
+                ) : [...detailPatient.consultations].sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id).localeCompare(String(a.id))).map(c => (
                   <div className="consultation-item" key={c.id}>
                     <div className="consultation-item-head">
                       <span>

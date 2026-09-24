@@ -5,8 +5,7 @@ import { useInventory } from '../../hooks/useInventory'
 import { useSales } from '../../hooks/useSales'
 
 // ==================== HELPERS ====================
-// Ported from employee-dashboard.js - read-only summary computed from the
-// same localStorage keys the other pages (and the admin portal) read/write.
+// Read-only summary computed from the API-backed hooks.
 
 function formatPrice(amount) {
   return `₱${Number(amount || 0).toFixed(2)}`
@@ -22,7 +21,12 @@ function toIsoDate(date) {
 // "label only today + the week's peak" rule, same 1:1 viewBox measurement.
 
 function SalesTrendChart({ branch }) {
-  const [sales] = useSales()
+  const since = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 6)
+    return toIsoDate(d)
+  }, [])
+  const { items: sales } = useSales({ since, limit: 1000 })
   const containerRef = useRef(null)
   const [width, setWidth] = useState(280)
 
@@ -122,8 +126,8 @@ function SalesTrendChart({ branch }) {
 
 export default function Dashboard() {
   const { branch, name } = useEmployeeContext()
-  const [patients] = usePatients()
-  const [products] = useInventory()
+  const { items: patients } = usePatients()
+  const { items: products } = useInventory()
 
   // Ported from startEmployeeClock() - ticks every 30s, same as the
   // original's setInterval(tick, 30000).

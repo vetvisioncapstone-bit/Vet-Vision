@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { usePatients } from '../../hooks/usePatients'
 import { useInventory } from '../../hooks/useInventory'
 import { useToast } from '../../components/shared/Toast'
+import { errorMessage } from '../../api/client'
 import '../../styles/admin/patients.css'
 
 // ==================== CONSTANTS ====================
@@ -24,6 +25,8 @@ const CLINIC_SERVICES = [
   'Wound Care / Minor Surgery',
   'Microchipping'
 ]
+
+const PAGE_SIZE = 50
 
 const EMPTY_PATIENT_FORM = {
   ownerName: '', ownerSurname: '', ownerEmail: '', ownerAddress: '', ownerMobile: '',
@@ -58,12 +61,17 @@ function formatPrice(amount) {
 // Visit count / last visit are derived from consultation history rather than
 // stored separately, so they can never drift out of sync with it.
 function getVisitCount(patient) {
-  return 1 + patient.consultations.length
+  return 1 + (patient.consultations ? patient.consultations.length : 0)
 }
 
 function getLastVisitDate(patient) {
-  if (patient.consultations.length === 0) return patient.createdAt
-  return patient.consultations.reduce((latest, c) => (c.date > latest ? c.date : latest), patient.consultations[0].date)
+  const consultations = patient.consultations || []
+  if (consultations.length === 0) return patient.createdAt || ''
+  return consultations.reduce((latest, c) => ((c.date || '') > latest ? c.date : latest), consultations[0].date || '')
+}
+
+function dash(value) {
+  return value === null || value === undefined || value === '' ? '—' : value
 }
 
 function isImageDataUrl(url) {
@@ -179,7 +187,7 @@ function clinicLetterheadHtml(patient) {
             </div>
             <div class="info-row">
                 <div class="info-field"><span class="field-label">Pet's Date of birth:</span><span class="field-value">${formatDate(patient.petDob)}</span></div>
-                <div class="info-field"><span class="field-label">Age:</span><span class="field-value">${escapeHtml(String(patient.petAge))}</span></div>
+                <div class="info-field"><span class="field-label">Age:</span><span class="field-value">${escapeHtml(String(patient.petAge ?? ''))}</span></div>
                 <div class="info-field"><span class="field-label">Sex:</span><span class="field-value">${escapeHtml(patient.petSex)}</span></div>
                 <div class="info-field"><span class="field-label">Color Marking:</span><span class="field-value">${escapeHtml(patient.petMarking)}</span></div>
             </div>
@@ -222,9 +230,11 @@ function writeAndPrint(printWindow, title, bodyHtml) {
 }
 
 export default function Patients() {
-  const [patients, setPatients] = usePatients()
-  const [products] = useInventory()
+  const { items: patients, loading, create, update, remove, addConsultation, removeConsultation } = usePatients()
+  const { items: inventoryItems } = useInventory()
   const showToast = useToast()
+  const [saving, setSaving] = useState(false)
+  const [page, setPage] = useState(1)
   const [searchParams] = useSearchParams()
 
   // ==================== STATE: search / filter / selection ====================
@@ -261,31 +271,17 @@ export default function Patients() {
   const waiverInputRef = useRef(null)
   const selectAllRef = useRef(null)
   const followUpNoteFieldRef = useRef(null)
-
-  // Monotonic id counters, computed once from whatever was loaded at mount -
-  // mirrors patients.js's page-level `let nextPatientId = ...` so ids are
-  // never reused even after a delete.
-  const nextPatientIdRef = useRef(null)
-  const nextConsultationIdRef = useRef(null)
-  if (nextPatientIdRef.current === null) {
-    nextPatientIdRef.current = patients.reduce((max, p) => Math.max(max, p.id + 1), 1)
-  }
-  if (nextConsultationIdRef.current === null) {
-    nextConsultationIdRef.current = patients.reduce(
-      (max, p) => p.consultations.reduce((m, c) => Math.max(m, c.id + 1), max),
-      1
-    )
-  }
+  const deepLinkHandledRef = useRef(false)
 
   // ==================== DERIVED ====================
 
   const visiblePatients = useMemo(() => {
     return patients.filter(p => {
-      const ownerFullName = `${p.ownerName} ${p.ownerSurname}`.toLowerCase()
+      const ownerFullName = `${p.ownerName || ''} ${p.ownerSurname || ''}`.toLowerCase()
       const matchesSearch = !searchTerm
-        || p.petName.toLowerCase().includes(searchTerm)
+        || (p.petName || '').toLowerCase().includes(searchTerm)
         || ownerFullName.includes(searchTerm)
-        || p.ownerEmail.toLowerCase().includes(searchTerm)
+        || (p.ownerEmail || '').toLowerCase().includes(searchTerm)
       const matchesBranch = selectedBranch === 'All Branches' || p.branch === selectedBranch
       const matchesStatus = activeStatuses.size === 0 || activeStatuses.has(p.status)
       return matchesSearch && matchesBranch && matchesStatus
@@ -297,7 +293,7 @@ export default function Patients() {
     const activeThisMonth = patients.filter(p => {
       const lastVisit = getLastVisitDate(p)
       if (!lastVisit) return false
-      const [y, m] = lastVisit.split('-').map(Number)
+      const [y, m] = String(lastVisit).split('-').map(Number)
       return p.status === 'Active' && y === now.getFullYear() && m === now.getMonth() + 1
     }).length
     const followUpNeeded = patients.filter(p => p.status === 'Follow-up needed').length
@@ -305,6 +301,15 @@ export default function Patients() {
   }, [patients])
 
   const availableStatuses = useMemo(() => [...new Set(patients.map(p => p.status))].sort(), [patients])
+
+  const totalPages = Math.max(1, Math.ceil(visiblePatients.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const pagePatients = useMemo(
+    () => visiblePatients.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [visiblePatients, currentPage]
+  )
+
+  useEffect(() => { setPage(1) }, [searchTerm, selectedBranch, activeStatuses])
 
   const visibleIds = useMemo(() => visiblePatients.map(p => p.id), [visiblePatients])
   const selectedVisibleCount = useMemo(
@@ -326,8 +331,17 @@ export default function Patients() {
   const availedItemOptions = useMemo(() => {
     if (!availedType) return []
     if (availedType === 'Service') return CLINIC_SERVICES
-    return products.map(p => p.name).sort((a, b) => a.localeCompare(b))
-  }, [availedType, products])
+    return [...new Set(inventoryItems.map(p => p.name).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  }, [availedType, inventoryItems])
+
+  // Suggested price per product name (first inventory row with a unit price).
+  const productPrices = useMemo(() => {
+    const map = new Map()
+    inventoryItems.forEach(p => {
+      if (p.name && p.unitPrice != null && p.unitPrice !== '' && !map.has(p.name)) map.set(p.name, p.unitPrice)
+    })
+    return map
+  }, [inventoryItems])
 
   // ==================== NEW / EDIT PATIENT MODAL ====================
 
@@ -340,19 +354,19 @@ export default function Patients() {
   function openEditModal(patient) {
     setEditingPatientId(patient.id)
     setPatientForm({
-      ownerName: patient.ownerName,
-      ownerSurname: patient.ownerSurname,
-      ownerEmail: patient.ownerEmail,
-      ownerAddress: patient.ownerAddress,
-      ownerMobile: patient.ownerMobile,
-      petName: patient.petName,
-      petSpecie: patient.petSpecie,
-      petBreed: patient.petBreed,
-      petSex: patient.petSex,
-      petDob: patient.petDob,
-      petAge: patient.petAge,
-      petMarking: patient.petMarking,
-      branch: patient.branch
+      ownerName: patient.ownerName || '',
+      ownerSurname: patient.ownerSurname || '',
+      ownerEmail: patient.ownerEmail || '',
+      ownerAddress: patient.ownerAddress || '',
+      ownerMobile: patient.ownerMobile || '',
+      petName: patient.petName || '',
+      petSpecie: patient.petSpecie || '',
+      petBreed: patient.petBreed || '',
+      petSex: patient.petSex || '',
+      petDob: patient.petDob || '',
+      petAge: patient.petAge ?? '',
+      petMarking: patient.petMarking || '',
+      branch: patient.branch || ''
     })
     setPatientModalOpen(true)
   }
@@ -367,20 +381,14 @@ export default function Patients() {
     setPatientForm(f => ({ ...f, [field]: value }))
   }
 
-  function handlePatientSubmit(e) {
+  async function handlePatientSubmit(e) {
     e.preventDefault()
-
-    const ownerEmail = patientForm.ownerEmail.trim().toLowerCase()
-    const duplicate = patients.find(p => p.ownerEmail === ownerEmail && p.id !== editingPatientId)
-    if (duplicate) {
-      showToast('That owner email is already registered to another owner.')
-      return
-    }
+    if (saving) return
 
     const patientData = {
       ownerName: patientForm.ownerName.trim(),
       ownerSurname: patientForm.ownerSurname.trim(),
-      ownerEmail,
+      ownerEmail: patientForm.ownerEmail.trim().toLowerCase(),
       ownerAddress: patientForm.ownerAddress.trim(),
       ownerMobile: patientForm.ownerMobile.trim(),
       petName: patientForm.petName.trim(),
@@ -388,34 +396,29 @@ export default function Patients() {
       petBreed: patientForm.petBreed.trim(),
       petSex: patientForm.petSex,
       petDob: patientForm.petDob,
-      petAge: Number(patientForm.petAge),
+      petAge: patientForm.petAge === '' ? null : Number(patientForm.petAge),
       petMarking: patientForm.petMarking.trim(),
       branch: patientForm.branch
     }
 
-    let newPatient = null
-
-    if (editingPatientId) {
-      setPatients(prev => prev.map(p => (p.id === editingPatientId ? { ...p, ...patientData } : p)))
-      showToast(`"${patientData.petName}" was updated.`)
-    } else {
-      newPatient = {
-        id: nextPatientIdRef.current++,
-        ...patientData,
-        status: 'Active',
-        createdAt: todayIso(),
-        consultations: []
+    setSaving(true)
+    try {
+      if (editingPatientId) {
+        await update(editingPatientId, patientData)
+        showToast(`"${patientData.petName}" was updated.`)
+        closePatientModal()
+      } else {
+        const newPatient = await create(patientData)
+        showToast(`"${patientData.petName}" was added.`)
+        closePatientModal()
+        // Straight from filling out a new patient's info to logging their first
+        // consultation, instead of dropping back to the bare table.
+        openPatientDetailModal(newPatient)
       }
-      setPatients(prev => [...prev, newPatient])
-      showToast(`"${patientData.petName}" was added.`)
-    }
-
-    closePatientModal()
-
-    // Straight from filling out a new patient's info to logging their first
-    // consultation, instead of dropping back to the bare table.
-    if (newPatient) {
-      openPatientDetailModal(newPatient)
+    } catch (err) {
+      showToast(errorMessage(err))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -440,15 +443,19 @@ export default function Patients() {
 
   // ==================== ROW ACTIONS ====================
 
-  function handleDeletePatient(patient) {
+  async function handleDeletePatient(patient) {
     if (!confirm(`Delete "${patient.petName}"'s record?`)) return
-    setPatients(prev => prev.filter(p => p.id !== patient.id))
-    setSelectedPatientIds(prev => {
-      const next = new Set(prev)
-      next.delete(patient.id)
-      return next
-    })
-    showToast(`"${patient.petName}" was deleted.`)
+    try {
+      await remove(patient.id)
+      setSelectedPatientIds(prev => {
+        const next = new Set(prev)
+        next.delete(patient.id)
+        return next
+      })
+      showToast(`"${patient.petName}" was deleted.`)
+    } catch (err) {
+      showToast(errorMessage(err))
+    }
   }
 
   // ==================== STATUS FILTER POPOVER ====================
@@ -518,6 +525,11 @@ export default function Patients() {
     setAvailedPrice('')
   }
 
+  function setAvailedItemAndPrice(name) {
+    setAvailedItem(name)
+    if (availedType === 'Product' && productPrices.has(name)) setAvailedPrice(String(productPrices.get(name)))
+  }
+
   function handleAvailedRemove(index) {
     setPendingAvailedItems(prev => prev.filter((_, i) => i !== index))
   }
@@ -562,8 +574,9 @@ export default function Patients() {
     showToast('Consultation entry cleared.')
   }
 
-  function handleConsultationSubmit(e) {
+  async function handleConsultationSubmit(e) {
     e.preventDefault()
+    if (saving) return
 
     const patient = currentPatient
     if (!patient) return
@@ -571,8 +584,7 @@ export default function Patients() {
     const followUp = consultFollowUp
     const followUpNote = followUp ? consultFollowUpNote.trim() : ''
 
-    const consultation = {
-      id: nextConsultationIdRef.current++,
+    const consultationInput = {
       date: consultDate,
       weight: consultWeight.trim(),
       notes: consultNotes.trim(),
@@ -588,29 +600,19 @@ export default function Patients() {
       followUpNote
     }
 
-    setPatients(prev => prev.map(p => {
-      if (p.id !== patient.id) return p
-      const updated = { ...p, consultations: [...p.consultations, consultation] }
-
-      if (followUp) {
-        // Raises a new follow-up (or replaces the pending one).
-        updated.status = 'Follow-up needed'
-        updated.followUpNote = followUpNote
-      } else if (
-        p.status === 'Follow-up needed'
-        && pendingAvailedItems.some(item => item.type === 'Service' && item.name === p.followUpNote)
-      ) {
-        // Resolves the pending follow-up only when the same service that was
-        // due actually got availed on this visit.
-        updated.status = 'Active'
-        updated.followUpNote = ''
-      }
-
-      return updated
-    }))
-
-    closePatientDetailModal()
-    showToast('Consultation added successfully.', 'Print', () => printConsultationReceipt(patient, consultation))
+    setSaving(true)
+    try {
+      // The server applies the follow-up logic and returns the updated patient.
+      const updated = await addConsultation(patient.id, consultationInput)
+      const oldIds = new Set((patient.consultations || []).map(c => c.id))
+      const created = ((updated && updated.consultations) || []).find(c => !oldIds.has(c.id)) || consultationInput
+      closePatientDetailModal()
+      showToast('Consultation added successfully.', 'Print', () => printConsultationReceipt(updated || patient, created))
+    } catch (err) {
+      showToast(errorMessage(err))
+    } finally {
+      setSaving(false)
+    }
   }
 
   // ==================== CONSULTATION HISTORY MODAL ====================
@@ -623,15 +625,15 @@ export default function Patients() {
     setHistoryOpen(false)
   }
 
-  function handleDeleteConsultation(id) {
+  async function handleDeleteConsultation(id) {
     if (!currentPatient) return
     if (!confirm('Delete this consultation entry?')) return
-    setPatients(prev => prev.map(p => (
-      p.id === currentPatient.id
-        ? { ...p, consultations: p.consultations.filter(c => c.id !== id) }
-        : p
-    )))
-    showToast('Consultation entry deleted.')
+    try {
+      await removeConsultation(id)
+      showToast('Consultation entry deleted.')
+    } catch (err) {
+      showToast(errorMessage(err))
+    }
   }
 
   // ==================== PRINTING ====================
@@ -691,7 +693,7 @@ export default function Patients() {
     const printWindow = openClinicPrintWindow()
     if (!printWindow) return
 
-    const sorted = [...patient.consultations].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+    const sorted = [...patient.consultations].sort((a, b) => (a.date || '').localeCompare(b.date || '') || String(a.id).localeCompare(String(b.id)))
 
     let grandTotal = 0
     const rows = sorted.map(c => {
@@ -750,14 +752,16 @@ export default function Patients() {
   // (Topbar.jsx) links to /admin/patients?followUp=<id> - jump straight to
   // that patient instead of leaving the admin to find them in the table.
   useEffect(() => {
-    const followUpParamId = Number(searchParams.get('followUp'))
-    if (followUpParamId) {
-      const targetPatient = patients.find(p => p.id === followUpParamId)
-      if (targetPatient) openPatientDetailModal(targetPatient)
+    const followUpParamId = searchParams.get('followUp')
+    if (!followUpParamId || deepLinkHandledRef.current) return
+    const targetPatient = patients.find(p => p.id === followUpParamId)
+    if (targetPatient) {
+      deepLinkHandledRef.current = true
+      openPatientDetailModal(targetPatient)
     }
-    // Run once on mount only, mirroring the original page-load-only check.
+    // Patients load asynchronously, so wait for the list; handle once only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [patients])
 
   // ==================== RENDER ====================
 
@@ -845,20 +849,22 @@ export default function Patients() {
               </tr>
             </thead>
             <tbody>
-              {patients.length === 0 ? (
+              {loading && patients.length === 0 ? (
+                <tr><td colSpan="10" className="empty-state">Loading patients...</td></tr>
+              ) : patients.length === 0 ? (
                 <tr><td colSpan="10" className="empty-state">No patients yet. Click "+ New" to add one.</td></tr>
               ) : visiblePatients.length === 0 ? (
                 <tr><td colSpan="10" className="empty-state">No patients match your search or filter.</td></tr>
-              ) : visiblePatients.map(p => (
+              ) : pagePatients.map(p => (
                 <tr className="patient-row" key={p.id} onClick={() => openPatientDetailModal(p)}>
                   <td className="checkbox-col" onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" className="patient-row-checkbox" checked={selectedPatientIds.has(p.id)} onChange={(e) => handleRowCheckboxChange(p.id, e.target.checked)} aria-label={`Select ${p.petName}`} />
                   </td>
-                  <td>{p.petName}</td>
-                  <td>{p.ownerName} {p.ownerSurname}</td>
-                  <td>{p.ownerEmail}</td>
-                  <td>{p.petSpecie}</td>
-                  <td>{p.branch}</td>
+                  <td>{dash(p.petName)}</td>
+                  <td>{dash(`${p.ownerName || ''} ${p.ownerSurname || ''}`.trim())}</td>
+                  <td>{dash(p.ownerEmail)}</td>
+                  <td>{dash(p.petSpecie)}</td>
+                  <td>{dash(p.branch)}</td>
                   <td>{formatDate(getLastVisitDate(p))}</td>
                   <td>{getVisitCount(p)}</td>
                   <td><span className={`status-pill ${getStatusClass(p.status)}`}>{p.status}</span></td>
@@ -881,11 +887,11 @@ export default function Patients() {
         <div className="table-footer">
           <p className="table-footer-count">Showing {visiblePatients.length} of {patients.length} entries</p>
           <div className="pagination">
-            <button className="page-btn" disabled aria-label="Previous page">
+            <button className="page-btn" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} aria-label="Previous page">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
             </button>
-            <button className="page-btn active" disabled>1</button>
-            <button className="page-btn" disabled aria-label="Next page">
+            <button className="page-btn active" disabled>{currentPage} / {totalPages}</button>
+            <button className="page-btn" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)} aria-label="Next page">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
             </button>
           </div>
@@ -1007,7 +1013,7 @@ export default function Patients() {
 
             <div className="patient-form-actions">
               <button type="button" className="patient-cancel-btn" onClick={closePatientModal}>Cancel</button>
-              <button type="submit" className="patient-save-btn">{editingPatientId ? 'Save changes' : 'Save'}</button>
+              <button type="submit" className="patient-save-btn" disabled={saving}>{editingPatientId ? 'Save changes' : 'Save'}</button>
             </div>
           </form>
         </div>
@@ -1032,15 +1038,15 @@ export default function Patients() {
                 <div className="detail-info-group">
                   <p className="detail-info-label">Owner</p>
                   <p className="detail-info-value">{currentPatient.ownerName} {currentPatient.ownerSurname}</p>
-                  <p className="detail-info-sub">{currentPatient.ownerEmail}</p>
-                  <p className="detail-info-sub">{currentPatient.ownerMobile}</p>
-                  <p className="detail-info-sub">{currentPatient.ownerAddress}</p>
+                  <p className="detail-info-sub">{dash(currentPatient.ownerEmail)}</p>
+                  <p className="detail-info-sub">{dash(currentPatient.ownerMobile)}</p>
+                  <p className="detail-info-sub">{dash(currentPatient.ownerAddress)}</p>
                 </div>
                 <div className="detail-info-group">
                   <p className="detail-info-label">Pet</p>
-                  <p className="detail-info-value">{currentPatient.petSpecie} — {currentPatient.petBreed}</p>
-                  <p className="detail-info-sub">{currentPatient.petSex}, {currentPatient.petAge} yr(s) old</p>
-                  <p className="detail-info-sub">{currentPatient.petMarking}</p>
+                  <p className="detail-info-value">{dash(currentPatient.petSpecie)} — {dash(currentPatient.petBreed)}</p>
+                  <p className="detail-info-sub">{dash(currentPatient.petSex)}, {currentPatient.petAge === '' || currentPatient.petAge == null ? '—' : `${currentPatient.petAge} yr(s) old`}</p>
+                  <p className="detail-info-sub">{dash(currentPatient.petMarking)}</p>
                   <p className="detail-info-sub">{currentPatient.branch}</p>
                 </div>
                 <div className="detail-info-group">
@@ -1101,7 +1107,7 @@ export default function Patients() {
                       <div className="form-group">
                         <label className="form-label" htmlFor="availedItem">Item</label>
                         <div className="form-select-wrapper">
-                          <select id="availedItem" className="form-input" disabled={!availedType || availedItemOptions.length === 0} value={availedItem} onChange={(e) => setAvailedItem(e.target.value)}>
+                          <select id="availedItem" className="form-input" disabled={!availedType || availedItemOptions.length === 0} value={availedItem} onChange={(e) => setAvailedItemAndPrice(e.target.value)}>
                             <option value="" disabled hidden>
                               {!availedType ? 'Select type first' : (availedItemOptions.length === 0 ? 'No products in inventory yet' : 'Select item')}
                             </option>
@@ -1196,7 +1202,7 @@ export default function Patients() {
                 </div>
                 <div className="consultation-form-actions">
                   <button type="button" className="patient-cancel-btn" onClick={handleCancelConsult}>Cancel</button>
-                  <button type="submit" className="patient-save-btn">Save consultation</button>
+                  <button type="submit" className="patient-save-btn" disabled={saving}>Save consultation</button>
                 </div>
               </form>
             </div>
@@ -1225,11 +1231,11 @@ export default function Patients() {
             </div>
             <div className="modal-body">
               <div className="consultation-history">
-                {currentPatient.consultations.length === 0 ? (
+                {(currentPatient.consultations || []).length === 0 ? (
                   <p className="empty-state">No consultations logged yet.</p>
                 ) : (
-                  [...currentPatient.consultations]
-                    .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
+                  [...(currentPatient.consultations || [])]
+                    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id).localeCompare(String(a.id)))
                     .map(c => (
                       <div className="consultation-item" key={c.id}>
                         <div className="consultation-item-head">

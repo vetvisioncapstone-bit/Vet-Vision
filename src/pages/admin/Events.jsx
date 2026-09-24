@@ -1,17 +1,10 @@
 import React, { useMemo, useRef, useState } from 'react'
-import { useAdminProfile } from '../../hooks/useAdminProfile'
+import { useAuth } from '../../hooks/useAuth'
+import { useEventPosts, useEventAvailability } from '../../hooks/useEvents'
+import { errorMessage } from '../../api/client'
 import { useToast } from '../../components/shared/Toast'
-import { readLocalStorage, writeLocalStorage } from '../../hooks/useLocalStorageState'
-import { getInitialsFromName } from '../../utils/auth'
+import { getInitialsFromName } from '../../utils/initials'
 import '../../styles/admin/events.css'
-
-// Persisted to localStorage (there's no backend yet) so the employee
-// portal's Events page can show these same announcements and the same
-// per-branch calendar in read-only form. Keys must match exactly what
-// employee-feed reads.
-const EVENTS_POSTS_KEY = 'vvEventsPosts'
-const EVENTS_AVAILABILITY_KEY = 'vvEventsAvailability'
-const DEFAULT_AVAILABILITY = { Ibaan: {}, 'San Jose': {} }
 
 function toIsoDate(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -24,7 +17,6 @@ function formatDateLabel(isoString) {
 }
 
 function formatTimestamp(date) {
-  // Round-tripping through localStorage turns the Date into an ISO string.
   const d = date instanceof Date ? date : new Date(date)
   return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
@@ -37,15 +29,13 @@ function Avatar({ name, photo }) {
 }
 
 export default function Events() {
-  const [profile] = useAdminProfile()
+  const { user } = useAuth()
+  const profile = { name: user?.name || '', photo: user?.photo || null }
   const showToast = useToast()
 
-  const [posts, setPosts] = useState(() => readLocalStorage(EVENTS_POSTS_KEY, []))
-  const [availability, setAvailability] = useState(() => readLocalStorage(EVENTS_AVAILABILITY_KEY, DEFAULT_AVAILABILITY))
-  const nextPostIdRef = useRef(null)
-  if (nextPostIdRef.current === null) {
-    nextPostIdRef.current = posts.reduce((max, p) => Math.max(max, p.id + 1), 1)
-  }
+  const { items: posts, loading: postsLoading, create: createPost, remove: removePost } = useEventPosts()
+  const { availability, setState: setAvailabilityState } = useEventAvailability()
+  const [busy, setBusy] = useState(false)
 
   const [composerText, setComposerText] = useState('')
   const [composerPhoto, setComposerPhoto] = useState(null)
@@ -57,18 +47,6 @@ export default function Events() {
     d.setDate(1)
     return d
   })
-
-  function persistPosts(newPosts) {
-    setPosts(newPosts)
-    const ok = writeLocalStorage(EVENTS_POSTS_KEY, newPosts)
-    if (!ok) showToast('Could not save to local storage (storage may be full).')
-  }
-
-  function persistAvailability(newAvailability) {
-    setAvailability(newAvailability)
-    const ok = writeLocalStorage(EVENTS_AVAILABILITY_KEY, newAvailability)
-    if (!ok) showToast('Could not save to local storage (storage may be full).')
-  }
 
   // ==================== COMPOSER ====================
 
@@ -96,30 +74,36 @@ export default function Events() {
     if (composerPhotoInputRef.current) composerPhotoInputRef.current.value = ''
   }
 
-  function handlePost() {
+  async function handlePost() {
     const text = composerText.trim()
-    if (!text && !composerPhoto) return
+    if ((!text && !composerPhoto) || busy) return
 
-    const newPost = {
-      id: nextPostIdRef.current++,
-      authorName: profile.name,
-      authorPhoto: profile.photo,
-      text,
-      photo: composerPhoto,
-      createdAt: new Date()
+    setBusy(true)
+    try {
+      await createPost({ text, photo: composerPhoto })
+      resetComposer()
+      showToast('Announcement posted.')
+    } catch (err) {
+      showToast(errorMessage(err))
+    } finally {
+      setBusy(false)
     }
-
-    persistPosts([newPost, ...posts])
-    resetComposer()
-    showToast('Announcement posted.')
   }
 
   // ==================== FEED ====================
 
-  function handleDeletePost(id) {
+  async function handleDeletePost(id) {
+    if (busy) return
     if (!confirm('Delete this announcement?')) return
-    persistPosts(posts.filter(p => p.id !== id))
-    showToast('Announcement deleted.')
+    setBusy(true)
+    try {
+      await removePost(id)
+      showToast('Announcement deleted.')
+    } catch (err) {
+      showToast(errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
   }
 
   // ==================== AVAILABILITY CALENDAR ====================
@@ -160,19 +144,19 @@ export default function Events() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchAvailability])
 
-  function handleDateClick(iso) {
+  async function handleDateClick(iso) {
+    if (busy) return
     const current = branchAvailability[iso]
-    const newBranchAvailability = { ...branchAvailability }
+    const nextState = !current ? 'unavailable' : current === 'unavailable' ? 'available' : null
 
-    if (!current) {
-      newBranchAvailability[iso] = 'unavailable'
-    } else if (current === 'unavailable') {
-      newBranchAvailability[iso] = 'available'
-    } else {
-      delete newBranchAvailability[iso]
+    setBusy(true)
+    try {
+      await setAvailabilityState(selectedBranch, iso, nextState)
+    } catch (err) {
+      showToast(errorMessage(err))
+    } finally {
+      setBusy(false)
     }
-
-    persistAvailability({ ...availability, [selectedBranch]: newBranchAvailability })
   }
 
   function goPrevMonth() {
@@ -230,12 +214,14 @@ export default function Events() {
                 <span>Photo</span>
               </label>
               <input type="file" id="composerPhotoInput" accept="image/*" hidden ref={composerPhotoInputRef} onChange={handleComposerPhotoChange} />
-              <button type="button" className="composer-post-btn" id="composerPostBtn" disabled={!canPost} onClick={handlePost}>Post</button>
+              <button type="button" className="composer-post-btn" id="composerPostBtn" disabled={!canPost || busy} onClick={handlePost}>Post</button>
             </div>
           </div>
 
           <div className="events-feed" id="eventsFeed">
-            {posts.length === 0 ? (
+            {postsLoading && posts.length === 0 ? (
+              <p className="empty-state">Loading...</p>
+            ) : posts.length === 0 ? (
               <p className="empty-state">No announcements yet. Share an update above.</p>
             ) : posts.map(post => (
               <div className="post-card" key={post.id} data-id={post.id}>
@@ -245,7 +231,7 @@ export default function Events() {
                     <p className="post-author">{post.authorName}</p>
                     <p className="post-timestamp">{formatTimestamp(post.createdAt)}</p>
                   </div>
-                  <button type="button" className="post-delete-btn" data-id={post.id} aria-label="Delete post" onClick={() => handleDeletePost(post.id)}>
+                  <button type="button" className="post-delete-btn" data-id={post.id} aria-label="Delete post" disabled={busy} onClick={() => handleDeletePost(post.id)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                   </button>
                 </div>
@@ -297,6 +283,7 @@ export default function Events() {
                     type="button"
                     className={`cal-day-btn${cell.isToday ? ' is-today' : ''}${cell.state === 'unavailable' ? ' is-unavailable' : ''}${cell.state === 'available' ? ' is-available' : ''}`}
                     data-date={cell.iso}
+                    disabled={busy}
                     onClick={() => handleDateClick(cell.iso)}
                   >
                     {cell.day}

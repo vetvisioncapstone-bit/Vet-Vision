@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react'
 import { useInventory } from '../../hooks/useInventory'
 import { useToast } from '../../components/shared/Toast'
+import { errorMessage } from '../../api/client'
 import '../../styles/admin/inventory.css'
 
 function formatDate(isoString) {
@@ -16,14 +17,24 @@ function getStatus(product) {
   return { label: 'Ok', cls: 'status-ok' }
 }
 
+function compareExpiration(a, b) {
+  const ea = a.expiration || ''
+  const eb = b.expiration || ''
+  if (ea === eb) return 0
+  if (!ea) return 1
+  if (!eb) return -1
+  return ea < eb ? -1 : 1
+}
+
 const EMPTY_FORM = {
   name: '', category: '', branch: '', quantity: '', reorderPoint: '',
   delivery: '', expiration: '', photo: null
 }
 
 export default function Inventory() {
-  const [products, setProducts] = useInventory()
+  const { items: products, loading, create, update, remove } = useInventory()
   const showToast = useToast()
+  const [saving, setSaving] = useState(false)
 
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategories, setActiveCategories] = useState(new Set())
@@ -45,7 +56,7 @@ export default function Inventory() {
         const matchesCategory = activeCategories.size === 0 || activeCategories.has(p.category)
         return matchesSearch && matchesCategory
       })
-      .sort((a, b) => a.expiration.localeCompare(b.expiration))
+      .sort(compareExpiration)
   }, [products, searchTerm, activeCategories])
 
   function toggleCategory(cat) {
@@ -89,8 +100,9 @@ export default function Inventory() {
     reader.readAsDataURL(file)
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
+    if (saving) return
     const productData = {
       name: form.name.trim(),
       category: form.category.trim(),
@@ -102,23 +114,31 @@ export default function Inventory() {
       photo: form.photo
     }
 
-    if (editingId) {
-      setProducts(prev => prev.map(p => p.id === editingId ? { ...p, ...productData } : p))
-      showToast(`"${productData.name}" was updated.`)
-    } else {
-      setProducts(prev => {
-        const nextId = prev.reduce((max, p) => Math.max(max, p.id + 1), 1)
-        return [...prev, { id: nextId, ...productData }]
-      })
-      showToast(`"${productData.name}" was added to inventory.`)
+    setSaving(true)
+    try {
+      if (editingId) {
+        await update(editingId, productData)
+        showToast(`"${productData.name}" was updated.`)
+      } else {
+        await create(productData)
+        showToast(`"${productData.name}" was added to inventory.`)
+      }
+      closeModal()
+    } catch (err) {
+      showToast(errorMessage(err))
+    } finally {
+      setSaving(false)
     }
-    closeModal()
   }
 
-  function handleDelete(product) {
+  async function handleDelete(product) {
     if (!confirm(`Delete "${product.name}" from inventory?`)) return
-    setProducts(prev => prev.filter(p => p.id !== product.id))
-    showToast(`"${product.name}" was deleted.`)
+    try {
+      await remove(product.id)
+      showToast(`"${product.name}" was deleted.`)
+    } catch (err) {
+      showToast(errorMessage(err))
+    }
   }
 
   return (
@@ -190,7 +210,9 @@ export default function Inventory() {
               </tr>
             </thead>
             <tbody>
-              {products.length === 0 ? (
+              {loading && products.length === 0 ? (
+                <tr><td colSpan="7" className="empty-state">Loading…</td></tr>
+              ) : products.length === 0 ? (
                 <tr><td colSpan="7" className="empty-state">No products yet. Click "+ New" to add one.</td></tr>
               ) : visibleProducts.length === 0 ? (
                 <tr><td colSpan="7" className="empty-state">No products match your search or filter.</td></tr>
@@ -300,7 +322,7 @@ export default function Inventory() {
 
             <p className="form-hint">Status is worked out from Quantity vs. Reorder point. Delivery and expiration dates show up when you click the product, so older stock can be sold first (FIFO).</p>
 
-            <button type="submit" className="modal-submit-btn">{editingId ? 'Save changes' : 'Add product'}</button>
+            <button type="submit" className="modal-submit-btn" disabled={saving}>{editingId ? 'Save changes' : 'Add product'}</button>
           </form>
         </div>
       </div>
