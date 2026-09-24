@@ -3,11 +3,12 @@
 // live in this file (and localStorage) and are visible to anyone who
 // opens dev tools. It gates access to the demo UI, not real authentication.
 
-const ADMIN_PROFILE_KEY = 'vetVisionAdminProfile'
-const DEFAULT_ADMIN_PROFILE = {
+export const ADMIN_PROFILE_KEY = 'vetVisionAdminProfile'
+export const DEFAULT_ADMIN_PROFILE = {
   name: 'June Jericho Humarang',
   email: 'junejerichohumarang@ecovet.ph',
-  password: 'Vetvision2026!'
+  password: 'Vetvision2026!',
+  photo: null
 }
 
 export function getAdminProfile() {
@@ -18,16 +19,28 @@ export function getAdminProfile() {
     return {
       name: parsed.name || DEFAULT_ADMIN_PROFILE.name,
       email: parsed.email || DEFAULT_ADMIN_PROFILE.email,
-      password: parsed.password || DEFAULT_ADMIN_PROFILE.password
+      password: parsed.password || DEFAULT_ADMIN_PROFILE.password,
+      photo: parsed.photo || null
     }
   } catch {
     return { ...DEFAULT_ADMIN_PROFILE }
   }
 }
 
+export function saveAdminProfile(profile) {
+  localStorage.setItem(ADMIN_PROFILE_KEY, JSON.stringify(profile))
+}
+
+export function getInitialsFromName(name) {
+  const parts = (name || '').split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return ''
+  if (parts.length === 1) return parts[0][0].toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
 // ==================== STAFF (EMPLOYEE) ACCOUNTS ====================
 
-const STAFF_ACCOUNTS_KEY = 'vvStaffAccounts'
+export const STAFF_ACCOUNTS_KEY = 'vvStaffAccounts'
 
 export function getStaffAccounts() {
   try {
@@ -38,9 +51,13 @@ export function getStaffAccounts() {
   }
 }
 
+export function saveStaffAccounts(accounts) {
+  localStorage.setItem(STAFF_ACCOUNTS_KEY, JSON.stringify(accounts))
+}
+
 // ==================== SESSION ====================
 
-const SESSION_KEY = 'vvCurrentSession'
+export const SESSION_KEY = 'vvCurrentSession'
 
 export function setSession(session) {
   try {

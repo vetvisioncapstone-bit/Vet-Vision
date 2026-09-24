@@ -1,0 +1,179 @@
+/* ==================== SHARED EMPLOYEE PORTAL STYLES ==================== */
+
+.content-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.content-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.employee-datetime {
+    text-align: right;
+}
+
+.employee-datetime p:first-child {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a1a1a;
+}
+
+.employee-datetime p:last-child {
+    font-size: 13px;
+    color: #6b736f;
+}
+
+.scope-banner {
+    background: #eef7f0;
+    border: 1px solid #cfe9d5;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+}
+
+.scope-banner p {
+    font-size: 13px;
+    color: #1f5233;
+    line-height: 1.5;
+}
+
+.stat-card.accent-warn {
+    border-top-color: #b8720a;
+}
+
+.stat-card .stat-change {
+    font-size: 12px;
+    color: #b8720a;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+.stat-card.alert .stat-change {
+    color: #e53935;
+}
+
+.table-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.table-card-header h2 {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.header-filters {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dashboard-greeting {
+    font-size: 14px;
+    color: #6b736f;
+    margin-bottom: 20px;
+}
+
+/* ==================== SALES CHART (DASHBOARD) ==================== */
+
+.chart-total {
+    font-size: 15px;
+    font-weight: 700;
+    color: #163a26;
+}
+
+.line-chart {
+    width: 100%;
+    height: 220px;
+}
+
+.line-chart-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.line-chart-area {
+    fill: rgba(76, 175, 80, 0.1);
+    stroke: none;
+}
+
+.line-chart-path {
+    fill: none;
+    stroke: #4caf50;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.line-chart-dot {
+    fill: #4caf50;
+    stroke: #ffffff;
+    stroke-width: 2;
+}
+
+.line-chart-dot.is-empty {
+    fill: #cfd6d3;
+}
+
+.line-chart-gridline {
+    stroke: #ececec;
+    stroke-width: 1;
+}
+
+.line-chart-value {
+    font-size: 11px;
+    font-weight: 700;
+    fill: #163a26;
+}
+
+.line-chart-day-label {
+    font-size: 11px;
+    fill: #9aa5a0;
+}
+
+.clinic-status-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+    border-left: 4px solid #4caf50;
+}
+
+.clinic-status-card.is-closed {
+    border-left-color: #e53935;
+}
+
+.clinic-status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #4caf50;
+    flex-shrink: 0;
+}
+
+.clinic-status-card.is-closed .clinic-status-dot {
+    background: #e53935;
+}
+
+.clinic-status-label {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a1a1a;
+}
+
+.clinic-status-sub {
+    font-size: 13px;
+    color: #6b736f;
+    margin-top: 2px;
+}
