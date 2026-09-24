@@ -1,0 +1,47 @@
+/* ==================== EMPLOYEE INVENTORY TABLE ==================== */
+
+.movement-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.movement-fast {
+    background: #e4f6e8;
+    color: #1f8a4c;
+}
+
+.movement-slow {
+    background: #fdf1e0;
+    color: #b8720a;
+}
+
+.employee-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.restock-btn {
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #163a26;
+    background: #ffffff;
+    color: #163a26;
+    font-size: 12.5px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.restock-btn:hover {
+    background: #eef7f0;
+}
+
+.restock-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
