@@ -1,0 +1,463 @@
+import React, { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { usePatients } from '../../hooks/usePatients'
+import { useToast } from '../../components/shared/Toast'
+import { useEmployeeContext } from '../../hooks/useEmployeeContext'
+import { useDeleteRequests } from '../../hooks/useRequests'
+import '../../styles/admin/inventory.css'
+import '../../styles/employee/employee-patients.css'
+
+// ==================== HELPERS ====================
+// Ported from employee-patients.js - reads/writes the same 'vvPatients' key
+// the admin Patients page uses, scoped to this employee's own branch. Only
+// a simplified consultation form is kept here (no availed-items pricing,
+// no blood-test/waiver upload, no follow-up flagging, no print) - matching
+// the reduced scope of the original employee-patients.html.
+
+function formatDate(isoString) {
+  if (!isoString) return '—'
+  const [year, month, day] = isoString.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function todayIso() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function getLastVisitDate(patient) {
+  if (!patient.consultations || patient.consultations.length === 0) return patient.createdAt
+  return patient.consultations.reduce((latest, c) => (c.date > latest ? c.date : latest), patient.consultations[0].date)
+}
+
+function getStatusClass(status) {
+  switch (status) {
+    case 'Active': return 'status-ok'
+    case 'Follow-up needed': return 'status-follow-up'
+    default: return 'status-inactive'
+  }
+}
+
+const EMPTY_PATIENT_FORM = {
+  ownerName: '', ownerSurname: '', ownerEmail: '', ownerAddress: '', ownerMobile: '',
+  petName: '', petSpecie: '', petBreed: '', petSex: '', petDob: '', petAge: '', petMarking: ''
+}
+
+const EMPTY_CONSULT_FORM = { date: '', weight: '', notes: '', remarks: '' }
+
+export default function Patients() {
+  const [patients, setPatients] = usePatients()
+  const showToast = useToast()
+  const { branch } = useEmployeeContext()
+  const { raiseDeleteRequest } = useDeleteRequests()
+  const [searchParams] = useSearchParams()
+
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000)
+    return () => clearInterval(id)
+  }, [])
+
+  const [searchTerm, setSearchTerm] = useState('')
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState(EMPTY_PATIENT_FORM)
+
+  const [detailPatientId, setDetailPatientId] = useState(null)
+  const [consultForm, setConsultForm] = useState(EMPTY_CONSULT_FORM)
+
+  const branchPatients = useMemo(() => patients.filter(p => p.branch === branch), [patients, branch])
+  const visiblePatients = useMemo(() => {
+    return branchPatients.filter(p => {
+      if (!searchTerm) return true
+      const ownerFullName = `${p.ownerName} ${p.ownerSurname}`.toLowerCase()
+      return p.petName.toLowerCase().includes(searchTerm)
+        || ownerFullName.includes(searchTerm)
+        || p.ownerEmail.toLowerCase().includes(searchTerm)
+    })
+  }, [branchPatients, searchTerm])
+
+  const statTotalPatients = branchPatients.length
+  const statFollowUpNeeded = branchPatients.filter(p => p.status === 'Follow-up needed').length
+
+  const detailPatient = useMemo(() => patients.find(p => p.id === detailPatientId) || null, [patients, detailPatientId])
+
+  function openAddModal() {
+    setEditingId(null)
+    setForm(EMPTY_PATIENT_FORM)
+    setModalOpen(true)
+  }
+
+  function openEditModal(patient) {
+    setEditingId(patient.id)
+    setForm({
+      ownerName: patient.ownerName,
+      ownerSurname: patient.ownerSurname,
+      ownerEmail: patient.ownerEmail,
+      ownerAddress: patient.ownerAddress,
+      ownerMobile: patient.ownerMobile,
+      petName: patient.petName,
+      petSpecie: patient.petSpecie,
+      petBreed: patient.petBreed,
+      petSex: patient.petSex,
+      petDob: patient.petDob,
+      petAge: patient.petAge,
+      petMarking: patient.petMarking
+    })
+    setModalOpen(true)
+  }
+
+  function closeModal() {
+    setModalOpen(false)
+    setEditingId(null)
+  }
+
+  function openDetailModal(patient) {
+    setDetailPatientId(patient.id)
+    setConsultForm({ ...EMPTY_CONSULT_FORM, date: todayIso() })
+  }
+
+  function closeDetailModal() {
+    setDetailPatientId(null)
+  }
+
+  // Escape closes whichever modal is open, same as the original's document
+  // keydown listener.
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        closeModal()
+        closeDetailModal()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  function handleSubmit(e) {
+    e.preventDefault()
+
+    const ownerEmail = form.ownerEmail.trim().toLowerCase()
+    const duplicate = patients.find(p => p.ownerEmail === ownerEmail && p.id !== editingId)
+    if (duplicate) {
+      showToast('That owner email is already registered to another owner.')
+      return
+    }
+
+    const patientData = {
+      ownerName: form.ownerName.trim(),
+      ownerSurname: form.ownerSurname.trim(),
+      ownerEmail,
+      ownerAddress: form.ownerAddress.trim(),
+      ownerMobile: form.ownerMobile.trim(),
+      petName: form.petName.trim(),
+      petSpecie: form.petSpecie,
+      petBreed: form.petBreed.trim(),
+      petSex: form.petSex,
+      petDob: form.petDob,
+      petAge: Number(form.petAge),
+      petMarking: form.petMarking.trim(),
+      branch
+    }
+
+    if (editingId) {
+      setPatients(prev => prev.map(p => p.id === editingId ? { ...p, ...patientData } : p))
+      showToast(`"${patientData.petName}" was updated.`)
+      closeModal()
+    } else {
+      const nextId = patients.reduce((max, p) => Math.max(max, p.id + 1), 1)
+      const newPatient = { id: nextId, ...patientData, status: 'Active', createdAt: todayIso(), consultations: [] }
+      setPatients(prev => [...prev, newPatient])
+      showToast(`"${patientData.petName}" was added.`)
+      closeModal()
+      openDetailModal(newPatient)
+    }
+  }
+
+  function handleDeleteRequest(patient) {
+    if (!confirm(`Send a request to the admin to delete "${patient.petName}"'s record?`)) return
+    raiseDeleteRequest('patient', patient.id, `${patient.petName} (${patient.ownerName} ${patient.ownerSurname})`)
+    showToast(`Delete request for "${patient.petName}" sent to the admin.`)
+    closeDetailModal()
+  }
+
+  function handleConsultationSubmit(e) {
+    e.preventDefault()
+    if (!detailPatient) return
+
+    const nextConsultationId = patients.reduce(
+      (max, p) => (p.consultations || []).reduce((m, c) => Math.max(m, c.id + 1), max), 1
+    )
+
+    const consultation = {
+      id: nextConsultationId,
+      date: consultForm.date,
+      weight: consultForm.weight.trim(),
+      notes: consultForm.notes.trim(),
+      remarks: consultForm.remarks.trim()
+    }
+
+    setPatients(prev => prev.map(p => p.id === detailPatient.id
+      ? { ...p, consultations: [...(p.consultations || []), consultation] }
+      : p
+    ))
+    setConsultForm({ ...EMPTY_CONSULT_FORM, date: todayIso() })
+    showToast('Consultation logged.')
+  }
+
+  // Landing here from a notification bell click on another page links to
+  // /employee/patients?followUp=<id> - jump straight to that patient.
+  useEffect(() => {
+    const followUpParamId = Number(searchParams.get('followUp'))
+    if (followUpParamId) {
+      const targetPatient = patients.find(p => p.id === followUpParamId)
+      if (targetPatient) openDetailModal(targetPatient)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  return (
+    <main className="content">
+      <div className="content-header">
+        <h1>My Branch - {branch}</h1>
+        <div className="employee-datetime">
+          <p>{now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+          <p>{now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
+        </div>
+      </div>
+
+      <div className="scope-banner">
+        <p>You are viewing patients registered at your branch only.</p>
+      </div>
+
+      <div className="stats-grid">
+        <div className="stat-card">
+          <p className="stat-label">Total patients</p>
+          <p className="stat-value">{statTotalPatients}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">Follow-up needed</p>
+          <p className="stat-value">{statFollowUpNeeded}</p>
+        </div>
+      </div>
+
+      <div className="table-card">
+        <div className="table-card-header">
+          <h2>Patient Records</h2>
+          <div className="header-filters">
+            <div className="search-wrapper">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+              <input type="text" placeholder="search patient or owner" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.trim().toLowerCase())} />
+            </div>
+            <button className="new-btn" onClick={openAddModal}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              <span>New</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Owner</th>
+                <th>Specie</th>
+                <th>Last visit</th>
+                <th>Status</th>
+                <th className="action-col"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {branchPatients.length === 0 ? (
+                <tr><td colSpan="6" className="empty-state">No patients for this branch yet. Click "+ New" to add one.</td></tr>
+              ) : visiblePatients.length === 0 ? (
+                <tr><td colSpan="6" className="empty-state">No patients match your search.</td></tr>
+              ) : visiblePatients.map(p => (
+                <tr className="patient-row" key={p.id} onClick={() => openDetailModal(p)}>
+                  <td>{p.petName}</td>
+                  <td>{p.ownerName} {p.ownerSurname}</td>
+                  <td>{p.petSpecie}</td>
+                  <td>{formatDate(getLastVisitDate(p))}</td>
+                  <td><span className={`status-pill ${getStatusClass(p.status)}`}>{p.status}</span></td>
+                  <td className="action-col"></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Add / Edit patient modal */}
+      <div className={`modal-overlay${modalOpen ? ' show' : ''}`} onClick={closeModal}>
+        <div className="modal patient-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h2>{editingId ? 'Edit patient' : 'New patient'}</h2>
+            <button className="modal-close" aria-label="Close" onClick={closeModal}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            </button>
+          </div>
+
+          <form className="modal-body" onSubmit={handleSubmit}>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Owner name <span className="required">*</span></label>
+                <input type="text" className="form-input" required value={form.ownerName} onChange={(e) => setForm(f => ({ ...f, ownerName: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Owner surname <span className="required">*</span></label>
+                <input type="text" className="form-input" required value={form.ownerSurname} onChange={(e) => setForm(f => ({ ...f, ownerSurname: e.target.value }))} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Owner email <span className="required">*</span></label>
+              <input type="email" className="form-input" required value={form.ownerEmail} onChange={(e) => setForm(f => ({ ...f, ownerEmail: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Owner address <span className="required">*</span></label>
+              <input type="text" className="form-input" required value={form.ownerAddress} onChange={(e) => setForm(f => ({ ...f, ownerAddress: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Mobile No. <span className="required">*</span></label>
+              <input type="tel" className="form-input" required value={form.ownerMobile} onChange={(e) => setForm(f => ({ ...f, ownerMobile: e.target.value }))} />
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Pet name <span className="required">*</span></label>
+                <input type="text" className="form-input" required value={form.petName} onChange={(e) => setForm(f => ({ ...f, petName: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Specie <span className="required">*</span></label>
+                <div className="form-select-wrapper">
+                  <select className="form-input" required value={form.petSpecie} onChange={(e) => setForm(f => ({ ...f, petSpecie: e.target.value }))}>
+                    <option value="" disabled hidden></option>
+                    <option>Dog</option>
+                    <option>Cat</option>
+                    <option>Other</option>
+                  </select>
+                  <svg className="form-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                </div>
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Breed <span className="required">*</span></label>
+                <input type="text" className="form-input" required value={form.petBreed} onChange={(e) => setForm(f => ({ ...f, petBreed: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Sex <span className="required">*</span></label>
+                <div className="form-select-wrapper">
+                  <select className="form-input" required value={form.petSex} onChange={(e) => setForm(f => ({ ...f, petSex: e.target.value }))}>
+                    <option value="" disabled hidden></option>
+                    <option>Male</option>
+                    <option>Female</option>
+                  </select>
+                  <svg className="form-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                </div>
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Date of birth <span className="required">*</span></label>
+                <input type="date" className="form-input" required value={form.petDob} onChange={(e) => setForm(f => ({ ...f, petDob: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Age <span className="required">*</span></label>
+                <input type="number" className="form-input" min="0" required value={form.petAge} onChange={(e) => setForm(f => ({ ...f, petAge: e.target.value }))} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Color &amp; marking <span className="required">*</span></label>
+              <input type="text" className="form-input" required value={form.petMarking} onChange={(e) => setForm(f => ({ ...f, petMarking: e.target.value }))} />
+            </div>
+
+            <div className="patient-form-actions">
+              <button type="button" className="patient-cancel-btn" onClick={closeModal}>Cancel</button>
+              <button type="submit" className="patient-save-btn">{editingId ? 'Save changes' : 'Save'}</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* Patient detail modal */}
+      <div className={`modal-overlay${detailPatient ? ' show' : ''}`} onClick={closeDetailModal}>
+        {detailPatient && (
+          <div className="modal patient-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2>{detailPatient.petName}</h2>
+                <p className="detail-owner-sub">{detailPatient.ownerName} {detailPatient.ownerSurname}</p>
+              </div>
+              <button className="modal-close" aria-label="Close" onClick={closeDetailModal}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+
+            <div className="modal-body detail-modal-body">
+              <div className="detail-info-grid">
+                <p className="detail-info-sub">{detailPatient.ownerEmail}</p>
+                <p className="detail-info-sub">{detailPatient.ownerMobile}</p>
+                <p className="detail-info-sub">{detailPatient.petSpecie} — {detailPatient.petBreed}</p>
+                <span className={`status-pill ${getStatusClass(detailPatient.status)}`}>{detailPatient.status}</span>
+                <div className="detail-action-btns">
+                  <button type="button" className="detail-edit-btn" onClick={() => { closeDetailModal(); openEditModal(detailPatient) }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" /></svg>
+                    <span>Edit info</span>
+                  </button>
+                  <button type="button" className="row-action-btn delete" aria-label="Request deletion" onClick={() => handleDeleteRequest(detailPatient)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <h3 className="detail-history-title">New consultation</h3>
+              <form className="consultation-form" onSubmit={handleConsultationSubmit}>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Date <span className="required">*</span></label>
+                    <input type="date" className="form-input" required value={consultForm.date} onChange={(e) => setConsultForm(f => ({ ...f, date: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Weight</label>
+                    <input type="text" className="form-input" placeholder="e.g. 6-8 kg" value={consultForm.weight} onChange={(e) => setConsultForm(f => ({ ...f, weight: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Treatment / findings <span className="required">*</span></label>
+                  <textarea className="form-input" rows="3" required value={consultForm.notes} onChange={(e) => setConsultForm(f => ({ ...f, notes: e.target.value }))}></textarea>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Remarks</label>
+                  <input type="text" className="form-input" value={consultForm.remarks} onChange={(e) => setConsultForm(f => ({ ...f, remarks: e.target.value }))} />
+                </div>
+                <div className="consultation-form-actions">
+                  <button type="submit" className="patient-save-btn">Save consultation</button>
+                </div>
+              </form>
+
+              <h3 className="detail-history-title">History</h3>
+              <div className="consultation-history">
+                {(!detailPatient.consultations || detailPatient.consultations.length === 0) ? (
+                  <p className="empty-state">No consultations logged yet.</p>
+                ) : [...detailPatient.consultations].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).map(c => (
+                  <div className="consultation-item" key={c.id}>
+                    <div className="consultation-item-head">
+                      <span>
+                        <span className="consultation-date">{formatDate(c.date)}</span>
+                        {c.weight && <span className="consultation-weight">{c.weight}</span>}
+                      </span>
+                    </div>
+                    <p className="consultation-field">{c.notes}</p>
+                    {c.remarks && <p className="consultation-remarks">{c.remarks}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
+  )
+}
