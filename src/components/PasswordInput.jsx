@@ -29,6 +29,9 @@ function PasswordInput({ value, onChange, error, success }) {
         <input
           type={showPassword ? 'text' : 'password'}
           id="password"
+          name="password"
+          autoComplete="current-password"
+          aria-invalid={error || undefined}
           className={className}
           placeholder="Enter your password"
           value={value}
@@ -41,6 +44,8 @@ function PasswordInput({ value, onChange, error, success }) {
         <button 
           type="button" 
           className={`toggle-password${showPassword ? ' is-visible' : ''}`}
+          aria-label={showPassword ? 'Hide password' : 'Show password'}
+          aria-pressed={showPassword}
           onClick={togglePassword}
         >
           <svg className="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

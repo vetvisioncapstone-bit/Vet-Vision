@@ -3,14 +3,10 @@ import { useInventory } from '../../hooks/useInventory'
 import { useToast } from '../../components/shared/Toast'
 import { errorMessage } from '../../api/client'
 import '../../styles/admin/inventory.css'
+import { formatDate } from '../../utils/format'
 
-function formatDate(isoString) {
-  if (!isoString) return '—'
-  const [year, month, day] = isoString.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
+import Dialog from '../../components/shared/Dialog'
+import { onActivate } from '../../utils/a11y'
 function getStatus(product) {
   if (product.quantity <= 0) return { label: 'Out of stock', cls: 'status-out-of-stock' }
   if (product.quantity <= product.reorderPoint) return { label: 'Low Stock', cls: 'status-low-stock' }
@@ -142,13 +138,13 @@ export default function Inventory() {
   }
 
   return (
-    <main className="content">
+    <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
         <h1>Inventory status &amp; demand forecast</h1>
         <div className="header-filters">
           <div className="search-wrapper">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-            <input type="text" placeholder="Search item" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.trim().toLowerCase())} />
+            <input type="text" aria-label="Search items" autoComplete="off" placeholder="Search item" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.trim().toLowerCase())} />
           </div>
 
           <div className="popover-wrapper">
@@ -219,7 +215,7 @@ export default function Inventory() {
               ) : visibleProducts.map(p => {
                 const status = getStatus(p)
                 return (
-                  <tr className="product-row" key={p.id} onClick={() => setDetailProduct(p)}>
+                  <tr className="product-row" key={p.id} tabIndex={0} onKeyDown={onActivate(() => setDetailProduct(p))} onClick={() => setDetailProduct(p)}>
                     <td>{p.photo
                       ? <img className="product-thumb" src={p.photo} alt={p.name} />
                       : <div className="product-thumb-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg></div>}
@@ -247,7 +243,7 @@ export default function Inventory() {
         </div>
       </div>
 
-      <div className={`modal-overlay${modalOpen ? ' show' : ''}`} onClick={closeModal}>
+      <Dialog open={!!(modalOpen)} onClose={closeModal} label={editingId ? 'Edit product' : 'Add new product'}>
         <div className="modal product-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>{editingId ? 'Edit product' : 'Add new product'}</h2>
@@ -269,21 +265,21 @@ export default function Inventory() {
 
               <div className="modal-fields">
                 <div className="form-group">
-                  <label className="form-label">Product name</label>
-                  <input type="text" className="form-input" placeholder="e.g. Pet food (dog)" required
+                  <label className="form-label" htmlFor="src-pages-admin-inventory-f1">Product name</label>
+                  <input id="src-pages-admin-inventory-f1" type="text" className="form-input" placeholder="e.g. Pet food (dog)" required
                     value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Category</label>
-                  <input type="text" className="form-input" placeholder="e.g. Food, Grooming, Medicine" required
+                  <label className="form-label" htmlFor="src-pages-admin-inventory-f2">Category</label>
+                  <input id="src-pages-admin-inventory-f2" type="text" className="form-input" placeholder="e.g. Food, Grooming, Medicine" required
                     value={form.category} onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))} />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Branch</label>
+                  <label className="form-label" htmlFor="src-pages-admin-inventory-f3">Branch</label>
                   <div className="form-select-wrapper">
-                    <select className="form-input" required value={form.branch} onChange={(e) => setForm(f => ({ ...f, branch: e.target.value }))}>
+                    <select id="src-pages-admin-inventory-f3" className="form-input" required value={form.branch} onChange={(e) => setForm(f => ({ ...f, branch: e.target.value }))}>
                       <option value="" disabled hidden></option>
                       <option>Ibaan</option>
                       <option>San Jose</option>
@@ -294,26 +290,26 @@ export default function Inventory() {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Quantity</label>
-                    <input type="number" className="form-input" min="0" step="1" placeholder="e.g. 25" required
+                    <label className="form-label" htmlFor="src-pages-admin-inventory-f4">Quantity</label>
+                    <input id="src-pages-admin-inventory-f4" type="number" className="form-input" min="0" step="1" placeholder="e.g. 25" required
                       value={form.quantity} onChange={(e) => setForm(f => ({ ...f, quantity: e.target.value }))} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Reorder point</label>
-                    <input type="number" className="form-input" min="0" step="1" placeholder="e.g. 10" required
+                    <label className="form-label" htmlFor="src-pages-admin-inventory-f5">Reorder point</label>
+                    <input id="src-pages-admin-inventory-f5" type="number" className="form-input" min="0" step="1" placeholder="e.g. 10" required
                       value={form.reorderPoint} onChange={(e) => setForm(f => ({ ...f, reorderPoint: e.target.value }))} />
                   </div>
                 </div>
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Delivery date</label>
-                    <input type="date" className="form-input" required
+                    <label className="form-label" htmlFor="src-pages-admin-inventory-f6">Delivery date</label>
+                    <input id="src-pages-admin-inventory-f6" type="date" className="form-input" required
                       value={form.delivery} onChange={(e) => setForm(f => ({ ...f, delivery: e.target.value }))} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Expiration date</label>
-                    <input type="date" className="form-input" required
+                    <label className="form-label" htmlFor="src-pages-admin-inventory-f7">Expiration date</label>
+                    <input id="src-pages-admin-inventory-f7" type="date" className="form-input" required
                       value={form.expiration} onChange={(e) => setForm(f => ({ ...f, expiration: e.target.value }))} />
                   </div>
                 </div>
@@ -325,9 +321,9 @@ export default function Inventory() {
             <button type="submit" className="modal-submit-btn" disabled={saving}>{editingId ? 'Save changes' : 'Add product'}</button>
           </form>
         </div>
-      </div>
+      </Dialog>
 
-      <div className={`modal-overlay${detailProduct ? ' show' : ''}`} onClick={() => setDetailProduct(null)}>
+      <Dialog open={!!(detailProduct)} onClose={() => setDetailProduct(null)} label={'Product details'}>
         {detailProduct && (
           <div className="modal detail-modal" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close detail-modal-close" aria-label="Close" onClick={() => setDetailProduct(null)}>
@@ -353,7 +349,7 @@ export default function Inventory() {
             </div>
           </div>
         )}
-      </div>
+      </Dialog>
     </main>
   )
 }

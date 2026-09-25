@@ -68,6 +68,8 @@ class ServiceTransaction(models.Model):
 
     class Meta:
         db_table = "service_transaction"
+        # The legacy schema indexes customer, date and branch but not pet; pet history and "last visit" look up by pet.
+        indexes = [models.Index(fields=["pet"], name="idx_svc_pet")]
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(payment_status__in=PAYMENT_STATUSES), name="chk_service_payment_status"

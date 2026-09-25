@@ -51,7 +51,7 @@ export default function ChatPanel() {
         <form className="chat-panel-input" onSubmit={handleSubmit}>
           <input
             type="text"
-            placeholder="Type a message..."
+            aria-label="Message" autoComplete="off" placeholder="Type a message…\"
             autoComplete="off"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}

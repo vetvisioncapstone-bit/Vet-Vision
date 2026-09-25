@@ -114,3 +114,11 @@
         grid-template-columns: 1fr;
     }
 }
+
+.forecast-picker { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+.forecast-picker .search-wrapper { flex: 1; min-width: 220px; }
+.forecast-picker select { min-width: 220px; }
+.search-results { list-style: none; margin: -16px 0 20px; background: #fff; border: 1px solid #ececec; border-radius: 10px; max-height: 220px; overflow-y: auto; }
+.search-results li button { width: 100%; text-align: left; padding: 10px 14px; background: none; border: none; font: inherit; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; }
+.search-results li button:hover { background: #f4f8f5; }
+.search-results small { color: #7a8580; }

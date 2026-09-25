@@ -5,14 +5,9 @@ import { useNotifications } from '../../hooks/useNotifications'
 import { getInitialsFromName } from '../../utils/initials'
 import { useToast } from './Toast'
 import { errorMessage } from '../../api/client'
+import { formatDate } from '../../utils/format'
 
-function formatDate(isoString) {
-  if (!isoString) return '—'
-  const [year, month, day] = isoString.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
+import Dialog from './Dialog'
 function escapeText(str) {
   return str
 }
@@ -91,7 +86,7 @@ export default function Topbar({ role, onToggleSidebar }) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
         </button>
 
-        <div className={`about-modal-overlay${aboutOpen ? ' show' : ''}`} onClick={() => setAboutOpen(false)}>
+        <Dialog open={!!(aboutOpen)} onClose={() => setAboutOpen(false)} label={'About Vet Vision'} className="about-modal-overlay">
           <div className="about-modal" onClick={(e) => e.stopPropagation()}>
             <button className="about-modal-close" aria-label="Close" onClick={() => setAboutOpen(false)}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -111,7 +106,7 @@ export default function Topbar({ role, onToggleSidebar }) {
             <p className="about-modal-title about-subtitle">About EcoVet Animal Clinic</p>
             <p className="about-text">EcoVet Animal Clinic is a growing veterinary practice offering animal consultation and treatment, grooming, and retail pet products. It currently operates two branches &mdash; in Ibaan and San Jose, Batangas &mdash; serving pet owners across both communities.</p>
           </div>
-        </div>
+        </Dialog>
 
         <div className="popover-wrapper">
           <button className="icon-btn" aria-label="Notifications" aria-haspopup="true" aria-expanded={notifOpen} onClick={(e) => { e.stopPropagation(); toggleNotif() }}>

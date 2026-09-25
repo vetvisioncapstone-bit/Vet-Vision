@@ -1,11 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { usePatients } from '../../hooks/usePatients'
+import { usePatient, usePatients } from '../../hooks/usePatients'
+import PatientPrintSheet from './PatientPrintSheet'
+import { useDebounced } from '../../hooks/useDebounced'
+import { getLastVisitDate } from '../../utils/visits'
 import { useInventory } from '../../hooks/useInventory'
 import { useToast } from '../../components/shared/Toast'
 import { errorMessage } from '../../api/client'
 import '../../styles/admin/patients.css'
+import { formatDate, todayIso, formatPrice, dash, getStatusClass, isImageDataUrl } from '../../utils/format'
 
+import Dialog from '../../components/shared/Dialog'
+import { onActivate } from '../../utils/a11y'
 // ==================== CONSTANTS ====================
 // The clinic's service catalog. Products, on the other hand, come from the
 // Inventory page's own records (useInventory) so the two stay a single
@@ -36,201 +42,13 @@ const EMPTY_PATIENT_FORM = {
 
 // ==================== HELPERS (pure, module-level) ====================
 
-function escapeHtml(str) {
-  const div = document.createElement('div')
-  div.textContent = str
-  return div.innerHTML
-}
-
-function formatDate(isoString) {
-  if (!isoString) return '—'
-  const [year, month, day] = isoString.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function todayIso() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function formatPrice(amount) {
-  return `₱${Number(amount || 0).toFixed(2)}`
-}
-
 // Visit count / last visit are derived from consultation history rather than
 // stored separately, so they can never drift out of sync with it.
 function getVisitCount(patient) {
-  return 1 + (patient.consultations ? patient.consultations.length : 0)
-}
-
-function getLastVisitDate(patient) {
-  const consultations = patient.consultations || []
-  if (consultations.length === 0) return patient.createdAt || ''
-  return consultations.reduce((latest, c) => ((c.date || '') > latest ? c.date : latest), consultations[0].date || '')
-}
-
-function dash(value) {
-  return value === null || value === undefined || value === '' ? '—' : value
-}
-
-function isImageDataUrl(url) {
-  return typeof url === 'string' && url.startsWith('data:image/')
-}
-
-function getStatusClass(status) {
-  switch (status) {
-    case 'Active': return 'status-ok'
-    case 'Follow-up needed': return 'status-follow-up'
-    default: return 'status-inactive'
-  }
-}
-
-// ==================== PRINTING (pure HTML string builders) ====================
-// These generate a full standalone HTML document string for a window.open()
-// popup - not JSX - ported essentially as-is from patients.js.
-
-const CLINIC_PRINT_STYLES = `
-    body { font-family: Arial, Helvetica, sans-serif; color: #111; padding: 28px 34px; max-width: 720px; margin: 0 auto; }
-    .letterhead { display: flex; align-items: center; justify-content: center; gap: 14px; border-bottom: 3px solid #111; padding-bottom: 10px; margin-bottom: 4px; }
-    .letterhead img { width: 52px; height: 52px; object-fit: contain; }
-    .letterhead h1 { font-size: 26px; letter-spacing: 0.02em; margin: 0; }
-    .branch-address { font-size: 12px; text-align: center; margin: 4px 0 18px; }
-    .info-block { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
-    .info-row { display: flex; gap: 22px; flex-wrap: wrap; }
-    .info-field { display: flex; align-items: baseline; gap: 6px; flex: 1; min-width: 140px; }
-    .info-field .field-label { font-weight: 700; font-size: 12.5px; white-space: nowrap; }
-    .info-field .field-value { flex: 1; border-bottom: 1px solid #111; font-size: 12.5px; padding-bottom: 1px; min-height: 14px; }
-    table.log { width: 100%; border-collapse: collapse; border: 1.5px solid #111; }
-    table.log th { border: 1px solid #111; padding: 6px 8px; font-size: 12.5px; background: #f2f2f2; }
-    table.log td { border: 1px solid #111; padding: 8px; font-size: 12px; vertical-align: top; }
-    table.log td:first-child { width: 90px; white-space: nowrap; }
-    table.log td:last-child { width: 150px; }
-    table.log tfoot td { font-weight: 700; background: #f7f7f7; }
-    .attachment-label { font-weight: 700; font-size: 12px; margin: 14px 0 4px; }
-    .attachment-img { max-width: 100%; max-height: 320px; border: 1px solid #ccc; border-radius: 6px; }
-    .footer { margin-top: 20px; font-size: 10.5px; color: #888; text-align: center; }
-`
-
-// Older consultations (saved before per-item pricing was added) only have the
-// flattened "services" string - fall back to splitting that instead of the
-// structured availedItems array so old receipts still print correctly.
-function buildConsultationCells(consultation) {
-  const hasPricedItems = Boolean(consultation.availedItems && consultation.availedItems.length)
-  const rxLines = hasPricedItems
-    ? consultation.availedItems.map(item => `* ${escapeHtml(item.name)} — ${formatPrice(item.price)}`)
-    : (consultation.services || '').split(',').map(s => s.trim()).filter(Boolean).map(text => `* ${escapeHtml(text)}`)
-
-  const total = hasPricedItems
-    ? consultation.totalPrice || consultation.availedItems.reduce((sum, i) => sum + Number(i.price || 0), 0)
-    : 0
-
-  const treatmentHtml = [
-    consultation.weight ? escapeHtml(`Wt: ${consultation.weight}`) : '',
-    consultation.notes ? escapeHtml(consultation.notes) : '',
-    rxLines.length ? '<strong>Rx</strong>' : '',
-    ...rxLines,
-    total ? `<strong>Total: ${formatPrice(total)}</strong>` : ''
-  ].filter(Boolean).join('<br>') || '&nbsp;'
-
-  const remarksHtml = [
-    consultation.remarks || '',
-    consultation.followUp ? `Follow-up needed: ${consultation.followUpNote || '—'}` : '',
-    consultation.bloodTestImage ? 'Blood test result attached' : '',
-    consultation.waiverImage ? 'Signed waiver attached' : ''
-  ].filter(Boolean).map(escapeHtml).join('<br>') || '&nbsp;'
-
-  return { treatmentHtml, remarksHtml, total }
-}
-
-function consultationAttachmentsHtml(consultation) {
-  return [
-    consultation.bloodTestImage ? `
-            <p class="attachment-label">Blood test result — ${formatDate(consultation.date)}</p>
-            <img class="attachment-img" src="${consultation.bloodTestImage}" alt="Blood test result">
-        ` : '',
-    consultation.waiverImage ? `
-            <p class="attachment-label">Signed waiver — ${formatDate(consultation.date)}</p>
-            ${isImageDataUrl(consultation.waiverImage)
-        ? `<img class="attachment-img" src="${consultation.waiverImage}" alt="Signed waiver">`
-        : `<p style="font-size:12px;color:#666;">(waiver on file - not an image, open from the app to view)</p>`}
-        ` : ''
-  ].filter(Boolean).join('')
-}
-
-// Logo path adapted for the React app: images now live in public/Images/, so
-// this is a root-relative path instead of the original's
-// new URL('Images/EcovetLogo%201.png', document.baseURI).
-function clinicLetterheadHtml(patient) {
-  const logoUrl = '/Images/EcovetLogo%201.png'
-  const branchAddress = patient.branch === 'Ibaan'
-    ? '454 Balagtas St., Poblacion, Ibaan, Batangas'
-    : `${escapeHtml(patient.branch)} Branch`
-
-  return `
-        <div class="letterhead">
-            <img src="${logoUrl}" alt="Ecovet logo">
-            <h1>ECOVET ANIMAL CLINIC</h1>
-        </div>
-        <p class="branch-address">${branchAddress}</p>
-
-        <div class="info-block">
-            <div class="info-row">
-                <div class="info-field"><span class="field-label">Client's Name:</span><span class="field-value">${escapeHtml(patient.ownerName)} ${escapeHtml(patient.ownerSurname)}</span></div>
-                <div class="info-field"><span class="field-label">Pet's Name:</span><span class="field-value">${escapeHtml(patient.petName)}</span></div>
-                <div class="info-field"><span class="field-label">Mobile #:</span><span class="field-value">${escapeHtml(patient.ownerMobile)}</span></div>
-            </div>
-            <div class="info-row">
-                <div class="info-field" style="flex: 2;"><span class="field-label">Address:</span><span class="field-value">${escapeHtml(patient.ownerAddress)}</span></div>
-                <div class="info-field"><span class="field-label">Specie:</span><span class="field-value">${escapeHtml(patient.petSpecie)}</span></div>
-                <div class="info-field"><span class="field-label">Breed:</span><span class="field-value">${escapeHtml(patient.petBreed)}</span></div>
-            </div>
-            <div class="info-row">
-                <div class="info-field"><span class="field-label">Pet's Date of birth:</span><span class="field-value">${formatDate(patient.petDob)}</span></div>
-                <div class="info-field"><span class="field-label">Age:</span><span class="field-value">${escapeHtml(String(patient.petAge ?? ''))}</span></div>
-                <div class="info-field"><span class="field-label">Sex:</span><span class="field-value">${escapeHtml(patient.petSex)}</span></div>
-                <div class="info-field"><span class="field-label">Color Marking:</span><span class="field-value">${escapeHtml(patient.petMarking)}</span></div>
-            </div>
-        </div>
-    `
-}
-
-function writeAndPrint(printWindow, title, bodyHtml) {
-  printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>${escapeHtml(title)}</title>
-            <style>${CLINIC_PRINT_STYLES}</style>
-        </head>
-        <body>${bodyHtml}</body>
-        </html>
-    `)
-  printWindow.document.close()
-
-  // Printing immediately after document.close() can fire before the
-  // letterhead logo image has actually loaded, so it shows up blank - wait
-  // for the window to finish loading everything first.
-  let printed = false
-  const doPrint = () => {
-    if (printed) return
-    printed = true
-    printWindow.focus()
-    printWindow.print()
-  }
-
-  if (printWindow.document.readyState === 'complete') {
-    doPrint()
-  } else {
-    printWindow.addEventListener('load', doPrint)
-    // Fallback in case 'load' never fires for some reason.
-    setTimeout(doPrint, 1000)
-  }
+  return patient.consultations ? patient.consultations.length : 0
 }
 
 export default function Patients() {
-  const { items: patients, loading, create, update, remove, addConsultation, removeConsultation } = usePatients()
   const { items: inventoryItems } = useInventory()
   const showToast = useToast()
   const [saving, setSaving] = useState(false)
@@ -238,11 +56,25 @@ export default function Patients() {
   const [searchParams] = useSearchParams()
 
   // ==================== STATE: search / filter / selection ====================
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchInput, setSearchInput] = useState('')
   const [selectedBranch, setSelectedBranch] = useState('All Branches')
   const [activeStatuses, setActiveStatuses] = useState(() => new Set())
   const [selectedPatientIds, setSelectedPatientIds] = useState(() => new Set())
   const [filterOpen, setFilterOpen] = useState(false)
+  const [printJob, setPrintJob] = useState(null) // { patient, consultations, single } while the print sheet is open
+  const [regYear, setRegYear] = useState('') // '' = any year
+  const [visitYear, setVisitYear] = useState('')
+
+  const searchTerm = useDebounced(searchInput.trim()) // what goes to the server
+
+  // The server does the searching, filtering and paging; only the current page is ever loaded.
+  const {
+    items: patients, loading, total: totalPatients, totalPages: serverTotalPages, stats: serverStats,
+    create, update, remove, addConsultation, removeConsultation
+  } = usePatients({
+    page, pageSize: PAGE_SIZE, q: searchTerm, branch: selectedBranch, status: [...activeStatuses].sort(),
+    year: regYear, visitYear
+  })
 
   // ==================== STATE: new/edit patient modal ====================
   const [patientModalOpen, setPatientModalOpen] = useState(false)
@@ -275,41 +107,23 @@ export default function Patients() {
 
   // ==================== DERIVED ====================
 
-  const visiblePatients = useMemo(() => {
-    return patients.filter(p => {
-      const ownerFullName = `${p.ownerName || ''} ${p.ownerSurname || ''}`.toLowerCase()
-      const matchesSearch = !searchTerm
-        || (p.petName || '').toLowerCase().includes(searchTerm)
-        || ownerFullName.includes(searchTerm)
-        || (p.ownerEmail || '').toLowerCase().includes(searchTerm)
-      const matchesBranch = selectedBranch === 'All Branches' || p.branch === selectedBranch
-      const matchesStatus = activeStatuses.size === 0 || activeStatuses.has(p.status)
-      return matchesSearch && matchesBranch && matchesStatus
-    })
-  }, [patients, searchTerm, selectedBranch, activeStatuses])
+  const visiblePatients = patients
 
-  const stats = useMemo(() => {
-    const now = new Date()
-    const activeThisMonth = patients.filter(p => {
-      const lastVisit = getLastVisitDate(p)
-      if (!lastVisit) return false
-      const [y, m] = String(lastVisit).split('-').map(Number)
-      return p.status === 'Active' && y === now.getFullYear() && m === now.getMonth() + 1
-    }).length
-    const followUpNeeded = patients.filter(p => p.status === 'Follow-up needed').length
-    return { activeThisMonth, followUpNeeded }
-  }, [patients])
-
-  const availableStatuses = useMemo(() => [...new Set(patients.map(p => p.status))].sort(), [patients])
-
-  const totalPages = Math.max(1, Math.ceil(visiblePatients.length / PAGE_SIZE))
-  const currentPage = Math.min(page, totalPages)
-  const pagePatients = useMemo(
-    () => visiblePatients.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-    [visiblePatients, currentPage]
+  const stats = useMemo(
+    () => ({ activeThisMonth: serverStats?.activeThisMonth ?? 0, followUpNeeded: serverStats?.followUpNeeded ?? 0 }),
+    [serverStats]
   )
 
-  useEffect(() => { setPage(1) }, [searchTerm, selectedBranch, activeStatuses])
+  const availableStatuses = ['Active', 'Follow-up needed']
+
+  const totalPages = serverTotalPages
+  const currentPage = Math.min(page, totalPages)
+  const pagePatients = patients
+  const total_from = totalPatients === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
+  const total_to = Math.min(currentPage * PAGE_SIZE, totalPatients)
+  const filtersActive = Boolean(searchTerm) || selectedBranch !== 'All Branches' || activeStatuses.size > 0 || Boolean(regYear) || Boolean(visitYear)
+
+  useEffect(() => { setPage(1) }, [searchTerm, selectedBranch, activeStatuses, regYear, visitYear])
 
   const visibleIds = useMemo(() => visiblePatients.map(p => p.id), [visiblePatients])
   const selectedVisibleCount = useMemo(
@@ -323,9 +137,11 @@ export default function Patients() {
     if (selectAllRef.current) selectAllRef.current.indeterminate = selectAllIndeterminate
   }, [selectAllIndeterminate])
 
+  // List rows leave out attached images, so the open patient is fetched in full.
+  const { patient: detailFromServer } = usePatient(currentDetailPatientId)
   const currentPatient = useMemo(
-    () => patients.find(p => p.id === currentDetailPatientId) || null,
-    [patients, currentDetailPatientId]
+    () => detailFromServer || patients.find(p => p.id === currentDetailPatientId) || null,
+    [detailFromServer, patients, currentDetailPatientId]
   )
 
   const availedItemOptions = useMemo(() => {
@@ -637,99 +453,20 @@ export default function Patients() {
   }
 
   // ==================== PRINTING ====================
+  // Shown as PatientPrintSheet: the clinic's paper chart, printed from the browser's own print dialog.
 
-  function openClinicPrintWindow() {
-    const printWindow = window.open('', '_blank', 'width=760,height=900')
-    if (!printWindow) {
-      showToast('Please allow pop-ups to print.')
-      return null
-    }
-    return printWindow
-  }
-
-  // Mirrors the clinic's actual paper chart (Ecovet Animal Clinic letterhead,
-  // Client's Name / Pet's Name / Mobile# fields, then a Date | Treatment |
-  // Remarks log table) so the printout matches what staff already know.
   function printConsultationReceipt(patient, consultation) {
-    const printWindow = openClinicPrintWindow()
-    if (!printWindow) return
-
-    const { treatmentHtml, remarksHtml } = buildConsultationCells(consultation)
-
-    const blankRows = Array.from({ length: 4 }, () => `
-        <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
-    `).join('')
-
-    const bodyHtml = `
-        ${clinicLetterheadHtml(patient)}
-        <table class="log">
-            <thead>
-                <tr><th>Date</th><th>Treatment</th><th>Remarks</th></tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>${formatDate(consultation.date)}</td>
-                    <td>${treatmentHtml}</td>
-                    <td>${remarksHtml}</td>
-                </tr>
-                ${blankRows}
-            </tbody>
-        </table>
-        ${consultationAttachmentsHtml(consultation)}
-        <p class="footer">Printed ${formatDate(todayIso())} - Vet Vision Clinic Management System</p>
-    `
-
-    writeAndPrint(printWindow, `${patient.petName} - Ecovet Animal Clinic`, bodyHtml)
+    setPrintJob({ patient, consultations: [consultation], single: true })
   }
 
-  // Prints every consultation on file for this patient as one running log,
-  // same layout as the physical chart when a page fills up with visits.
+  // Every consultation on file as one running log, oldest first.
   function printPatientHistory(patient) {
     if (!patient.consultations || patient.consultations.length === 0) {
       showToast('No consultations logged yet for this patient.')
       return
     }
-
-    const printWindow = openClinicPrintWindow()
-    if (!printWindow) return
-
     const sorted = [...patient.consultations].sort((a, b) => (a.date || '').localeCompare(b.date || '') || String(a.id).localeCompare(String(b.id)))
-
-    let grandTotal = 0
-    const rows = sorted.map(c => {
-      const { treatmentHtml, remarksHtml, total } = buildConsultationCells(c)
-      grandTotal += total
-      return `
-            <tr>
-                <td>${formatDate(c.date)}</td>
-                <td>${treatmentHtml}</td>
-                <td>${remarksHtml}</td>
-            </tr>
-        `
-    }).join('')
-
-    // Unlike the single-visit receipt, the full history doesn't dump every
-    // blood test / waiver image on the page - with many visits that's a lot
-    // of heavy inline images, which is also what was making the letterhead
-    // logo print blank. The Remarks column still notes when a visit has one
-    // on file.
-    const bodyHtml = `
-        ${clinicLetterheadHtml(patient)}
-        <table class="log">
-            <thead>
-                <tr><th>Date</th><th>Treatment</th><th>Remarks</th></tr>
-            </thead>
-            <tbody>${rows}</tbody>
-            ${grandTotal ? `
-                <tfoot>
-                    <tr><td>&nbsp;</td><td>Grand total</td><td>${formatPrice(grandTotal)}</td></tr>
-                </tfoot>
-            ` : ''}
-        </table>
-        <p class="footer">Printed ${formatDate(todayIso())} - Vet Vision Clinic Management System</p>
-    `
-
-    writeAndPrint(printWindow, `${patient.petName} - Full history - Ecovet Animal Clinic`, bodyHtml)
+    setPrintJob({ patient, consultations: sorted, single: false })
   }
 
   // ==================== EFFECTS: escape key / deep link ====================
@@ -748,25 +485,26 @@ export default function Patients() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const followUpParamId = searchParams.get('followUp')
+  const { patient: deepLinkPatient } = usePatient(followUpParamId)
+
   // Landing here from a notification bell click on another page
   // (Topbar.jsx) links to /admin/patients?followUp=<id> - jump straight to
   // that patient instead of leaving the admin to find them in the table.
   useEffect(() => {
-    const followUpParamId = searchParams.get('followUp')
     if (!followUpParamId || deepLinkHandledRef.current) return
-    const targetPatient = patients.find(p => p.id === followUpParamId)
-    if (targetPatient) {
+    if (deepLinkPatient) {
       deepLinkHandledRef.current = true
-      openPatientDetailModal(targetPatient)
+      openPatientDetailModal(deepLinkPatient)
     }
-    // Patients load asynchronously, so wait for the list; handle once only.
+    // The patient loads asynchronously; handle once only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patients])
+  }, [deepLinkPatient])
 
   // ==================== RENDER ====================
 
   return (
-    <main className="content">
+    <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
         <h1>Patient records</h1>
         <div className="select-wrapper">
@@ -783,15 +521,15 @@ export default function Patients() {
       <div className="stats-grid">
         <div className="stat-card">
           <p className="stat-label">Total patients</p>
-          <p className={`stat-value${patients.length === 0 ? ' muted' : ''}`}>{patients.length}</p>
+          <p className={`stat-value${(serverStats?.total ?? 0) === 0 ? ' muted' : ''}`}>{serverStats?.total ?? 0}</p>
         </div>
         <div className="stat-card">
           <p className="stat-label">Active this month</p>
-          <p className={`stat-value${patients.length === 0 ? ' muted' : ''}`}>{stats.activeThisMonth}</p>
+          <p className={`stat-value${(serverStats?.total ?? 0) === 0 ? ' muted' : ''}`}>{stats.activeThisMonth}</p>
         </div>
         <div className={`stat-card${stats.followUpNeeded > 0 ? ' follow-up-active' : ''}`}>
           <p className="stat-label">Follow-up needed</p>
-          <p className={`stat-value${patients.length === 0 ? ' muted' : ''}`}>{stats.followUpNeeded}</p>
+          <p className={`stat-value${(serverStats?.total ?? 0) === 0 ? ' muted' : ''}`}>{stats.followUpNeeded}</p>
         </div>
       </div>
 
@@ -800,7 +538,7 @@ export default function Patients() {
         <div className="patients-toolbar">
           <div className="search-wrapper">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-            <input type="text" placeholder="search patient or owner" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.trim().toLowerCase())} />
+            <input type="text" aria-label="Search patients or owners" autoComplete="off" placeholder="search patient or owner" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
           </div>
 
           <div className="toolbar-actions">
@@ -827,6 +565,19 @@ export default function Patients() {
                       </label>
                     ))}
                 </div>
+                <p className="popover-title">Registered in</p>
+                <select className="filter-year" value={regYear} onChange={(e) => setRegYear(e.target.value)} aria-label="Registered in year">
+                  <option value="">Any year</option>
+                  {(serverStats?.years || []).map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <p className="popover-title">Visited in</p>
+                <select className="filter-year" value={visitYear} onChange={(e) => setVisitYear(e.target.value)} aria-label="Visited in year">
+                  <option value="">Any year</option>
+                  {(serverStats?.years || []).map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                {(regYear || visitYear) && (
+                  <button type="button" className="filter-clear" onClick={() => { setRegYear(''); setVisitYear('') }}>Clear year filters</button>
+                )}
               </div>
             </div>
           </div>
@@ -851,12 +602,12 @@ export default function Patients() {
             <tbody>
               {loading && patients.length === 0 ? (
                 <tr><td colSpan="10" className="empty-state">Loading patients...</td></tr>
-              ) : patients.length === 0 ? (
+              ) : patients.length === 0 && !filtersActive ? (
                 <tr><td colSpan="10" className="empty-state">No patients yet. Click "+ New" to add one.</td></tr>
-              ) : visiblePatients.length === 0 ? (
+              ) : patients.length === 0 ? (
                 <tr><td colSpan="10" className="empty-state">No patients match your search or filter.</td></tr>
               ) : pagePatients.map(p => (
-                <tr className="patient-row" key={p.id} onClick={() => openPatientDetailModal(p)}>
+                <tr className="patient-row" key={p.id} tabIndex={0} onKeyDown={onActivate(() => openPatientDetailModal(p))} onClick={() => openPatientDetailModal(p)}>
                   <td className="checkbox-col" onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" className="patient-row-checkbox" checked={selectedPatientIds.has(p.id)} onChange={(e) => handleRowCheckboxChange(p.id, e.target.checked)} aria-label={`Select ${p.petName}`} />
                   </td>
@@ -885,7 +636,7 @@ export default function Patients() {
         </div>
 
         <div className="table-footer">
-          <p className="table-footer-count">Showing {visiblePatients.length} of {patients.length} entries</p>
+          <p className="table-footer-count">Showing {total_from}-{total_to} of {totalPatients} entries</p>
           <div className="pagination">
             <button className="page-btn" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} aria-label="Previous page">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
@@ -899,7 +650,7 @@ export default function Patients() {
       </div>
 
       {/* New/Edit patient modal */}
-      <div className={`modal-overlay${patientModalOpen ? ' show' : ''}`} onClick={closePatientModal}>
+      <Dialog open={!!(patientModalOpen)} onClose={closePatientModal} label={editingPatientId ? 'Edit patient' : 'New patient'}>
         <div className="modal patient-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>{editingPatientId ? 'Edit patient' : 'New patient'}</h2>
@@ -1017,10 +768,10 @@ export default function Patients() {
             </div>
           </form>
         </div>
-      </div>
+      </Dialog>
 
       {/* Patient detail modal */}
-      <div className={`modal-overlay${currentPatient ? ' show' : ''}`} onClick={closePatientDetailModal}>
+      <Dialog open={!!(currentPatient)} onClose={closePatientDetailModal} label={'Patient details'}>
         {currentPatient && (
           <div className="modal patient-detail-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -1087,7 +838,7 @@ export default function Patients() {
                 </div>
                 <div className="form-group">
                   <label className="form-label" htmlFor="consultNotes">Treatment / findings <span className="required">*</span></label>
-                  <textarea id="consultNotes" className="form-input" rows="3" placeholder="Diagnosis, prescription, dosage..." required value={consultNotes} onChange={(e) => setConsultNotes(e.target.value)}></textarea>
+                  <textarea id="consultNotes" className="form-input" rows="3" placeholder="Diagnosis, prescription, dosage…\" required value={consultNotes} onChange={(e) => setConsultNotes(e.target.value)}></textarea>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Services / products</label>
@@ -1208,10 +959,10 @@ export default function Patients() {
             </div>
           </div>
         )}
-      </div>
+      </Dialog>
 
       {/* Consultation history modal */}
-      <div className={`modal-overlay${historyOpen && currentPatient ? ' show' : ''}`} onClick={closeHistoryModal}>
+      <Dialog open={!!(historyOpen && currentPatient)} onClose={closeHistoryModal} label={'Consultation history'}>
         {historyOpen && currentPatient && (
           <div className="modal patient-history-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -1276,7 +1027,9 @@ export default function Patients() {
             </div>
           </div>
         )}
-      </div>
+      </Dialog>
+
+      {printJob && <PatientPrintSheet job={printJob} onClose={() => setPrintJob(null)} />}
     </main>
   )
 }

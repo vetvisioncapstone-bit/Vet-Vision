@@ -22,7 +22,7 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={showToast}>
       {children}
-      <div className={`toast${visible ? ' show' : ''}`}>
+      <div className={`toast${visible ? ' show' : ''}`} role="status" aria-live="polite">
         {toast && (
           <>
             <span>{toast.message}</span>

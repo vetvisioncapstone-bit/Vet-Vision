@@ -1,13 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { usePatients } from '../../hooks/usePatients'
+import { usePatient, usePatients } from '../../hooks/usePatients'
+import { useDebounced } from '../../hooks/useDebounced'
+import { getLastVisitDate } from '../../utils/visits'
 import { useToast } from '../../components/shared/Toast'
 import { useEmployeeContext } from '../../hooks/useEmployeeContext'
 import { useApprovalRequests } from '../../hooks/useRequests'
 import { errorMessage } from '../../api/client'
 import '../../styles/admin/inventory.css'
 import '../../styles/employee/employee-patients.css'
+import { formatDate, todayIso, dash, getStatusClass } from '../../utils/format'
 
+import Dialog from '../../components/shared/Dialog'
+import { onActivate } from '../../utils/a11y'
 // ==================== HELPERS ====================
 // Ported from employee-patients.js - uses the same API-backed patients as the
 // admin Patients page; the server scopes them to this employee's own branch. Only
@@ -15,36 +20,7 @@ import '../../styles/employee/employee-patients.css'
 // no blood-test/waiver upload, no follow-up flagging, no print) - matching
 // the reduced scope of the original employee-patients.html.
 
-function formatDate(isoString) {
-  if (!isoString) return '—'
-  const [year, month, day] = isoString.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function todayIso() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function getLastVisitDate(patient) {
-  if (!patient.consultations || patient.consultations.length === 0) return patient.createdAt || ''
-  return patient.consultations.reduce((latest, c) => ((c.date || '') > latest ? c.date : latest), patient.consultations[0].date || '')
-}
-
-function dash(value) {
-  return value === null || value === undefined || value === '' ? '—' : value
-}
-
 const PAGE_SIZE = 50
-
-function getStatusClass(status) {
-  switch (status) {
-    case 'Active': return 'status-ok'
-    case 'Follow-up needed': return 'status-follow-up'
-    default: return 'status-inactive'
-  }
-}
 
 const EMPTY_PATIENT_FORM = {
   ownerName: '', ownerSurname: '', ownerEmail: '', ownerAddress: '', ownerMobile: '',
@@ -54,7 +30,6 @@ const EMPTY_PATIENT_FORM = {
 const EMPTY_CONSULT_FORM = { date: '', weight: '', notes: '', remarks: '' }
 
 export default function Patients() {
-  const { items: patients, loading, create, update, addConsultation } = usePatients()
   const showToast = useToast()
   const { branch } = useEmployeeContext()
   const { raise } = useApprovalRequests()
@@ -69,7 +44,14 @@ export default function Patients() {
     return () => clearInterval(id)
   }, [])
 
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const searchTerm = useDebounced(searchInput.trim()) // what goes to the server
+
+  // Staff are already limited to their branch by the server; it also does the searching and paging.
+  const {
+    items: patients, loading, total: totalPatients, totalPages: serverTotalPages, stats: serverStats,
+    create, update, addConsultation
+  } = usePatients({ page, pageSize: PAGE_SIZE, q: searchTerm })
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -78,29 +60,22 @@ export default function Patients() {
   const [detailPatientId, setDetailPatientId] = useState(null)
   const [consultForm, setConsultForm] = useState(EMPTY_CONSULT_FORM)
 
-  const branchPatients = useMemo(() => patients.filter(p => p.branch === branch), [patients, branch])
-  const visiblePatients = useMemo(() => {
-    return branchPatients.filter(p => {
-      if (!searchTerm) return true
-      const ownerFullName = `${p.ownerName || ''} ${p.ownerSurname || ''}`.toLowerCase()
-      return (p.petName || '').toLowerCase().includes(searchTerm)
-        || ownerFullName.includes(searchTerm)
-        || (p.ownerEmail || '').toLowerCase().includes(searchTerm)
-    })
-  }, [branchPatients, searchTerm])
-
-  const totalPages = Math.max(1, Math.ceil(visiblePatients.length / PAGE_SIZE))
+  const branchPatients = patients
+  const visiblePatients = patients
+  const totalPages = serverTotalPages
   const currentPage = Math.min(page, totalPages)
-  const pagePatients = useMemo(
-    () => visiblePatients.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-    [visiblePatients, currentPage]
-  )
+  const pagePatients = patients
   useEffect(() => { setPage(1) }, [searchTerm])
 
-  const statTotalPatients = branchPatients.length
-  const statFollowUpNeeded = useMemo(() => branchPatients.filter(p => p.status === 'Follow-up needed').length, [branchPatients])
+  const statTotalPatients = serverStats?.total ?? 0
+  const statFollowUpNeeded = serverStats?.followUpNeeded ?? 0
 
-  const detailPatient = useMemo(() => patients.find(p => p.id === detailPatientId) || null, [patients, detailPatientId])
+  // List rows leave out attached images; fetch the open patient in full.
+  const { patient: detailFromServer } = usePatient(detailPatientId)
+  const detailPatient = useMemo(
+    () => detailFromServer || patients.find(p => p.id === detailPatientId) || null,
+    [detailFromServer, patients, detailPatientId]
+  )
 
   function openAddModal() {
     setEditingId(null)
@@ -229,6 +204,8 @@ export default function Patients() {
     }
   }
 
+  const { patient: deepLinkPatient } = usePatient(searchParams.get('followUp'))
+
   // Landing here from a notification bell click on another page links to
   // /employee/patients?followUp=<id> - jump straight to that patient.
   useEffect(() => {
@@ -238,17 +215,16 @@ export default function Patients() {
       return
     }
     if (deepLinkHandledRef.current) return
-    const targetPatient = patients.find(p => p.id === followUpParamId)
-    if (targetPatient) {
+    if (deepLinkPatient) {
       deepLinkHandledRef.current = true
-      openDetailModal(targetPatient)
+      openDetailModal(deepLinkPatient)
     }
-    // Patients load asynchronously, so re-check when the list arrives.
+    // The patient loads asynchronously; re-check when it arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, patients])
+  }, [searchParams, deepLinkPatient])
 
   return (
-    <main className="content">
+    <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
         <h1>My Branch - {branch}</h1>
         <div className="employee-datetime">
@@ -278,7 +254,7 @@ export default function Patients() {
           <div className="header-filters">
             <div className="search-wrapper">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-              <input type="text" placeholder="search patient or owner" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.trim().toLowerCase())} />
+              <input type="text" aria-label="Search patients or owners" autoComplete="off" placeholder="search patient or owner" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
             </div>
             <button className="new-btn" onClick={openAddModal}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -302,12 +278,12 @@ export default function Patients() {
             <tbody>
               {loading && patients.length === 0 ? (
                 <tr><td colSpan="6" className="empty-state">Loading patients...</td></tr>
-              ) : branchPatients.length === 0 ? (
+              ) : patients.length === 0 && !searchTerm ? (
                 <tr><td colSpan="6" className="empty-state">No patients for this branch yet. Click "+ New" to add one.</td></tr>
-              ) : visiblePatients.length === 0 ? (
+              ) : patients.length === 0 ? (
                 <tr><td colSpan="6" className="empty-state">No patients match your search.</td></tr>
               ) : pagePatients.map(p => (
-                <tr className="patient-row" key={p.id} onClick={() => openDetailModal(p)}>
+                <tr className="patient-row" key={p.id} tabIndex={0} onKeyDown={onActivate(() => openDetailModal(p))} onClick={() => openDetailModal(p)}>
                   <td>{dash(p.petName)}</td>
                   <td>{dash(`${p.ownerName || ''} ${p.ownerSurname || ''}`.trim())}</td>
                   <td>{dash(p.petSpecie)}</td>
@@ -321,7 +297,7 @@ export default function Patients() {
         </div>
         {totalPages > 1 && (
           <div className="table-footer">
-            <p className="table-footer-count">Showing {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, visiblePatients.length)} of {visiblePatients.length} entries</p>
+            <p className="table-footer-count">Showing {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, totalPatients)} of {totalPatients} entries</p>
             <div className="pagination">
               <button className="page-btn" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} aria-label="Previous page">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
@@ -336,7 +312,7 @@ export default function Patients() {
       </div>
 
       {/* Add / Edit patient modal */}
-      <div className={`modal-overlay${modalOpen ? ' show' : ''}`} onClick={closeModal}>
+      <Dialog open={!!(modalOpen)} onClose={closeModal} label={editingId ? 'Edit patient' : 'New patient'}>
         <div className="modal patient-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>{editingId ? 'Edit patient' : 'New patient'}</h2>
@@ -348,35 +324,35 @@ export default function Patients() {
           <form className="modal-body" onSubmit={handleSubmit}>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Owner name <span className="required">*</span></label>
-                <input type="text" className="form-input" required value={form.ownerName} onChange={(e) => setForm(f => ({ ...f, ownerName: e.target.value }))} />
+                <label className="form-label" htmlFor="src-pages-employee-patients-f1">Owner name <span className="required">*</span></label>
+                <input id="src-pages-employee-patients-f1" type="text" className="form-input" required value={form.ownerName} onChange={(e) => setForm(f => ({ ...f, ownerName: e.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Owner surname <span className="required">*</span></label>
-                <input type="text" className="form-input" required value={form.ownerSurname} onChange={(e) => setForm(f => ({ ...f, ownerSurname: e.target.value }))} />
+                <label className="form-label" htmlFor="src-pages-employee-patients-f2">Owner surname <span className="required">*</span></label>
+                <input id="src-pages-employee-patients-f2" type="text" className="form-input" required value={form.ownerSurname} onChange={(e) => setForm(f => ({ ...f, ownerSurname: e.target.value }))} />
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label">Owner email <span className="required">*</span></label>
-              <input type="email" className="form-input" required value={form.ownerEmail} onChange={(e) => setForm(f => ({ ...f, ownerEmail: e.target.value }))} />
+              <label className="form-label" htmlFor="src-pages-employee-patients-f3">Owner email <span className="required">*</span></label>
+              <input id="src-pages-employee-patients-f3" type="email" className="form-input" required value={form.ownerEmail} onChange={(e) => setForm(f => ({ ...f, ownerEmail: e.target.value }))} />
             </div>
             <div className="form-group">
-              <label className="form-label">Owner address <span className="required">*</span></label>
-              <input type="text" className="form-input" required value={form.ownerAddress} onChange={(e) => setForm(f => ({ ...f, ownerAddress: e.target.value }))} />
+              <label className="form-label" htmlFor="src-pages-employee-patients-f4">Owner address <span className="required">*</span></label>
+              <input id="src-pages-employee-patients-f4" type="text" className="form-input" required value={form.ownerAddress} onChange={(e) => setForm(f => ({ ...f, ownerAddress: e.target.value }))} />
             </div>
             <div className="form-group">
-              <label className="form-label">Mobile No. <span className="required">*</span></label>
-              <input type="tel" className="form-input" required value={form.ownerMobile} onChange={(e) => setForm(f => ({ ...f, ownerMobile: e.target.value }))} />
+              <label className="form-label" htmlFor="src-pages-employee-patients-f5">Mobile No. <span className="required">*</span></label>
+              <input id="src-pages-employee-patients-f5" type="tel" className="form-input" required value={form.ownerMobile} onChange={(e) => setForm(f => ({ ...f, ownerMobile: e.target.value }))} />
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Pet name <span className="required">*</span></label>
-                <input type="text" className="form-input" required value={form.petName} onChange={(e) => setForm(f => ({ ...f, petName: e.target.value }))} />
+                <label className="form-label" htmlFor="src-pages-employee-patients-f6">Pet name <span className="required">*</span></label>
+                <input id="src-pages-employee-patients-f6" type="text" className="form-input" required value={form.petName} onChange={(e) => setForm(f => ({ ...f, petName: e.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Specie <span className="required">*</span></label>
+                <label className="form-label" htmlFor="src-pages-employee-patients-f7">Specie <span className="required">*</span></label>
                 <div className="form-select-wrapper">
-                  <select className="form-input" required value={form.petSpecie} onChange={(e) => setForm(f => ({ ...f, petSpecie: e.target.value }))}>
+                  <select id="src-pages-employee-patients-f7" className="form-input" required value={form.petSpecie} onChange={(e) => setForm(f => ({ ...f, petSpecie: e.target.value }))}>
                     <option value="" disabled hidden></option>
                     <option>Dog</option>
                     <option>Cat</option>
@@ -388,13 +364,13 @@ export default function Patients() {
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Breed <span className="required">*</span></label>
-                <input type="text" className="form-input" required value={form.petBreed} onChange={(e) => setForm(f => ({ ...f, petBreed: e.target.value }))} />
+                <label className="form-label" htmlFor="src-pages-employee-patients-f8">Breed <span className="required">*</span></label>
+                <input id="src-pages-employee-patients-f8" type="text" className="form-input" required value={form.petBreed} onChange={(e) => setForm(f => ({ ...f, petBreed: e.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Sex <span className="required">*</span></label>
+                <label className="form-label" htmlFor="src-pages-employee-patients-f9">Sex <span className="required">*</span></label>
                 <div className="form-select-wrapper">
-                  <select className="form-input" required value={form.petSex} onChange={(e) => setForm(f => ({ ...f, petSex: e.target.value }))}>
+                  <select id="src-pages-employee-patients-f9" className="form-input" required value={form.petSex} onChange={(e) => setForm(f => ({ ...f, petSex: e.target.value }))}>
                     <option value="" disabled hidden></option>
                     <option>Male</option>
                     <option>Female</option>
@@ -405,17 +381,17 @@ export default function Patients() {
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Date of birth <span className="required">*</span></label>
-                <input type="date" className="form-input" required value={form.petDob} onChange={(e) => setForm(f => ({ ...f, petDob: e.target.value }))} />
+                <label className="form-label" htmlFor="src-pages-employee-patients-f10">Date of birth <span className="required">*</span></label>
+                <input id="src-pages-employee-patients-f10" type="date" className="form-input" required value={form.petDob} onChange={(e) => setForm(f => ({ ...f, petDob: e.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Age <span className="required">*</span></label>
-                <input type="number" className="form-input" min="0" required value={form.petAge} onChange={(e) => setForm(f => ({ ...f, petAge: e.target.value }))} />
+                <label className="form-label" htmlFor="src-pages-employee-patients-f11">Age <span className="required">*</span></label>
+                <input id="src-pages-employee-patients-f11" type="number" className="form-input" min="0" required value={form.petAge} onChange={(e) => setForm(f => ({ ...f, petAge: e.target.value }))} />
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label">Color &amp; marking <span className="required">*</span></label>
-              <input type="text" className="form-input" required value={form.petMarking} onChange={(e) => setForm(f => ({ ...f, petMarking: e.target.value }))} />
+              <label className="form-label" htmlFor="src-pages-employee-patients-f12">Color &amp; marking <span className="required">*</span></label>
+              <input id="src-pages-employee-patients-f12" type="text" className="form-input" required value={form.petMarking} onChange={(e) => setForm(f => ({ ...f, petMarking: e.target.value }))} />
             </div>
 
             <div className="patient-form-actions">
@@ -424,10 +400,10 @@ export default function Patients() {
             </div>
           </form>
         </div>
-      </div>
+      </Dialog>
 
       {/* Patient detail modal */}
-      <div className={`modal-overlay${detailPatient ? ' show' : ''}`} onClick={closeDetailModal}>
+      <Dialog open={!!(detailPatient)} onClose={closeDetailModal} label={'Patient details'}>
         {detailPatient && (
           <div className="modal patient-detail-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -461,21 +437,21 @@ export default function Patients() {
               <form className="consultation-form" onSubmit={handleConsultationSubmit}>
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Date <span className="required">*</span></label>
-                    <input type="date" className="form-input" required value={consultForm.date} onChange={(e) => setConsultForm(f => ({ ...f, date: e.target.value }))} />
+                    <label className="form-label" htmlFor="src-pages-employee-patients-f13">Date <span className="required">*</span></label>
+                    <input id="src-pages-employee-patients-f13" type="date" className="form-input" required value={consultForm.date} onChange={(e) => setConsultForm(f => ({ ...f, date: e.target.value }))} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Weight</label>
-                    <input type="text" className="form-input" placeholder="e.g. 6-8 kg" value={consultForm.weight} onChange={(e) => setConsultForm(f => ({ ...f, weight: e.target.value }))} />
+                    <label className="form-label" htmlFor="src-pages-employee-patients-f14">Weight</label>
+                    <input id="src-pages-employee-patients-f14" type="text" className="form-input" placeholder="e.g. 6-8 kg" value={consultForm.weight} onChange={(e) => setConsultForm(f => ({ ...f, weight: e.target.value }))} />
                   </div>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Treatment / findings <span className="required">*</span></label>
-                  <textarea className="form-input" rows="3" required value={consultForm.notes} onChange={(e) => setConsultForm(f => ({ ...f, notes: e.target.value }))}></textarea>
+                  <label className="form-label" htmlFor="src-pages-employee-patients-f15">Treatment / findings <span className="required">*</span></label>
+                  <textarea id="src-pages-employee-patients-f15" className="form-input" rows="3" required value={consultForm.notes} onChange={(e) => setConsultForm(f => ({ ...f, notes: e.target.value }))}></textarea>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Remarks</label>
-                  <input type="text" className="form-input" value={consultForm.remarks} onChange={(e) => setConsultForm(f => ({ ...f, remarks: e.target.value }))} />
+                  <label className="form-label" htmlFor="src-pages-employee-patients-f16">Remarks</label>
+                  <input id="src-pages-employee-patients-f16" type="text" className="form-input" value={consultForm.remarks} onChange={(e) => setConsultForm(f => ({ ...f, remarks: e.target.value }))} />
                 </div>
                 <div className="consultation-form-actions">
                   <button type="submit" className="patient-save-btn" disabled={saving}>Save consultation</button>
@@ -502,7 +478,7 @@ export default function Patients() {
             </div>
           </div>
         )}
-      </div>
+      </Dialog>
     </main>
   )
 }

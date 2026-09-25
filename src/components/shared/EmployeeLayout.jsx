@@ -1,5 +1,6 @@
 import React from 'react'
 import { Outlet } from 'react-router-dom'
+import SkipLink from './SkipLink'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import { useSidebarToggle } from './useSidebarToggle'
@@ -11,6 +12,7 @@ export default function EmployeeLayout() {
 
   return (
     <>
+      <SkipLink />
       <div className={`sidebar-overlay${sidebar.open ? ' show' : ''}`} onClick={sidebar.close}></div>
       <div className="dashboard-container">
         <Sidebar role="employee" open={sidebar.open} onNavigate={sidebar.close} />

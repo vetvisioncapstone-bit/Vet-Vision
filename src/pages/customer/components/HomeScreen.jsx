@@ -2,39 +2,58 @@
 // ported verbatim from customer/index.html.
 
 import { useMemo, useState } from "react";
-import { CLINIC_HOURS, CLINIC_STATUS, PETS } from "../lib/mockData";
-import { getDayAvailability } from "../lib/dateUtils";
+import { useAnnouncements, useClinicCalendar, useMyPets, useReminders } from "../../../hooks/useCustomerPortal";
+import { toDateKey } from "../lib/dateUtils";
 import { NAV_ITEMS } from "../nav";
 import ClinicCalendar from "./ClinicCalendar";
 import NotificationButton from "./NotificationButton";
 import PetDetailModal from "./PetDetailModal";
 import PetHistoryModal from "./PetHistoryModal";
+import PetRegisterModal from "./PetRegisterModal";
 import ToggleSwitch from "./ToggleSwitch";
 import { ArrowRightIcon, ChevronRightIcon, MenuIcon, PawIcon, PetIcon } from "./icons";
 
-export default function HomeScreen({ email, page, onOpenNav, darkMode, onToggleDarkMode, notifsEnabled, onToggleNotifs }) {
+export default function HomeScreen({ session, page, onOpenNav, darkMode, onToggleDarkMode, notifsEnabled, onToggleNotifs }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [selectedPet, setSelectedPet] = useState(null);
   const [selectedHistoryPet, setSelectedHistoryPet] = useState(null);
+  const [registeringPet, setRegisteringPet] = useState(false);
 
-  const firstName = useMemo(() => {
-    const handle = email.split("@")[0] || "there";
-    return handle.charAt(0).toUpperCase() + handle.slice(1);
-  }, [email]);
+  const email = session.email;
+  const fullName = session.name || email;
+  const firstName = useMemo(() => fullName.split(" ")[0] || "there", [fullName]);
+  const initials = useMemo(
+    () => fullName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase(),
+    [fullName]
+  );
 
-  const initials = useMemo(() => firstName.slice(0, 2).toUpperCase(), [firstName]);
+  const { pets, loading: petsLoading, error: petsError } = useMyPets();
+  const announcements = useAnnouncements();
+  const reminders = useReminders();
 
   const activeItem = useMemo(() => NAV_ITEMS.find((item) => item.id === page), [page]);
 
   const today = useMemo(() => new Date(), []);
-  const todayAvailability = useMemo(() => getDayAvailability(today), [today]);
+  const { days: todaySchedule, weekly, branch } = useClinicCalendar(toDateKey(today), toDateKey(today));
+  const info = todaySchedule[toDateKey(today)];
+  const todayAvailability = { isOpen: info ? info.state !== "closed" : true, hours: info?.hours || "", reason: info?.reason || null };
+  // "Open right now": today is a working day and the current time is inside its hours.
+  const nowHm = `${String(today.getHours()).padStart(2, "0")}:${String(today.getMinutes()).padStart(2, "0")}`;
+  const openNow = Boolean(info && info.opens && nowHm >= info.opens && nowHm < info.closes);
   const todayLabel = useMemo(
     () => today.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }),
     [today]
   );
 
   const notifButton = (
-    <NotificationButton open={notifOpen} onToggle={() => setNotifOpen((v) => !v)} onClose={() => setNotifOpen(false)} />
+    <NotificationButton
+      open={notifOpen}
+      onToggle={() => setNotifOpen((v) => !v)}
+      onClose={() => setNotifOpen(false)}
+      announcements={announcements}
+      reminders={reminders}
+      enabled={notifsEnabled}
+    />
   );
   const menuButton = (
     <button type="button" className="topbar__menu" onClick={onOpenNav} aria-label="Open menu">
@@ -45,7 +64,7 @@ export default function HomeScreen({ email, page, onOpenNav, darkMode, onToggleD
   return (
     <>
       {page === "home" && (
-        <main className="content home-content">
+        <main id="main-content" tabIndex={-1} className="content home-content">
           <div className="page-topbar">
             {menuButton}
             <p className="page-greeting page-topbar__title">Hi {firstName}</p>
@@ -70,18 +89,37 @@ export default function HomeScreen({ email, page, onOpenNav, darkMode, onToggleD
               </div>
             </div>
           </div>
+
+          <div className="settings-card announce-card">
+            <p className="settings-card__label">Clinic announcements</p>
+            {announcements.items.length === 0 ? (
+              <p className="records-card__meta">No announcements right now.</p>
+            ) : (
+              <ul className="notif-list">
+                {announcements.items.slice(0, 3).map((post) => (
+                  <li key={post.id} className="notif-item">
+                    <p className="notif-item__meta">
+                      {post.authorName} · {new Date(post.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </p>
+                    {post.text && <p className="notif-item__text">{post.text}</p>}
+                    {post.photo && <img className="notif-item__photo" src={post.photo} alt="" />}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </main>
       )}
 
       {page === "calendar" && (
-        <main className="content home-content">
+        <main id="main-content" tabIndex={-1} className="content home-content">
           <div className="page-topbar">
             {menuButton}
             <div className="section-head page-topbar__title">
               <h1 className="page-title">Calendar</h1>
-              <span className={`status-pill ${CLINIC_STATUS.isOpen ? "status-pill--open" : "status-pill--closed"}`}>
+              <span className={`status-pill ${openNow ? "status-pill--open" : "status-pill--closed"}`}>
                 <span className="status-dot" />
-                {CLINIC_STATUS.label}
+                {openNow ? "Clinic is open now" : info ? "Clinic is closed right now" : "Checking hours…"}
               </span>
             </div>
             {notifButton}
@@ -92,11 +130,11 @@ export default function HomeScreen({ email, page, onOpenNav, darkMode, onToggleD
 
             <div className="calendar-side">
               <div className="section-head">
-                <h3>Weekly hours</h3>
+                <h3>Weekly hours{branch ? ` · ${branch}` : ""}</h3>
               </div>
 
               <div className="availability-list">
-                {CLINIC_HOURS.map((h) => (
+                {weekly.map((h) => (
                   <div className="availability-row" key={h.day}>
                     <span className="availability-row__day">{h.day}</span>
                     <span className={`availability-row__hours ${h.closed ? "availability-row__hours--closed" : ""}`}>
@@ -111,7 +149,7 @@ export default function HomeScreen({ email, page, onOpenNav, darkMode, onToggleD
       )}
 
       {page === "records" && (
-        <main className="content home-content">
+        <main id="main-content" tabIndex={-1} className="content home-content">
           <div className="page-topbar">
             {menuButton}
             <h1 className="page-title page-topbar__title">Records</h1>
@@ -119,13 +157,23 @@ export default function HomeScreen({ email, page, onOpenNav, darkMode, onToggleD
           </div>
 
           <div className="records-list">
-            {PETS.map((pet) => (
+            {petsLoading && pets.length === 0 && <p className="records-card__meta">Loading your pets…</p>}
+            {petsError && <p className="records-card__meta">Could not load your pets. Please try again.</p>}
+            {!petsLoading && !petsError && pets.length === 0 && (
+              <p className="records-card__meta">You have not registered a pet yet. Add one in Settings.</p>
+            )}
+            {pets.map((pet) => (
               <div className="records-card" key={pet.id}>
                 <div className="records-card__body">
                   <div className="records-card__text">
                     <p className="records-card__eyebrow">Medical Records</p>
                     <h2>{pet.name}'s Health History</h2>
-                    <p className="records-card__meta">Last checkup: {pet.lastCheckup} · {pet.note}</p>
+                    <p className="records-card__meta">
+                      {pet.lastCheckup
+                        ? `Last checkup: ${new Date(`${pet.lastCheckup}T00:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`
+                        : "No visits yet"}
+                      {pet.followUpNote ? ` · Follow-up: ${pet.followUpNote}` : ""}
+                    </p>
                     <button type="button" className="records-card__cta" onClick={() => setSelectedHistoryPet(pet)}>
                       View records <ArrowRightIcon />
                     </button>
@@ -143,7 +191,7 @@ export default function HomeScreen({ email, page, onOpenNav, darkMode, onToggleD
       )}
 
       {page === "settings" && (
-        <main className="content home-content">
+        <main id="main-content" tabIndex={-1} className="content home-content">
           <div className="page-topbar">
             {menuButton}
             <h1 className="page-title page-topbar__title">Settings</h1>
@@ -164,20 +212,23 @@ export default function HomeScreen({ email, page, onOpenNav, darkMode, onToggleD
           <div className="settings-card">
             <p className="settings-card__label">My Pets</p>
             <div className="pet-list">
-              {PETS.map((pet) => (
+              {pets.length === 0 && <p className="records-card__meta">You have not registered a pet yet.</p>}
+              {pets.map((pet) => (
                 <button type="button" className="pet-row" key={pet.id} onClick={() => setSelectedPet(pet)}>
                   <span className="pet-row__icon"><PetIcon species={pet.species} /></span>
                   <div>
                     <p className="pet-row__name">{pet.name}</p>
-                    <p className="pet-row__meta">{pet.species} · {pet.breed}</p>
+                    <p className="pet-row__meta">{[pet.species, pet.breed].filter(Boolean).join(" · ")}</p>
                   </div>
                   <ChevronRightIcon />
                 </button>
               ))}
             </div>
+            <button type="button" className="ll-submit pet-add-btn" onClick={() => setRegisteringPet(true)}>Register a pet</button>
           </div>
 
           {selectedPet && <PetDetailModal pet={selectedPet} onDismiss={() => setSelectedPet(null)} />}
+          {registeringPet && <PetRegisterModal onDismiss={() => setRegisteringPet(false)} onDone={() => setRegisteringPet(false)} />}
 
           <div className="settings-card">
             <p className="settings-card__label">System</p>
@@ -200,7 +251,7 @@ export default function HomeScreen({ email, page, onOpenNav, darkMode, onToggleD
       )}
 
       {page !== "home" && page !== "calendar" && page !== "records" && page !== "settings" && (
-        <main className="content home-content">
+        <main id="main-content" tabIndex={-1} className="content home-content">
           <div className="page-topbar">
             {menuButton}
             <h1 className="page-title page-topbar__title">{activeItem?.label}</h1>

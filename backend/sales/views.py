@@ -7,7 +7,9 @@ from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.pagination import paginate, wants_page
 from core.ids import branch_letter, next_id
+from accounts.audit import record
 from core.permissions import IsClinicStaff, branch_by_town, scope_branch
 from inventory.models import Inventory, ProductBranchPrice
 
@@ -57,6 +59,8 @@ class SaleList(APIView):
         if since:
             qs = qs.filter(sale_date__gte=since)
         qs = qs.order_by("-sale_date", "-sale_time", "-sale_id")
+        if wants_page(request):
+            return paginate(request, qs, sale_row)
         try:
             limit = min(int(request.query_params.get("limit", 200)), 1000)
         except ValueError:
@@ -103,6 +107,7 @@ class SaleList(APIView):
             total_amount=Decimal(0),
         )
         total = Decimal(0)
+        record(request, "sale.create", target=sale.sale_id)
         for item in d["items"]:
             inv = stock[item["inventoryId"]]
             price = ProductBranchPrice.objects.filter(product=inv.product, branch=branch).first()

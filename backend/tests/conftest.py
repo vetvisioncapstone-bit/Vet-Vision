@@ -61,3 +61,12 @@ def stocked(branches):
     b = Inventory.objects.create(inventory_id="INV-000002", product=p, branch=branches[1],
                                  quantity_on_hand=5, reorder_point=3)
     return a, b
+
+
+@pytest.fixture(autouse=True)
+def _fresh_throttles():
+    """Throttle counters live in the cache; do not let one test's requests count against the next."""
+    from django.core.cache import cache
+
+    cache.clear()
+

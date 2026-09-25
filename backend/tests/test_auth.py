@@ -36,3 +36,8 @@ def test_me_requires_current_password_for_password_change(admin):
 def test_staff_cannot_use_admin_endpoints(staff_ibaan):
     c = client_for(staff_ibaan)
     assert c.get("/api/staff-accounts/").status_code == 403
+
+
+def test_health_check_is_public(api, db):
+    r = api.get("/api/health/")
+    assert r.status_code == 200 and r.json() == {"status": "ok"}

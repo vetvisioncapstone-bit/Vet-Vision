@@ -7,10 +7,12 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.pagination import paginate, wants_page
 from core.ids import next_id
-from core.permissions import IsAdmin, IsClinicStaff, assert_branch_access, branch_by_town, scope_branch
+from accounts.audit import record
+from core.permissions import IsClinicStaff, branch_by_town, scope_branch
 
-from .models import Inventory, InventoryTransaction, Product, ProductBranchPrice
+from .models import Inventory, InventoryTransaction, Product
 
 
 def iso(d):
@@ -78,7 +80,13 @@ class InventoryList(APIView):
     permission_classes = [IsClinicStaff]
 
     def get(self, request):
-        return Response([inventory_row(i) for i in _queryset(request).order_by("product__product_name")])
+        qs = _queryset(request).order_by("product__product_name", "inventory_id")
+        if wants_page(request):
+            q = request.query_params.get("q", "").strip()
+            for term in q.split():
+                qs = qs.filter(product__product_name__icontains=term)
+            return paginate(request, qs, inventory_row)
+        return Response([inventory_row(i) for i in qs])
 
     @transaction.atomic
     def post(self, request):
@@ -154,5 +162,6 @@ class InventoryDetail(APIView):
         if request.user.role != "admin":
             raise PermissionDenied("Staff must submit a delete request for admin approval.")
         inv = self._get(request, pk)
+        record(request, "product.delete", target=inv.inventory_id)
         inv.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

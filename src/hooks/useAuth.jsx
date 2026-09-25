@@ -53,15 +53,29 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  // A pet owner creates their own account and is signed straight in.
+  const register = useCallback(async (fields) => {
+    try {
+      const data = await api.post('/auth/register/', fields)
+      setTokens({ access: data.access, refresh: data.refresh })
+      setUser(data.user)
+      return { success: true }
+    } catch (err) {
+      return { success: false, message: errorMessage(err, 'Could not create the account. Please try again.') }
+    }
+  }, [])
+
   const logout = useCallback(() => {
+    const refresh = getRefreshToken()
+    if (refresh) api.post('/auth/logout/', { refresh }).catch(() => {}) // revoke it server-side, best effort
     clearTokens()
     clearCache()
     setUser(null)
   }, [])
 
   const value = useMemo(
-    () => ({ user, session: toSession(user), loading, login, logout, setUser }),
-    [user, loading, login, logout]
+    () => ({ user, session: toSession(user), loading, login, register, logout, setUser }),
+    [user, loading, login, register, logout]
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

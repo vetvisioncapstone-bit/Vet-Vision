@@ -1,17 +1,22 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.db.models import F, Prefetch
+from django.db.models import Exists, F, Max, OuterRef, Prefetch, Q, Subquery
 from rest_framework import serializers, status
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.audit import record
 from accounts.models import User
+from accounts.views import revoke_sessions
 from core.ids import branch_letter, next_id
-from core.permissions import IsAdmin, IsClinicStaff, branch_by_town, scope_branch
+from core.pagination import paginate, wants_page
+from core.permissions import IsAdmin, IsClinicStaff, IsCustomer, branch_by_town, scope_branch
+
+from sales.models import ServiceDetail, ServiceTransaction
 
 from .models import Branch, Customer, MedicalRecord, Pet, Staff
 
@@ -32,7 +37,8 @@ def _split_name(customer):
     return (parts[0], parts[1]) if len(parts) == 2 else (parts[0], "")
 
 
-def consultation_row(r):
+def consultation_row(r, light=False):
+    """`light` leaves out the attached images (large base64 strings); the detail endpoint returns them."""
     return {
         "id": r.record_id,
         "date": r.record_date.isoformat(),
@@ -42,16 +48,22 @@ def consultation_row(r):
         "availedItems": r.availed_items or [],
         "totalPrice": float(r.total_price or 0),
         "remarks": r.remarks or "",
-        "bloodTestImage": r.blood_test_image,
+        "bloodTestImage": None if light else r.blood_test_image,
         "bloodTestName": r.blood_test_name or "",
-        "waiverImage": r.waiver_image,
+        "waiverImage": None if light else r.waiver_image,
         "waiverName": r.waiver_name or "",
         "followUp": r.follow_up,
         "followUpNote": r.follow_up_note or "",
     }
 
 
-def patient_row(pet):
+def _last_visit(pet):
+    """ISO date of the most recent visit (consultation or service transaction), or '' when there is none."""
+    dates = [d for d in (getattr(pet, "last_record", None), getattr(pet, "last_service", None)) if d]
+    return max(dates).isoformat() if dates else ""
+
+
+def patient_row(pet, light=False):
     c = pet.customer
     first, last = _split_name(c)
     created = pet.created_at.date() if pet.created_at else c.date_registered
@@ -74,18 +86,93 @@ def patient_row(pet):
         "status": pet.status,
         "followUpNote": pet.follow_up_note or "",
         "createdAt": created.isoformat() if created else "",
-        "consultations": [consultation_row(r) for r in pet.records.all()],
+        "lastVisit": _last_visit(pet),
+        "consultations": [consultation_row(r, light) for r in pet.records.all()],
     }
 
 
-def _pets(request):
-    records = Prefetch("records", queryset=MedicalRecord.objects.order_by("record_date", "record_id"))
-    qs = Pet.objects.select_related("customer__branch").prefetch_related(records)
+def _year_param(request, name):
+    raw = request.query_params.get(name)
+    if not raw:
+        return None
+    if not raw.isdigit() or not 1900 <= int(raw) <= 2200:
+        raise serializers.ValidationError({name: "Enter a four-digit year."})
+    return int(raw)
+
+
+def _registered_in(year):
+    """Pets first registered in `year`. Older rows have no created_at, so fall back to the owner's join date."""
+    return Q(created_at__year=year) | Q(created_at__isnull=True, customer__date_registered__year=year)
+
+
+def _visited_in(year):
+    """Pets with a consultation or a legacy service visit in `year`."""
+    return Q(Exists(MedicalRecord.objects.filter(pet=OuterRef("pk"), record_date__year=year))) | Q(
+        Exists(ServiceTransaction.objects.filter(pet=OuterRef("pk"), txn_date__year=year))
+    )
+
+
+def _pets(request, light=False):
+    records = MedicalRecord.objects.order_by("record_date", "record_id")
+    if light:
+        records = records.defer("blood_test_image", "waiver_image")
+    qs = (
+        Pet.objects.select_related("customer__branch")
+        .prefetch_related(Prefetch("records", queryset=records))
+        # Most recent visit of any kind: a consultation record or a service transaction. Two separate subqueries:
+        # aggregating both relations in one join multiplies their rows against each other and is very slow.
+        .annotate(
+            last_record=Subquery(
+                MedicalRecord.objects.filter(pet=OuterRef("pk")).order_by("-record_date").values("record_date")[:1]
+            ),
+            last_service=Subquery(
+                ServiceTransaction.objects.filter(pet=OuterRef("pk")).order_by("-txn_date").values("txn_date")[:1]
+            ),
+        )
+    )
     qs = scope_branch(qs, request.user, field="customer__branch_id", requested_town=request.query_params.get("branch"))
-    status_filter = request.query_params.get("status")
-    if status_filter:
-        qs = qs.filter(status=status_filter)
-    return qs.order_by(F("created_at").desc(nulls_last=True), "pet_id")
+    statuses = [x for x in request.query_params.get("status", "").split(",") if x]
+    if statuses:
+        qs = qs.filter(status__in=statuses)
+    # Every word must match the pet name or something about the owner ("juan santos" finds Juan Santos).
+    for term in request.query_params.get("q", "").split():
+        qs = qs.filter(
+            Q(pet_name__icontains=term) | Q(customer__customer_name__icontains=term)
+            | Q(customer__first_name__icontains=term) | Q(customer__last_name__icontains=term)
+            | Q(customer__email__icontains=term) | Q(customer__contact_no__icontains=term)
+        )
+    year = _year_param(request, "year")
+    if year:
+        qs = qs.filter(_registered_in(year))
+    visit_year = _year_param(request, "visitYear")
+    if visit_year:
+        qs = qs.filter(_visited_in(visit_year))
+    return qs.order_by(F("created_at").desc(nulls_last=True), "-pet_id")
+
+
+def _patient_stats(request):
+    """Headline counts for the branch the caller can see. They ignore the search and status filters on purpose,
+    so the cards do not change while typing in the search box."""
+    base = scope_branch(
+        Pet.objects.all(), request.user, field="customer__branch_id", requested_town=request.query_params.get("branch")
+    )
+    # "This month" means the month of the most recent recorded visit, so the card still means something when the
+    # history ends before today (as the imported clinic data does). Once visits are being recorded, it is the
+    # current month.
+    anchor = MedicalRecord.objects.aggregate(d=Max("record_date"))["d"] or date.today()
+    visited_this_month = MedicalRecord.objects.filter(
+        pet=OuterRef("pk"), record_date__year=anchor.year, record_date__month=anchor.month
+    )
+    # Years the "Registered in" / "Visited in" pickers offer. Registration years are cheap to collect and, for this
+    # clinic's data, span the same range as the visit history.
+    years = {d.year for d in base.dates("created_at", "year")}
+    years |= {d.year for d in base.filter(created_at__isnull=True).dates("customer__date_registered", "year")}
+    return {
+        "years": sorted(years, reverse=True),
+        "total": base.count(),
+        "followUpNeeded": base.filter(status=FOLLOW_UP).count(),
+        "activeThisMonth": base.filter(status="Active").filter(Exists(visited_this_month)).count(),
+    }
 
 
 class PatientInput(serializers.Serializer):
@@ -129,6 +216,9 @@ class PatientList(APIView):
     permission_classes = [IsClinicStaff]
 
     def get(self, request):
+        if wants_page(request):
+            return paginate(request, _pets(request, light=True), lambda p: patient_row(p, light=True),
+                            extra={"stats": _patient_stats(request)})
         return Response([patient_row(p) for p in _pets(request)])
 
     @transaction.atomic
@@ -191,6 +281,7 @@ class PatientDetail(APIView):
         if request.user.role != "admin":
             raise PermissionDenied("Staff must submit a delete request for admin approval.")
         pet = self._get(request, pk)
+        record(request, "patient.delete", target=pet.pet_id)
         pet.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -265,6 +356,7 @@ class ConsultationDetail(APIView):
         rec = MedicalRecord.objects.filter(pk=pk).first()
         if rec is None:
             raise NotFound()
+        record(request, "consultation.delete", target=rec.pk)
         rec.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -350,6 +442,7 @@ class StaffList(APIView):
             email=email, password=d["password"], name=st.staff_name, role=User.ROLE_STAFF,
             photo=d.get("photo") or None, staff=st,
         )
+        record(request, "staff.create", target=st.staff_id)
         return Response(staff_row(_staff_qs().get(pk=st.pk)), status=status.HTTP_201_CREATED)
 
 
@@ -395,7 +488,9 @@ class StaffDetail(APIView):
         if d.get("password"):
             _validated_password(d["password"], user)
             user.set_password(d["password"])
+            revoke_sessions(user)  # an admin reset signs that person out everywhere
         user.save()
+        record(request, "staff.update", target=st.staff_id, detail="password reset" if d.get("password") else "")
         return Response(staff_row(_staff_qs().get(pk=st.pk)))
 
     patch = put
@@ -407,6 +502,7 @@ class StaffDetail(APIView):
         st.is_active = False
         st.save(update_fields=["is_active"])
         User.objects.filter(staff=st).update(is_active=False)
+        record(request, "staff.deactivate", target=st.staff_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -418,3 +514,159 @@ class BranchList(APIView):
                 for b in Branch.objects.order_by("branch_id")
             ]
         )
+
+
+class OwnPetInput(serializers.Serializer):
+    petName = serializers.CharField(max_length=40)
+    petSpecie = serializers.CharField(max_length=15)
+    petBreed = serializers.CharField(max_length=40, required=False, allow_blank=True)
+    petSex = serializers.CharField(max_length=10)
+    petDob = serializers.DateField()
+    petMarking = serializers.CharField(max_length=40, required=False, allow_blank=True)
+
+    def validate_petDob(self, value):
+        if value > date.today():
+            raise serializers.ValidationError("The date of birth cannot be in the future.")
+        return value
+
+
+class MyPets(APIView):
+    """The signed-in pet owner's own pets, each with its history (newest visit first).
+
+    History merges two sources: consultations recorded in the app (medical_record) and the clinic's
+    service transactions from the legacy data (each with its billed services)."""
+
+    permission_classes = [IsCustomer]
+
+    def get(self, request):
+        records = Prefetch("records", queryset=MedicalRecord.objects.order_by("-record_date", "-record_id"))
+        txns = Prefetch(
+            "servicetransaction_set",
+            queryset=ServiceTransaction.objects.order_by("-txn_date", "-service_txn_id").prefetch_related(
+                "details__service"
+            ),
+        )
+        pets = (
+            Pet.objects.filter(customer_id=request.user.customer_id)
+            .prefetch_related(records, txns)
+            .order_by("pet_name")
+        )
+        return Response([_my_pet_row(p) for p in pets])
+
+    @transaction.atomic
+    def post(self, request):
+        """The owner registers one of their own pets."""
+        s = OwnPetInput(data=request.data)
+        s.is_valid(raise_exception=True)
+        d = s.validated_data
+        customer = request.user.customer
+        pet = Pet(pet_id=next_id(Pet, "pet_id", f"PET-{branch_letter(customer.branch_id)}", 5), customer=customer,
+                  status="Active", pet_name=d["petName"].strip(), species=d["petSpecie"], sex=d["petSex"],
+                  breed=(d.get("petBreed") or "").strip(), date_of_birth=d["petDob"],
+                  color_marking=(d.get("petMarking") or "").strip())
+        pet.save()
+        record(request, "pet.register", target=pet.pet_id)
+        return Response(_my_pet_row(pet), status=status.HTTP_201_CREATED)
+
+
+class MyReminders(APIView):
+    """Things the owner should act on: a follow-up the vet asked for, and yearly vaccine boosters that are due
+    (within 30 days, or overdue by up to a year). Newest concern first."""
+
+    permission_classes = [IsCustomer]
+    BOOSTER_DAYS = 365
+    WARN_DAYS = 30
+    LAPSED_DAYS = 365  # overdue by more than a year: the pet has likely moved on, so stop nagging
+
+    def get(self, request):
+        today = date.today()
+        pets = {p.pet_id: p for p in Pet.objects.filter(customer_id=request.user.customer_id)}
+        out = []
+
+        latest = {}
+        for r in MedicalRecord.objects.filter(pet_id__in=pets).order_by("record_date", "record_id"):
+            latest[r.pet_id] = r  # ends on each pet's most recent record
+        for pet_id, r in latest.items():
+            if r.follow_up:
+                out.append({
+                    "id": f"follow_up-{pet_id}", "kind": "follow_up", "petId": pet_id, "petName": pets[pet_id].pet_name,
+                    "title": "Follow-up visit needed", "dueDate": r.record_date.isoformat(), "overdue": False,
+                    "text": r.follow_up_note or "The vet asked you to bring your pet back for a check.",
+                })
+
+        last_vaccine = {}
+        shots = (ServiceDetail.objects.filter(service_txn__pet_id__in=pets, service__category="VACCINES")
+                 .exclude(service__service_name__icontains="CARD")  # a vaccination card is not a vaccine
+                 .values_list("service_txn__pet_id", "service_txn__txn_date").order_by("service_txn__txn_date"))
+        for pet_id, given in shots:
+            last_vaccine[pet_id] = given
+        for pet_id, given in last_vaccine.items():
+            due = given + timedelta(days=self.BOOSTER_DAYS)
+            if today - timedelta(days=self.LAPSED_DAYS) <= due <= today + timedelta(days=self.WARN_DAYS):
+                out.append({
+                    "id": f"vaccination-{pet_id}", "kind": "vaccination", "petId": pet_id,
+                    "petName": pets[pet_id].pet_name, "title": "Vaccine booster due", "dueDate": due.isoformat(),
+                    "overdue": due < today,
+                    "text": f"{pets[pet_id].pet_name} was last vaccinated on {given:%b %d, %Y}. The yearly booster "
+                            f"{'was due' if due < today else 'is due'} {due:%b %d, %Y}.",
+                })
+        out.sort(key=lambda r: r["dueDate"])
+        return Response(out)
+
+
+def _consultation_visit(r):
+    return {
+        "id": r.record_id,
+        "date": r.record_date.isoformat(),
+        "type": r.record_type or "Consultation",
+        "diagnosis": r.diagnosis or "",
+        "treatment": r.treatment or "",
+        "services": r.services or "",
+        "availedItems": r.availed_items or [],
+        "totalPrice": float(r.total_price or 0),
+        "weight": r.weight or "",
+        "remarks": r.remarks or "",
+        "followUp": r.follow_up,
+        "followUpNote": r.follow_up_note or "",
+    }
+
+
+def _service_visit(t):
+    details = list(t.details.all())
+    return {
+        "id": t.service_txn_id,
+        "date": t.txn_date.isoformat(),
+        "type": "Clinic visit",
+        "diagnosis": "",
+        "treatment": "",
+        "services": ", ".join(d.service.service_name for d in details),
+        "availedItems": [],
+        "totalPrice": float(t.total_amount or 0),
+        "weight": f"{t.weight_kg.normalize():f} kg" if t.weight_kg else "",
+        "remarks": "; ".join(d.remarks for d in details if d.remarks),
+        "followUp": False,
+        "followUpNote": "",
+    }
+
+
+def _my_pet_row(pet):
+    records = list(pet.records.all())
+    visits = [_consultation_visit(r) for r in records]
+    # Transactions that were turned into records (seed_medical_records) are already listed above.
+    seeded = {r.source_txn_id for r in records if r.source_txn_id}
+    visits += [_service_visit(t) for t in pet.servicetransaction_set.all() if t.service_txn_id not in seeded]
+    visits.sort(key=lambda v: (v["date"], v["id"]), reverse=True)
+    return {
+        "id": pet.pet_id,
+        "name": pet.pet_name,
+        "species": pet.species or "",
+        "breed": pet.breed or "",
+        "sex": pet.sex or "",
+        "age": _age(pet.date_of_birth),
+        "dob": pet.date_of_birth.isoformat() if pet.date_of_birth else "",
+        "color": pet.color_marking or "",
+        "status": pet.status,
+        "followUpNote": pet.follow_up_note or "",
+        "lastCheckup": visits[0]["date"] if visits else "",
+        "visits": visits,
+    }

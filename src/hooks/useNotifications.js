@@ -1,18 +1,18 @@
 import { useApprovalRequests, useSeenFollowUps, followUpSeenKey } from './useRequests'
 import { usePatients } from './usePatients'
 import { useSession } from './useSession'
+import { getLastVisitDate } from '../utils/visits'
 
-export function getPatientLastVisitDate(patient) {
-  if (!patient.consultations || patient.consultations.length === 0) return patient.createdAt
-  return patient.consultations.reduce((latest, c) => (c.date > latest ? c.date : latest), patient.consultations[0].date)
-}
+// The bell shows the registration date for a follow-up patient who has no visit on record yet.
+export const getPatientLastVisitDate = (patient) => getLastVisitDate(patient) || patient.createdAt
 
 // Everything the shared notification bell shows: follow-up flags (everyone) and, for the admin,
 // pending delete / restock requests. Same shape the Topbar used with the localStorage version.
 export function useNotifications() {
   const { session } = useSession()
   const isAdminContext = session?.role === 'admin'
-  const { items: followUps } = usePatients({ status: 'Follow-up needed' })
+  // The bell lists the 50 most recent follow-ups and shows the true total as its count.
+  const { items: followUps, total: followUpTotal } = usePatients({ status: 'Follow-up needed', page: 1, pageSize: 50 })
   const requests = useApprovalRequests()
   const { seenKeys, markSeen } = useSeenFollowUps()
 
@@ -25,7 +25,7 @@ export function useNotifications() {
     followUpSeenKey,
     deleteRequests,
     restockRequests,
-    totalCount: followUps.length + deleteRequests.length + restockRequests.length,
+    totalCount: followUpTotal + deleteRequests.length + restockRequests.length,
     isAdminContext,
     markFollowUpsSeen: () => markSeen(followUps.map(followUpSeenKey)),
     approveDeleteRequest: (id) => requests.approve(id),

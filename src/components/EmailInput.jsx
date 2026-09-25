@@ -16,6 +16,10 @@ function EmailInput({ value, onChange, onBlur, error, success }) {
         <input
           type="email"
           id="email"
+          name="email"
+          autoComplete="username"
+          spellCheck={false}
+          aria-invalid={error || undefined}
           className={className}
           placeholder="e.g. admin@ecovet.com"
           value={value}

@@ -3,13 +3,10 @@ import { useEmployeeContext } from '../../hooks/useEmployeeContext'
 import { usePatients } from '../../hooks/usePatients'
 import { useInventory } from '../../hooks/useInventory'
 import { useSales } from '../../hooks/useSales'
+import { formatPrice } from '../../utils/format'
 
 // ==================== HELPERS ====================
 // Read-only summary computed from the API-backed hooks.
-
-function formatPrice(amount) {
-  return `₱${Number(amount || 0).toFixed(2)}`
-}
 
 function toIsoDate(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -126,7 +123,8 @@ function SalesTrendChart({ branch }) {
 
 export default function Dashboard() {
   const { branch, name } = useEmployeeContext()
-  const { items: patients } = usePatients()
+  // Only the headline counts are needed, so ask for a single row plus the server's stats.
+  const { stats: patientStats } = usePatients({ page: 1, pageSize: 1 })
   const { items: products } = useInventory()
 
   // Ported from startEmployeeClock() - ticks every 30s, same as the
@@ -137,16 +135,15 @@ export default function Dashboard() {
     return () => clearInterval(id)
   }, [])
 
-  const branchPatients = useMemo(() => patients.filter(p => p.branch === branch), [patients, branch])
   const branchProducts = useMemo(() => products.filter(p => p.branch === branch), [products, branch])
 
-  const totalPatients = branchPatients.length
-  const followUps = branchPatients.filter(p => p.status === 'Follow-up needed').length
+  const totalPatients = patientStats?.total ?? 0
+  const followUps = patientStats?.followUpNeeded ?? 0
   const lowStock = branchProducts.filter(p => p.quantity > 0 && p.quantity <= p.reorderPoint).length
   const outOfStock = branchProducts.filter(p => p.quantity <= 0).length
 
   return (
-    <main className="content">
+    <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
         <h1>My Branch - {branch}</h1>
         <div className="employee-datetime">

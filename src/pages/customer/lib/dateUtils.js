@@ -1,6 +1,4 @@
-// Date/calendar helpers ported verbatim from customer/index.html.
-
-import { ADMIN_CLOSURES, HOURS_BY_JSDAY } from "./mockData";
+// Date/calendar helpers for the customer calendar.
 
 export function pad2(n) {
   return String(n).padStart(2, "0");
@@ -20,11 +18,4 @@ export function getMonthGrid(monthDate) {
   return Array.from({ length: 42 }, (_, i) =>
     new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i)
   );
-}
-
-export function getDayAvailability(date) {
-  const closure = ADMIN_CLOSURES.find((c) => c.date === toDateKey(date));
-  if (closure) return { isOpen: false, hours: "Closed", reason: closure.reason };
-  const weekday = HOURS_BY_JSDAY[date.getDay()];
-  return { isOpen: !weekday.closed, hours: weekday.hours, reason: null };
 }

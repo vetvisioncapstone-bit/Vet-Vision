@@ -1,0 +1,18 @@
+login: median 723 ms over 5 calls
+
+Single user (20 calls each)
+endpoint | median ms | p95 ms | status
+/api/analytics/overview/ | 209 | 1900 | 200
+/api/analytics/live/ | 109 | 250 | 200
+/api/analytics/sales/ | 617 | 1334 | 200
+/api/analytics/inventory/ | 371 | 730 | 200
+/api/analytics/forecast/ | 157 | 3957 | 200
+/api/analytics/report/ | 204 | 370 | 200
+/api/patients/?page=1&pageSize=25 | 143 | 294 | 200
+/api/inventory/ | 476 | 850 | 200
+/api/events/posts/ | 99 | 193 | 200
+/api/requests/ | 133 | 210 | 200
+
+5 users at once for 15 s
+requests: 217  (14.5/s)  errors: 0 (0.0%)  rate-limited: 0
+latency ms: median 309, p95 749, max 1056

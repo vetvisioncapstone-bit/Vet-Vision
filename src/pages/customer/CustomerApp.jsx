@@ -1,24 +1,17 @@
-// Top-level customer portal component — equivalent to the `App()` function in the
-// original customer/index.html standalone build. Mount this as a single route element
-// (e.g. <Route path="/customer/*" element={<CustomerApp />} />); it manages its own
-// login/home view switching and in-page navigation internally via component state,
-// exactly as the original did (see CustomerApp's report notes on why `page` was kept
-// as state rather than promoted to nested routes).
-//
-// Intentionally isolated: this portal's mock Google login never reads or writes the
-// admin/employee localStorage keys (`vvStaffAccounts`, `vetVisionAdminProfile`) or
-// src/utils/auth.js — that separation is preserved as-is per product decision.
+// The pet-owner portal: home, calendar, records and settings, switched by component state.
+// Reached only through RequireRole (App.jsx): everyone signs in on the main login page, and a signed-out owner is
+// sent back there. Owners see their own pets, medical history, reminders and the clinic announcements.
 
 import { useEffect, useState } from "react";
 import "../../styles/customer/style.css";
-import LoginScreen from "./components/LoginScreen";
+import SkipLink from "../../components/shared/SkipLink";
 import SideNav from "./components/SideNav";
 import HomeScreen from "./components/HomeScreen";
-import ChatAssistant from "./components/ChatAssistant";
+import ChangePasswordScreen from "./components/ChangePasswordScreen";
+import { useAuth } from "../../hooks/useAuth";
 
 export default function CustomerApp() {
-  const [view, setView] = useState("login");
-  const [email, setEmail] = useState("");
+  const { session, logout, setUser } = useAuth();
   const [page, setPage] = useState("home");
   const [navExpanded, setNavExpanded] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
@@ -39,7 +32,7 @@ export default function CustomerApp() {
   useEffect(() => {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", "#F5F9F6");
-  }, [view]);
+  }, []);
 
   useEffect(() => {
     try {
@@ -53,14 +46,8 @@ export default function CustomerApp() {
     } catch {}
   }, [notifsEnabled]);
 
-  function handleContinue(value) {
-    setEmail(value);
-    setView("home");
-  }
-
   function handleLogout() {
-    setView("login");
-    setEmail("");
+    logout();
     setPage("home");
     setNavExpanded(false);
   }
@@ -70,12 +57,13 @@ export default function CustomerApp() {
     setNavExpanded(false);
   }
 
-  if (view === "login") {
-    return <LoginScreen onContinue={handleContinue} />;
+  if (session?.mustChangePassword) {
+    return <ChangePasswordScreen email={session.email} onDone={setUser} onCancel={handleLogout} />;
   }
 
   return (
     <div className={`home-page ${navExpanded ? "home-page--nav-expanded" : ""} ${darkMode ? "dark" : ""}`}>
+      <SkipLink />
       <SideNav
         page={page}
         expanded={navExpanded}
@@ -88,7 +76,7 @@ export default function CustomerApp() {
       <div className="sidenav-backdrop" onClick={() => setNavExpanded(false)} />
       <div className="home-container">
         <HomeScreen
-          email={email}
+          session={session}
           page={page}
           onOpenNav={() => setNavExpanded(true)}
           darkMode={darkMode}
@@ -97,7 +85,6 @@ export default function CustomerApp() {
           onToggleNotifs={() => setNotifsEnabled((v) => !v)}
         />
       </div>
-      <ChatAssistant />
     </div>
   );
 }

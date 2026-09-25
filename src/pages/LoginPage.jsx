@@ -4,6 +4,7 @@ import LeftSection from '../components/LeftSection'
 import RightSection from '../components/RightSection'
 import SuccessOverlay from '../components/SuccessOverlay'
 import { useAuth } from '../hooks/useAuth'
+import { homePathFor } from '../utils/homePath'
 import '../styles/LoginPage.css'
 
 function LoginPage() {
@@ -35,7 +36,7 @@ function LoginPage() {
 
     // Navigate after the success overlay has had a moment
     setTimeout(() => {
-      navigate(result.session.role === 'admin' ? '/admin/dashboard' : '/employee/dashboard')
+      navigate(homePathFor(result.session.role))
     }, 1500)
 
     return { success: true }
@@ -44,7 +45,7 @@ function LoginPage() {
   return (
     <div className="container">
       <LeftSection />
-      <RightSection onLogin={handleLogin} />
+      <RightSection onLogin={handleLogin} onSignedUp={() => navigate(homePathFor('customer'))} />
       {showSuccess && (
         <SuccessOverlay 
           email={successData.email} 

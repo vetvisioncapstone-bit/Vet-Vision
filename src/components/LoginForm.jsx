@@ -13,6 +13,7 @@ function LoginForm({ onLogin }) {
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [forgotNote, setForgotNote] = useState(false)
 
   useEffect(() => {
     // Keyboard shortcuts
@@ -97,6 +98,7 @@ function LoginForm({ onLogin }) {
       shakeElement('email')
       shakeElement('password')
       setIsLoading(false)
+      document.getElementById('password')?.focus() // keyboard and screen-reader users land back on the field to retry
     }
     // If success, loading state continues until redirect
   }
@@ -122,15 +124,13 @@ function LoginForm({ onLogin }) {
     }
   }
 
-  const handleForgotPassword = (e) => {
-    e.preventDefault()
-    alert('Password reset functionality would be implemented here! 🔐')
-  }
+  // There is no reset-by-email yet (no mail service is set up): tell people who can reset it for them.
+  const handleForgotPassword = () => setForgotNote((shown) => !shown)
 
   return (
     <form id="loginForm" onSubmit={handleSubmit}>
       {loginError && (
-        <div className="login-alert">
+        <div className="login-alert" role="alert">
           {loginError}
         </div>
       )}
@@ -161,10 +161,16 @@ function LoginForm({ onLogin }) {
           />
           <label htmlFor="remember">Remember me</label>
         </div>
-        <a href="#" className="forgot-password" onClick={handleForgotPassword}>
+        <button type="button" className="forgot-password" aria-expanded={forgotNote} onClick={handleForgotPassword}>
           Forgot Password?
-        </a>
+        </button>
       </div>
+      {forgotNote && (
+        <div className="login-note" role="status">
+          Staff: ask your clinic administrator to reset your password in User Management. Pet owners: please contact the
+          clinic.
+        </div>
+      )}
 
       <LoginButton isLoading={isLoading} />
 

@@ -7,6 +7,7 @@ import { errorMessage } from '../../api/client'
 import '../../styles/admin/inventory.css'
 import '../../styles/employee/employee-inventory.css'
 
+import Dialog from '../../components/shared/Dialog'
 // ==================== HELPERS ====================
 // Rows come from the API, already scoped to this employee's branch by the server.
 
@@ -157,7 +158,7 @@ export default function Inventory() {
   }
 
   return (
-    <main className="content">
+    <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
         <h1>My Branch - {branch}</h1>
         <div className="employee-datetime">
@@ -193,7 +194,7 @@ export default function Inventory() {
           <div className="header-filters">
             <div className="search-wrapper">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-              <input type="text" placeholder="search product..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.trim().toLowerCase())} />
+              <input type="text" aria-label="Search products" autoComplete="off" placeholder="search product…\" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.trim().toLowerCase())} />
             </div>
             <button className="new-btn" onClick={openAddModal}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -250,7 +251,7 @@ export default function Inventory() {
       </div>
 
       {/* Add / Edit product modal */}
-      <div className={`modal-overlay${modalOpen ? ' show' : ''}`} onClick={closeModal}>
+      <Dialog open={!!(modalOpen)} onClose={closeModal} label={editingId ? 'Edit product' : 'Add new product'}>
         <div className="modal product-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>{editingId ? 'Edit product' : 'Add new product'}</h2>
@@ -272,44 +273,44 @@ export default function Inventory() {
 
               <div className="modal-fields">
                 <div className="form-group">
-                  <label className="form-label">Product name</label>
-                  <input type="text" className="form-input" placeholder="e.g. Pet food (dog)" required
+                  <label className="form-label" htmlFor="src-pages-employee-inventory-f1">Product name</label>
+                  <input id="src-pages-employee-inventory-f1" type="text" className="form-input" placeholder="e.g. Pet food (dog)" required
                     value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Category</label>
-                  <input type="text" className="form-input" placeholder="e.g. Food, Grooming, Medicine" required
+                  <label className="form-label" htmlFor="src-pages-employee-inventory-f2">Category</label>
+                  <input id="src-pages-employee-inventory-f2" type="text" className="form-input" placeholder="e.g. Food, Grooming, Medicine" required
                     value={form.category} onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))} />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Branch</label>
-                  <input type="text" className="form-input" value={branch} disabled />
+                  <label className="form-label" htmlFor="src-pages-employee-inventory-f3">Branch</label>
+                  <input id="src-pages-employee-inventory-f3" type="text" className="form-input" value={branch} disabled />
                 </div>
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Quantity</label>
-                    <input type="number" className="form-input" min="0" step="1" placeholder="e.g. 25" required
+                    <label className="form-label" htmlFor="src-pages-employee-inventory-f4">Quantity</label>
+                    <input id="src-pages-employee-inventory-f4" type="number" className="form-input" min="0" step="1" placeholder="e.g. 25" required
                       value={form.quantity} onChange={(e) => setForm(f => ({ ...f, quantity: e.target.value }))} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Reorder point</label>
-                    <input type="number" className="form-input" min="0" step="1" placeholder="e.g. 10" required
+                    <label className="form-label" htmlFor="src-pages-employee-inventory-f5">Reorder point</label>
+                    <input id="src-pages-employee-inventory-f5" type="number" className="form-input" min="0" step="1" placeholder="e.g. 10" required
                       value={form.reorderPoint} onChange={(e) => setForm(f => ({ ...f, reorderPoint: e.target.value }))} />
                   </div>
                 </div>
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Delivery date</label>
-                    <input type="date" className="form-input" required
+                    <label className="form-label" htmlFor="src-pages-employee-inventory-f6">Delivery date</label>
+                    <input id="src-pages-employee-inventory-f6" type="date" className="form-input" required
                       value={form.delivery} onChange={(e) => setForm(f => ({ ...f, delivery: e.target.value }))} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Expiration date</label>
-                    <input type="date" className="form-input" required
+                    <label className="form-label" htmlFor="src-pages-employee-inventory-f7">Expiration date</label>
+                    <input id="src-pages-employee-inventory-f7" type="date" className="form-input" required
                       value={form.expiration} onChange={(e) => setForm(f => ({ ...f, expiration: e.target.value }))} />
                   </div>
                 </div>
@@ -321,7 +322,7 @@ export default function Inventory() {
             <button type="submit" className="modal-submit-btn" disabled={saving}>{editingId ? 'Save changes' : 'Add product'}</button>
           </form>
         </div>
-      </div>
+      </Dialog>
     </main>
   )
 }

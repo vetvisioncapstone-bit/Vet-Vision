@@ -1,11 +1,17 @@
+from datetime import timedelta
+
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from clinic.models import MedicalRecord, Pet
+from core.pagination import paginate, wants_page
+from accounts.audit import record
+from core.clinic_calendar import FULL_CLOSE, FULL_HOURS, OPENS, WEEKLY, day_info
 from core.permissions import IsAdmin, IsClinicStaff, assert_branch_access, branch_by_town
 from inventory.models import Inventory
 
@@ -48,7 +54,15 @@ class PostInput(serializers.Serializer):
 class EventPostList(APIView):
     permission_classes = [IsClinicStaff]
 
+    def get_permissions(self):
+        # Announcements are for everyone signed in, including pet owners. Only the admin can write.
+        if self.request.method == "GET":
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
     def get(self, request):
+        if wants_page(request):
+            return paginate(request, EventPost.objects.all(), post_row)
         return Response([post_row(p) for p in EventPost.objects.all()])
 
     def post(self, request):
@@ -74,7 +88,41 @@ class EventPostDetail(APIView):
         deleted, _ = EventPost.objects.filter(pk=pk).delete()
         if not deleted:
             raise NotFound()
+        record(request, "event.delete", target=pk)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ClinicCalendar(APIView):
+    """GET /api/clinic/calendar/?from=YYYY-MM-DD&to=YYYY-MM-DD[&branch=Ibaan]: for each date, whether the branch is open.
+
+    The regular schedule (core.clinic_calendar) with the admin's per-date overrides on top. Any signed-in user; it
+    defaults to the caller's own branch."""
+
+    MAX_DAYS = 70
+
+    def get(self, request):
+        f = serializers.DateField()
+        try:
+            start, end = f.run_validation(request.query_params.get("from")), f.run_validation(request.query_params.get("to"))
+        except serializers.ValidationError:
+            raise serializers.ValidationError({"detail": "Give from and to as YYYY-MM-DD."})
+        if end < start or (end - start).days > self.MAX_DAYS:
+            raise serializers.ValidationError({"detail": f"Ask for at most {self.MAX_DAYS} days at a time."})
+        town = request.query_params.get("branch") or (
+            request.user.customer.branch.town if request.user.customer_id else
+            request.user.staff.branch.town if request.user.staff_id else "Ibaan")
+        branch = branch_by_town(town)
+        overrides = {a.date: a.state for a in BranchAvailability.objects.filter(branch=branch, date__range=(start, end))}
+        days = {}
+        for n in range((end - start).days + 1):
+            d = start + timedelta(days=n)
+            info = day_info(d)
+            if overrides.get(d) == "unavailable":
+                info = {"state": "closed", "hours": "Closed", "reason": "Closed by the clinic", "opens": None, "closes": None}
+            elif overrides.get(d) == "available" and info["state"] == "closed":
+                info = {"state": "open", "hours": FULL_HOURS, "reason": "Special opening", "opens": OPENS, "closes": FULL_CLOSE}
+            days[d.isoformat()] = info
+        return Response({"branch": branch.town, "days": days, "weekly": WEEKLY})
 
 
 class AvailabilityView(APIView):
@@ -188,6 +236,7 @@ class RequestAction(APIView):
             r.status = ApprovalRequest.STATUS_DENIED
         else:
             r.status = ApprovalRequest.STATUS_DISMISSED
+        record(request, f"request.{self.action}", target=r.pk, detail=r.kind)
         r.resolved_by = request.user
         r.resolved_at = timezone.now()
         r.save()

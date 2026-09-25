@@ -24,10 +24,11 @@
 .left-section::before {
     content: '';
     position: absolute;
-    left: -15%;
-    bottom: -10%;
-    width: 85%;
-    height: 75%;
+    left: 50%;
+    bottom: 4%;
+    width: 78%;
+    height: 68%;
+    transform: translateX(-50%);
     background: linear-gradient(135deg, #eaf6ec 0%, #d3ebd7 100%);
     border-radius: 62% 38% 35% 65% / 58% 32% 68% 42%;
     z-index: 0;
@@ -36,28 +37,28 @@
 .paw-print {
     position: absolute;
     opacity: 0.15;
-    font-size: 80px;
+    font-size: 64px;
     color: #4caf50;
     animation: pawBounce 4s ease-in-out infinite;
 }
 
 .paw-1 { 
-    top: 10%; 
-    left: 5%; 
+    top: 8%;
+    left: 6%;
     transform: rotate(-20deg);
     animation-delay: 0s;
 }
 
 .paw-2 { 
-    top: 70%; 
-    right: 10%; 
+    top: 72%;
+    right: 6%;
     transform: rotate(30deg);
     animation-delay: 0.5s;
 }
 
 .paw-3 { 
-    bottom: 20%; 
-    left: 15%; 
+    bottom: 8%;
+    left: 8%;
     transform: rotate(-45deg);
     animation-delay: 1s;
 }
@@ -73,7 +74,7 @@
     align-items: center;
     justify-content: center;
     gap: 10px;
-    margin-bottom: 40px;
+    margin-bottom: 28px;
     font-size: 24px;
     font-weight: bold;
     color: #2d5f4f;
@@ -81,15 +82,15 @@
 }
 
 .logo-img {
-    height: 48px;
+    height: 42px;
+    width: auto;
     display: inline-block;
-    animation: float 3s ease-in-out infinite;
 }
 
 .pet-image {
-    width: 420px;
-    height: 420px;
-    margin: 20px 0;
+    width: clamp(260px, 46vh, 420px);
+    height: clamp(260px, 46vh, 420px);
+    margin: 16px auto 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -111,10 +112,10 @@
     font-size: 18px;
     color: #3d7a5d;
     font-weight: 500;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     line-height: 1.6;
     animation: slideInUp 0.8s ease-out 0.5s backwards;
-    transition: all 0.3s ease;
+    transition: color 0.3s ease;
 }
 
 .tagline:hover {

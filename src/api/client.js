@@ -91,6 +91,11 @@ export async function request(method, path, body) {
     }
   }
   if (!res.ok) throw new ApiError(res.status, data)
+  // A password change returns a fresh token pair (the old ones were revoked): keep this session alive.
+  if (data && data.tokens) {
+    setTokens(data.tokens)
+    delete data.tokens
+  }
   return data
 }
 

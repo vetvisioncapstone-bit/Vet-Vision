@@ -1,28 +1,29 @@
-import React from 'react'
+import React, { lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import RequireRole from './components/shared/RequireRole'
 import AdminLayout from './components/shared/AdminLayout'
 import EmployeeLayout from './components/shared/EmployeeLayout'
-import AdminDashboard from './pages/admin/Dashboard'
-import AdminSalesAnalytics from './pages/admin/SalesAnalytics'
-import AdminInventory from './pages/admin/Inventory'
-import AdminForecasting from './pages/admin/Forecasting'
-import AdminEvents from './pages/admin/Events'
-import AdminReports from './pages/admin/Reports'
-import AdminPatients from './pages/admin/Patients'
-import AdminUserManagement from './pages/admin/UserManagement'
-import AdminSystemSettings from './pages/admin/SystemSettings'
-import EmployeeDashboard from './pages/employee/Dashboard'
-import EmployeeFeed from './pages/employee/Feed'
-import EmployeeInventory from './pages/employee/Inventory'
-import EmployeePatients from './pages/employee/Patients'
-import EmployeeSales from './pages/employee/Sales'
-import CustomerApp from './pages/customer/CustomerApp'
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
+const AdminSalesAnalytics = lazy(() => import('./pages/admin/SalesAnalytics'))
+const AdminInventory = lazy(() => import('./pages/admin/Inventory'))
+const AdminForecasting = lazy(() => import('./pages/admin/Forecasting'))
+const AdminEvents = lazy(() => import('./pages/admin/Events'))
+const AdminReports = lazy(() => import('./pages/admin/Reports'))
+const AdminPatients = lazy(() => import('./pages/admin/Patients'))
+const AdminUserManagement = lazy(() => import('./pages/admin/UserManagement'))
+const AdminSystemSettings = lazy(() => import('./pages/admin/SystemSettings'))
+const EmployeeDashboard = lazy(() => import('./pages/employee/Dashboard'))
+const EmployeeFeed = lazy(() => import('./pages/employee/Feed'))
+const EmployeeInventory = lazy(() => import('./pages/employee/Inventory'))
+const EmployeePatients = lazy(() => import('./pages/employee/Patients'))
+const EmployeeSales = lazy(() => import('./pages/employee/Sales'))
+const CustomerApp = lazy(() => import('./pages/customer/CustomerApp'))
 
 function App() {
   return (
     <Router>
+      <Suspense fallback={<div className="skeleton" style={{ height: 120, margin: 24 }} />}>
       <Routes>
         <Route path="/" element={<LoginPage />} />
 
@@ -48,10 +49,11 @@ function App() {
           <Route path="sales" element={<EmployeeSales />} />
         </Route>
 
-        <Route path="/customer/*" element={<CustomerApp />} />
+        <Route path="/customer/*" element={<RequireRole role="customer"><CustomerApp /></RequireRole>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </Router>
   )
 }

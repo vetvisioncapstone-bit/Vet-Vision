@@ -1,6 +1,6 @@
 import React from 'react'
 
-function LoginButton({ isLoading }) {
+function LoginButton({ isLoading, label = 'Login' }) {
   const handleClick = (e) => {
     if (!isLoading) {
       // Ripple effect
@@ -36,7 +36,7 @@ function LoginButton({ isLoading }) {
           <path d="M12 12c-3.5 0-6.5 2.4-6.5 5.4 0 2 1.7 3.1 3.6 2.4.9-.3 1.9-.5 2.9-.5s2 .2 2.9.5c1.9.7 3.6-.4 3.6-2.4C18.5 14.4 15.5 12 12 12Z"/>
         </svg>
       </span>
-      <span className="btn-text">Login</span>
+      <span className="btn-text">{label}</span>
     </button>
   )
 }

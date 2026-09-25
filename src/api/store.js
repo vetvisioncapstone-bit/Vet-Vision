@@ -7,6 +7,7 @@ import { api } from './client'
 const cache = new Map() // key -> { data, error, loading, loaded }
 const listeners = new Map() // key -> Set<fn>
 const inflight = new Map()
+const FRESH_MS = 15000 // focus refetch skips data newer than this
 const EMPTY = { data: undefined, error: null, loading: false, loaded: false }
 
 function entry(key) {
@@ -27,7 +28,7 @@ export function fetchKey(key) {
   put(key, { loading: true })
   const p = api
     .get(key)
-    .then((data) => put(key, { data, error: null, loading: false, loaded: true }))
+    .then((data) => put(key, { data, error: null, loading: false, loaded: true, fetchedAt: Date.now() }))
     .catch((error) => put(key, { error, loading: false, loaded: true }))
     .finally(() => inflight.delete(key))
   inflight.set(key, p)
@@ -53,12 +54,6 @@ export function clearCache() {
   for (const key of listeners.keys()) emit(key)
 }
 
-// Optimistically patch cached data (rarely needed - most mutations just invalidate).
-export function setCached(key, updater) {
-  const cur = entry(key)
-  put(key, { data: typeof updater === 'function' ? updater(cur.data) : updater, loaded: true })
-}
-
 function subscribe(key, fn) {
   if (!listeners.has(key)) listeners.set(key, new Set())
   listeners.get(key).add(fn)
@@ -74,9 +69,10 @@ export function useResource(key, { enabled = true, refreshMs = 0 } = {}) {
   useEffect(() => {
     if (!key || !enabled) return undefined
     fetchKey(key) // stale-while-revalidate: cached data shows instantly, a fresh copy replaces it
-    const onFocus = () => fetchKey(key)
+    const onFocus = () => { if (Date.now() - (entry(key).fetchedAt || 0) > FRESH_MS) fetchKey(key) }
     window.addEventListener('focus', onFocus)
-    const timer = refreshMs ? setInterval(() => fetchKey(key), refreshMs) : null
+    // Poll only while the tab is on screen; coming back triggers an immediate refresh via the focus handler.
+    const timer = refreshMs ? setInterval(() => { if (document.visibilityState === 'visible') fetchKey(key) }, refreshMs) : null
     return () => {
       window.removeEventListener('focus', onFocus)
       if (timer) clearInterval(timer)
@@ -87,6 +83,7 @@ export function useResource(key, { enabled = true, refreshMs = 0 } = {}) {
     data: snapshot.data,
     loading: !snapshot.loaded && (snapshot.loading || (enabled && !!key)),
     error: snapshot.error,
+    fetchedAt: snapshot.fetchedAt || null, // ms timestamp of the last successful load
     reload: () => (key ? fetchKey(key) : Promise.resolve())
   }
 }

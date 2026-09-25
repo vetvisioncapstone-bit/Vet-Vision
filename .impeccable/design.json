@@ -1,0 +1,452 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-25T04:03:17.884965+00:00",
+  "title": "Design System: VET Vision",
+  "extensions": {
+    "colorMeta": {
+      "brand-green": {
+        "role": "primary",
+        "displayName": "Clinic Green",
+        "canonical": "#2d7a4d",
+        "tonalRamp": [
+          "#153823",
+          "#225d3b",
+          "#308252",
+          "#3ea86a",
+          "#6ac891",
+          "#97d9b2",
+          "#c3e9d3",
+          "#ecf8f1"
+        ]
+      },
+      "leaf-green": {
+        "role": "primary",
+        "displayName": "Leaf Green",
+        "canonical": "#4caf50",
+        "tonalRamp": [
+          "#173518",
+          "#275929",
+          "#367c39",
+          "#45a049",
+          "#71c174",
+          "#9bd49e",
+          "#c6e6c7",
+          "#edf7ee"
+        ]
+      },
+      "success-green": {
+        "role": "primary",
+        "displayName": "Ledger Green",
+        "canonical": "#1f8a4c",
+        "tonalRamp": [
+          "#0e3e22",
+          "#176839",
+          "#219250",
+          "#2abb67",
+          "#58da8f",
+          "#8ae5b0",
+          "#bcf0d2",
+          "#eafaf1"
+        ]
+      },
+      "forest": {
+        "role": "primary",
+        "displayName": "Forest",
+        "canonical": "#163a26",
+        "tonalRamp": [
+          "#153724",
+          "#235c3d",
+          "#318155",
+          "#3fa66d",
+          "#6bc794",
+          "#97d8b4",
+          "#c4e9d4",
+          "#edf8f2"
+        ]
+      },
+      "deep-forest": {
+        "role": "primary",
+        "displayName": "Deep Forest",
+        "canonical": "#0f2a1a",
+        "tonalRamp": [
+          "#143823",
+          "#225e3a",
+          "#2f8451",
+          "#3ca969",
+          "#69c990",
+          "#96d9b1",
+          "#c3ead3",
+          "#ecf8f1"
+        ]
+      },
+      "success-tint": {
+        "role": "primary",
+        "displayName": "Mint Tint",
+        "canonical": "#e4f6e8",
+        "tonalRamp": [
+          "#13391c",
+          "#20602e",
+          "#2d8640",
+          "#39ac53",
+          "#66cc7d",
+          "#94dba4",
+          "#c2ebcb",
+          "#ecf9ef"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#262626",
+          "#404040",
+          "#595959",
+          "#737373",
+          "#999999",
+          "#b8b8b8",
+          "#d6d6d6",
+          "#f2f2f2"
+        ]
+      },
+      "page-mist": {
+        "role": "neutral",
+        "displayName": "Page Mist",
+        "canonical": "#f0f4f1",
+        "tonalRamp": [
+          "#202c23",
+          "#364a3b",
+          "#4c6752",
+          "#61846a",
+          "#89a991",
+          "#adc3b2",
+          "#d0dcd3",
+          "#f0f4f1"
+        ]
+      },
+      "panel-mist": {
+        "role": "neutral",
+        "displayName": "Panel Mist",
+        "canonical": "#f9fbfa",
+        "tonalRamp": [
+          "#1f2e26",
+          "#334c40",
+          "#476b59",
+          "#5c8a73",
+          "#85ad99",
+          "#a9c6b8",
+          "#ceded6",
+          "#f0f5f2"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#ececec",
+        "tonalRamp": [
+          "#262626",
+          "#404040",
+          "#595959",
+          "#737373",
+          "#999999",
+          "#b8b8b8",
+          "#d6d6d6",
+          "#f2f2f2"
+        ]
+      },
+      "hairline-strong": {
+        "role": "neutral",
+        "displayName": "Strong Hairline",
+        "canonical": "#dfe3e1",
+        "tonalRamp": [
+          "#242926",
+          "#3c4440",
+          "#535f59",
+          "#6b7a73",
+          "#92a099",
+          "#b3bcb8",
+          "#d3d9d6",
+          "#f1f3f2"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1a1a1a",
+        "tonalRamp": [
+          "#262626",
+          "#404040",
+          "#595959",
+          "#737373",
+          "#999999",
+          "#b8b8b8",
+          "#d6d6d6",
+          "#f2f2f2"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "#45514a",
+        "tonalRamp": [
+          "#232926",
+          "#3b453f",
+          "#526058",
+          "#6a7c71",
+          "#91a198",
+          "#b2bdb7",
+          "#d3d9d6",
+          "#f1f3f2"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#6b736f",
+        "tonalRamp": [
+          "#252826",
+          "#3d4240",
+          "#565c59",
+          "#6f7773",
+          "#959d99",
+          "#b5bab8",
+          "#d5d8d6",
+          "#f2f3f2"
+        ]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Faint Ink",
+        "canonical": "#9aa5a0",
+        "tonalRamp": [
+          "#242826",
+          "#3c4340",
+          "#545e5a",
+          "#6c7973",
+          "#939f9a",
+          "#b3bcb8",
+          "#d4d9d6",
+          "#f2f3f2"
+        ]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Alarm Red",
+        "canonical": "#e53935",
+        "tonalRamp": [
+          "#440a09",
+          "#71110f",
+          "#9e1714",
+          "#cb1e1a",
+          "#e84e4a",
+          "#ef8380",
+          "#f6b8b7",
+          "#fce9e8"
+        ]
+      },
+      "danger-tint": {
+        "role": "tertiary",
+        "displayName": "Red Wash",
+        "canonical": "#fdecea",
+        "tonalRamp": [
+          "#460d07",
+          "#74160b",
+          "#a31f10",
+          "#d22814",
+          "#ed5645",
+          "#f3897d",
+          "#f8bcb4",
+          "#fdeae8"
+        ]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "Caution Amber",
+        "canonical": "#b8720a",
+        "tonalRamp": [
+          "#492d04",
+          "#794b07",
+          "#a96909",
+          "#da870c",
+          "#f4ab3e",
+          "#f8c478",
+          "#fbddb2",
+          "#fef4e7"
+        ]
+      },
+      "warning-tint": {
+        "role": "tertiary",
+        "displayName": "Amber Wash",
+        "canonical": "#fdf1e0",
+        "tonalRamp": [
+          "#482c05",
+          "#784908",
+          "#a8670b",
+          "#d8840e",
+          "#f3a83f",
+          "#f6c279",
+          "#fadcb2",
+          "#fdf4e7"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page title in each content header."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card titles, primary button label, modal titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Forms, paragraphs, table cells."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels, table headers, badges."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card-lift",
+        "value": "0 4px 16px rgba(16, 60, 40, 0.06)",
+        "purpose": "Interactive cards on hover."
+      },
+      {
+        "name": "hover-raise",
+        "value": "0 10px 24px rgba(20, 40, 30, 0.08)",
+        "purpose": "Stat and feature cards on hover."
+      },
+      {
+        "name": "focus-glow",
+        "value": "0 0 0 3px rgba(76, 175, 80, 0.12)",
+        "purpose": "Input focus."
+      },
+      {
+        "name": "modal",
+        "value": "0 24px 60px rgba(0, 0, 0, 0.3)",
+        "purpose": "Dialogs over a dimmed backdrop."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-ui",
+        "value": "0.3s ease",
+        "purpose": "Color, transform and shadow transitions on controls. Reduced-motion users get about 0.01ms."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "xl",
+        "value": "1024px"
+      },
+      {
+        "name": "lg",
+        "value": "900px"
+      },
+      {
+        "name": "md",
+        "value": "700px"
+      },
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "xs",
+        "value": "480px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action on a screen, such as Sign in.",
+      "html": "<button class=\"ds-btn\">Sign in</button>",
+      "css": ".ds-btn{width:220px;padding:14px;background:#2d7a4d;color:#fff;border:none;border-radius:30px;font:600 16px 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;cursor:pointer;transition:background-color .3s ease,transform .3s ease}.ds-btn:hover{background:#4caf50}.ds-btn:focus-visible{outline:2px solid #2d7a4d;outline-offset:2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Labelled field with a soft green focus glow.",
+      "html": "<label class=\"ds-label\" for=\"ds-e\">Email</label><input id=\"ds-e\" class=\"ds-input\" placeholder=\"you@example.com\">",
+      "css": ".ds-label{display:block;margin-bottom:6px;font:600 12.5px 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;color:#45514a}.ds-input{width:240px;padding:13px 15px;border:1px solid #e6e6e6;border-radius:10px;background:#fafafa;font:14px 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;transition:border-color .3s ease,box-shadow .3s ease}.ds-input:focus{outline:none;border-color:#4caf50;box-shadow:0 0 0 3px rgba(76,175,80,.12)}"
+    },
+    {
+      "name": "Stat Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "KPI tile with a green top edge; red or amber when it needs attention.",
+      "html": "<div class=\"ds-stat\"><div class=\"ds-stat-l\">Total sales this month</div><div class=\"ds-stat-v\">₱184,250</div></div>",
+      "css": ".ds-stat{width:220px;background:#fff;border:1px solid #ececec;border-top:3px solid #4caf50;border-radius:12px;padding:18px 20px;font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;transition:transform .25s ease,box-shadow .25s ease}.ds-stat:hover{transform:translateY(-4px);box-shadow:0 10px 24px rgba(20,40,30,.08)}.ds-stat-l{font-size:13px;color:#6b736f;margin-bottom:8px}.ds-stat-v{font-size:26px;font-weight:700;color:#1a1a1a}"
+    },
+    {
+      "name": "Sidebar Item",
+      "kind": "nav",
+      "refersTo": "sidebar",
+      "description": "Navigation row; the current page is solid green.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-i active\" href=\"#\">Dashboard</a><a class=\"ds-nav-i\" href=\"#\">Inventory</a></nav>",
+      "css": ".ds-nav{width:220px;display:flex;flex-direction:column;gap:4px;font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif}.ds-nav-i{padding:11px 14px;border-radius:10px;color:#45514a;text-decoration:none;font-size:14px;transition:background-color .2s ease,transform .2s ease}.ds-nav-i:hover{background:#f0f4f1;transform:translateX(3px)}.ds-nav-i.active{background:#2d7a4d;color:#fff}.ds-nav-i:focus-visible{outline:2px solid #2d7a4d;outline-offset:2px}"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "card",
+      "description": "Pill badge; green for fine, red for low stock, amber for follow-up.",
+      "html": "<span class=\"ds-b ok\">In stock</span> <span class=\"ds-b low\">Low</span> <span class=\"ds-b warn\">Follow-up</span>",
+      "css": ".ds-b{display:inline-block;padding:3px 10px;border-radius:999px;font:600 12px 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif}.ds-b.ok{background:#e4f6e8;color:#1f8a4c}.ds-b.low{background:#fdecea;color:#e53935}.ds-b.warn{background:#fdf1e0;color:#b8720a}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Clinic Ledger",
+    "overview": "VET Vision reads like a well-kept record book for the clinic: white pages on a pale green-grey desk, thin hairlines, and one calm green voice. Flat with hairlines; soft and reassuring controls.",
+    "keyCharacteristics": [
+      "White surfaces on a pale green-grey page.",
+      "One green family for action, focus and positive state; red and amber only for danger and warning.",
+      "Segoe UI throughout, 13-14px for data.",
+      "Corners 8-14px, pill for the main call to action."
+    ],
+    "rules": [
+      {
+        "name": "The One Voice Rule",
+        "body": "Green is the only brand color. Red and amber carry meaning, never decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tint Not Shadow Rule",
+        "body": "Separate surfaces with a hairline or a mist tint before reaching for a shadow.",
+        "section": "colors"
+      },
+      {
+        "name": "The Small Data Rule",
+        "body": "Data screens run at 13-14px. Type above 16px is only for page titles and KPI numbers.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-At-Rest Rule",
+        "body": "Surfaces carry no shadow at rest; shadows answer hover, focus or elevation.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** use Clinic Green (#2d7a4d) for the one primary action on a screen.",
+      "**Do** separate surfaces with a Hairline (#ececec) or Page Mist before adding a shadow.",
+      "**Do** keep data text at 13-14px and reserve 28px for page titles.",
+      "**Do** show a visible focus ring on every interactive element (WCAG 2.1 AA).",
+      "**Do** tie every input to a visible label and give icon-only buttons an `aria-label`.",
+      "**Do** say when data is thin or stale, in Caution Amber on Amber Wash."
+    ],
+    "donts": [
+      "**Don't** use Faint Ink (#9aa5a0) for text that must be read; it is too light.",
+      "**Don't** add a second brand hue, gradients or decorative color.",
+      "**Don't** animate `transform` in a keyframe on an element that positions itself with `transform`; the keyframe overrides the centering and the element jumps (the password eye button bug).",
+      "**Don't** use `transition: all`; list the properties that change.",
+      "**Don't** show a control the signed-in role cannot use."
+    ]
+  }
+}

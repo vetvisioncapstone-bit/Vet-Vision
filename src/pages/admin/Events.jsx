@@ -176,7 +176,7 @@ export default function Events() {
   }
 
   return (
-    <main className="content">
+    <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
         <h1>Events</h1>
       </div>
@@ -192,7 +192,7 @@ export default function Events() {
               <textarea
                 id="postComposerInput"
                 className="composer-input"
-                placeholder="Share an announcement or update with pet owners..."
+                placeholder="Share an announcement or update with pet owners…\"
                 rows="2"
                 value={composerText}
                 onChange={(e) => setComposerText(e.target.value)}
@@ -220,7 +220,7 @@ export default function Events() {
 
           <div className="events-feed" id="eventsFeed">
             {postsLoading && posts.length === 0 ? (
-              <p className="empty-state">Loading...</p>
+              <p className="empty-state">Loading…</p>
             ) : posts.length === 0 ? (
               <p className="empty-state">No announcements yet. Share an update above.</p>
             ) : posts.map(post => (

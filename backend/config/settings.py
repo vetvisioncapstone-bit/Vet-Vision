@@ -1,6 +1,7 @@
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from dotenv import load_dotenv
 
@@ -30,6 +31,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "corsheaders",
+    "rest_framework_simplejwt.token_blacklist",
     "rest_framework",
     "core",
     "clinic",
@@ -37,11 +39,13 @@ INSTALLED_APPS = [
     "sales",
     "accounts",
     "engagement",
+    "analytics",
 ]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "django.middleware.gzip.GZipMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -80,6 +84,15 @@ DATABASES = {
     }
 }
 
+# Hosted databases (Supabase, Render) hand out one connection string: postgresql://user:password@host:port/name
+if os.getenv("DATABASE_URL"):
+    _u = urlparse(os.environ["DATABASE_URL"])
+    DATABASES["default"].update(
+        NAME=_u.path.lstrip("/"), USER=unquote(_u.username or ""), PASSWORD=unquote(_u.password or ""),
+        HOST=_u.hostname, PORT=str(_u.port or 5432), OPTIONS={"sslmode": os.getenv("DB_SSLMODE", "require")},
+        CONN_MAX_AGE=60,
+    )
+
 AUTH_USER_MODEL = "accounts.User"
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -105,14 +118,29 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_PAGINATION_CLASS": None,
-    "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
-    "DEFAULT_THROTTLE_RATES": {"login": os.getenv("LOGIN_THROTTLE", "10/min")},
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.ScopedRateThrottle",
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "login": os.getenv("LOGIN_THROTTLE", "10/min"),  # per IP; the per-account lockout is in accounts/audit.py
+        "refresh": "30/min",
+        "register": "5/min",
+        "anon": "300/min",
+        "user": "1500/min",  # a busy admin dashboard polls every 10 s
+    },
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
+    # The browsable HTML API is a convenience for development only.
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"]
+    + (["rest_framework.renderers.BrowsableAPIRenderer"] if DEBUG else []),
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": True,       # every refresh returns a new refresh token ...
+    "BLACKLIST_AFTER_ROTATION": True,    # ... and the old one stops working (stolen copies die)
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
@@ -121,3 +149,17 @@ CORS_ALLOWED_ORIGINS = [
     for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
     if o.strip()
 ]
+
+# Production hardening: everything below applies only when DJANGO_DEBUG is off.
+if not DEBUG:
+    SECURE_SSL_REDIRECT = env_bool("DJANGO_SSL_REDIRECT", True)
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")  # the host's proxy terminates TLS
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_REFERRER_POLICY = "same-origin"
+    X_FRAME_OPTIONS = "DENY"
+
+# The Django admin site is a second door into the data; leave it off unless asked for.
+ENABLE_DJANGO_ADMIN = DEBUG or env_bool("DJANGO_ENABLE_ADMIN", False)

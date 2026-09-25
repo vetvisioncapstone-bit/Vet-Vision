@@ -10,7 +10,7 @@
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -53,7 +53,8 @@
 
 .paw-icon {
     display: inline-flex;
-    animation: pawBounce 1.5s ease-in-out infinite;
+    align-items: center;
+    line-height: 1;
 }
 
 .paw-icon svg {
@@ -67,7 +68,7 @@
 
 .btn-text {
     display: inline-block;
-    transition: all 0.3s ease;
+    transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 /* Loading state for button */
@@ -102,7 +103,7 @@
     font-size: 12px;
     margin-top: 20px;
     animation: slideInUp 0.6s ease-out 0.9s backwards;
-    transition: all 0.3s ease;
+    transition: color 0.3s ease;
 }
 
 .footer-text:hover {

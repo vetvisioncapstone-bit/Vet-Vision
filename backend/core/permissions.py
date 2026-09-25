@@ -1,5 +1,5 @@
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import SAFE_METHODS, BasePermission
+from rest_framework.permissions import BasePermission
 
 from clinic.models import Branch
 
@@ -18,14 +18,12 @@ class IsClinicStaff(BasePermission):
         return bool(u and u.is_authenticated and u.role in ("admin", "staff"))
 
 
-class AdminWriteStaffRead(BasePermission):
-    """Any clinic user may read; only admins may write."""
+class IsCustomer(BasePermission):
+    """A pet owner signed in to the customer portal, linked to a customer row."""
 
     def has_permission(self, request, view):
         u = request.user
-        if not (u and u.is_authenticated and u.role in ("admin", "staff")):
-            return False
-        return request.method in SAFE_METHODS or u.role == "admin"
+        return bool(u and u.is_authenticated and u.role == "customer" and u.customer_id)
 
 
 def branch_by_town(town):

@@ -3,49 +3,81 @@ import { useSearchParams } from 'react-router-dom'
 import { useToast } from '../../components/shared/Toast'
 import { useAuth } from '../../hooks/useAuth'
 import { api, errorMessage } from '../../api/client'
+import { useResource } from '../../api/store'
+import { useDebounced } from '../../hooks/useDebounced'
 import { getInitialsFromName } from '../../utils/initials'
 import '../../styles/admin/system-settings.css'
 
-// ==================== STATE ====================
-// In-memory only - there's no database yet, so this resets on reload.
-// These values aren't read by any other page yet (inventory, forecasting,
-// etc. still use their own hardcoded numbers) - this page just captures
-// and previews the configuration. Matches system-settings.js exactly:
-// no localStorage persistence for this object.
-
-const DEFAULT_SETTINGS = {
-  lowStockThreshold: 20,
-  highDemandThreshold: 100,
-  loyalVisitCount: 8,
-  movingAverageWindow: 3,
-  forecastHorizon: 1,
-  defaultForecastBranch: 'All Branches',
-  lowStockEmailAlerts: true,
-  followUpReminders: true,
-  autoDailyBackup: false
-}
-
-// ==================== EXPORT HELPERS ====================
-
-function downloadFile(filename, content, mimeType) {
-  const blob = new Blob([content], { type: mimeType })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
-}
-
-function settingsToCsv(settings) {
-  const rows = [['Setting', 'Value']]
-  Object.entries(settings).forEach(([key, value]) => rows.push([key, String(value)]))
-  return rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n')
-}
-
+import Dialog from '../../components/shared/Dialog'
 const EMPTY_EDIT_FORM = { name: '', email: '', newPassword: '', confirmPassword: '' }
+
+function Row({ title, desc }) {
+  return (
+    <div className="settings-row">
+      <div className="settings-row-label">
+        <p className="settings-row-title">{title}</p>
+        <p className="settings-row-desc">{desc}</p>
+      </div>
+    </div>
+  )
+}
+
+const ACTION_LABELS = {
+  login: 'Signed in', login_failed: 'Wrong password', login_locked: 'Blocked (locked)', logout: 'Signed out',
+  password_change: 'Password changed', 'staff.create': 'Staff added', 'staff.update': 'Staff edited',
+  'staff.deactivate': 'Staff deactivated', 'patient.delete': 'Patient deleted', 'consultation.delete': 'Record deleted',
+  'product.delete': 'Product deleted', 'sale.create': 'Sale recorded', 'event.delete': 'Post deleted',
+  'request.approve': 'Request approved', 'request.deny': 'Request denied', 'request.dismiss': 'Request dismissed'
+}
+const BAD_ACTIONS = new Set(['login_failed', 'login_locked'])
+
+function ActivityLog() {
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const term = useDebounced(search.trim())
+  const { data, loading, error } = useResource(
+    `/auth/audit/?page=${page}&pageSize=10${term ? `&q=${encodeURIComponent(term)}` : ''}`,
+    { refreshMs: 30000 }
+  )
+  const rows = data?.results || []
+  const totalPages = data?.totalPages || 1
+
+  return (
+    <div className="table-card settings-card audit-card">
+      <div className="audit-head">
+        <h2>Activity log</h2>
+        <input
+          type="search" className="audit-search" placeholder="Search email or action…" aria-label="Search the activity log"
+          value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+        />
+      </div>
+      {error && <p className="settings-field-error">Could not load the activity log.</p>}
+      <div className="table-scroll">
+        <table>
+          <thead><tr><th>When</th><th>Who</th><th>What</th><th>Target</th><th>From</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className={BAD_ACTIONS.has(r.action) ? 'audit-bad' : undefined}>
+                <td>{new Date(r.at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                <td>{r.email || '—'}</td>
+                <td>{ACTION_LABELS[r.action] || r.action}{r.detail ? ` (${r.detail})` : ''}</td>
+                <td>{r.target || '—'}</td>
+                <td>{r.ip || '—'}</td>
+              </tr>
+            ))}
+            {!loading && rows.length === 0 && <tr><td colSpan="5" className="empty-state">Nothing recorded yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className="audit-pager">
+        <span>{data ? `${data.count} events` : ''}</span>
+        <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
+        <span>{data?.page || page} / {totalPages}</span>
+        <button type="button" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
+      </div>
+    </div>
+  )
+}
 
 export default function SystemSettings() {
   const showToast = useToast()
@@ -53,9 +85,6 @@ export default function SystemSettings() {
   const adminProfile = { name: user?.name || '', email: user?.email || '', photo: user?.photo || null }
   const [saving, setSaving] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
-
-  // ---- in-memory settings ----
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
 
   // ---- admin edit modal ----
   // step: null (closed) | 'verify' | 'edit'
@@ -204,49 +233,10 @@ export default function SystemSettings() {
     }
   }
 
-  // ==================== NUMBER / SELECT / TOGGLE FIELDS ====================
-  // Native number/text inputs fire 'change' on blur, not on every
-  // keystroke - onBlur here is the faithful React equivalent (onChange
-  // would fire on every keystroke and doesn't match the original).
-
-  function handleNumberBlur(e, key, label, min) {
-    let value = Math.round(Number(e.target.value))
-    if (Number.isNaN(value) || value < min) {
-      value = min
-    }
-    e.target.value = value
-    setSettings(prev => ({ ...prev, [key]: value }))
-    showToast(`${label} set to ${value}.`)
-  }
-
-  function handleBranchChange(e) {
-    const value = e.target.value
-    setSettings(prev => ({ ...prev, defaultForecastBranch: value }))
-    showToast(`Default forecast branch set to ${value}.`)
-  }
-
-  function handleToggleChange(e, key, label) {
-    const checked = e.target.checked
-    setSettings(prev => ({ ...prev, [key]: checked }))
-    showToast(`${label} ${checked ? 'enabled' : 'disabled'}.`)
-  }
-
-  // ==================== EXPORT ====================
-
-  function handleExportCsv() {
-    downloadFile('vet-vision-settings.csv', settingsToCsv(settings), 'text/csv')
-    showToast('Settings exported as CSV.')
-  }
-
-  function handleExportJson() {
-    downloadFile('vet-vision-settings.json', JSON.stringify(settings, null, 2), 'application/json')
-    showToast('Settings exported as JSON.')
-  }
-
   const summaryInitials = getInitialsFromName(adminProfile.name)
 
   return (
-    <main className="content">
+    <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
         <h1>System settings</h1>
       </div>
@@ -274,132 +264,30 @@ export default function SystemSettings() {
       </div>
 
       <div className="settings-grid">
-        <div className="settings-col">
-          <div className="table-card settings-card">
-            <h2>KPI thresholds</h2>
-
-            <div className="settings-row">
-              <div className="settings-row-label">
-                <p className="settings-row-title">Low stock alert threshold</p>
-                <p className="settings-row-desc">Flag item when stock falls below this quantity</p>
-              </div>
-              <input type="number" className="settings-number-input" min="0" defaultValue={DEFAULT_SETTINGS.lowStockThreshold}
-                onBlur={(e) => handleNumberBlur(e, 'lowStockThreshold', 'Low stock alert threshold', 0)} />
-            </div>
-
-            <div className="settings-row">
-              <div className="settings-row-label">
-                <p className="settings-row-title">High demand threshold</p>
-                <p className="settings-row-desc">Mark service as high demand above this count</p>
-              </div>
-              <input type="number" className="settings-number-input" min="0" defaultValue={DEFAULT_SETTINGS.highDemandThreshold}
-                onBlur={(e) => handleNumberBlur(e, 'highDemandThreshold', 'High demand threshold', 0)} />
-            </div>
-
-            <div className="settings-row">
-              <div className="settings-row-label">
-                <p className="settings-row-title">Loyal customer visit count</p>
-                <p className="settings-row-desc">Auto-tag patient owner as loyal after this many visits</p>
-              </div>
-              <input type="number" className="settings-number-input" min="0" defaultValue={DEFAULT_SETTINGS.loyalVisitCount}
-                onBlur={(e) => handleNumberBlur(e, 'loyalVisitCount', 'Loyal customer visit count', 0)} />
-            </div>
-          </div>
-
-          <div className="table-card settings-card">
-            <h2>Forecast parameters</h2>
-
-            <div className="settings-row">
-              <div className="settings-row-label">
-                <p className="settings-row-title">Moving average window</p>
-                <p className="settings-row-desc">Number of past months to average for forecast</p>
-              </div>
-              <input type="number" className="settings-number-input" min="1" defaultValue={DEFAULT_SETTINGS.movingAverageWindow}
-                onBlur={(e) => handleNumberBlur(e, 'movingAverageWindow', 'Moving average window', 1)} />
-            </div>
-
-            <div className="settings-row">
-              <div className="settings-row-label">
-                <p className="settings-row-title">Forecast horizon</p>
-                <p className="settings-row-desc">How many months ahead to predict demand</p>
-              </div>
-              <input type="number" className="settings-number-input" min="1" defaultValue={DEFAULT_SETTINGS.forecastHorizon}
-                onBlur={(e) => handleNumberBlur(e, 'forecastHorizon', 'Forecast horizon', 1)} />
-            </div>
-
-            <div className="settings-row">
-              <div className="settings-row-label">
-                <p className="settings-row-title">Default forecast branch</p>
-                <p className="settings-row-desc">Branch to show by default on forecast screen</p>
-              </div>
-              <div className="select-wrapper settings-select-wrapper">
-                <select defaultValue={DEFAULT_SETTINGS.defaultForecastBranch} onChange={handleBranchChange}>
-                  <option>All Branches</option>
-                  <option>Ibaan</option>
-                  <option>San Jose</option>
-                </select>
-                <svg className="select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-              </div>
-            </div>
-          </div>
+        <div className="table-card settings-card">
+          <h2>Forecast method</h2>
+          <p className="settings-admin-sub">Fixed by the study's methodology so results stay comparable with the thesis.</p>
+          <Row title="Technique" desc="Simple Moving Average" />
+          <Row title="Window" desc="The previous 6 complete months" />
+          <Row title="Horizon" desc="The following month" />
+          <Row title="Accuracy" desc="MAE and MAPE from a 12-month back-test" />
+          <Row title="Fast / slow movers" desc="Top and bottom third (terciles) of each category" />
         </div>
 
-        <div className="settings-col">
-          <div className="table-card settings-card">
-            <h2>Notifications &amp; backup</h2>
-
-            <div className="settings-row">
-              <div className="settings-row-label">
-                <p className="settings-row-title">Low stock email alerts</p>
-                <p className="settings-row-desc">Send admin email when item hits threshold</p>
-              </div>
-              <label className="toggle-switch">
-                <input type="checkbox" defaultChecked={DEFAULT_SETTINGS.lowStockEmailAlerts}
-                  onChange={(e) => handleToggleChange(e, 'lowStockEmailAlerts', 'Low stock email alerts')} />
-                <span className="toggle-slider"></span>
-              </label>
-            </div>
-
-            <div className="settings-row">
-              <div className="settings-row-label">
-                <p className="settings-row-title">Follow-up reminders</p>
-                <p className="settings-row-desc">Notify staff of patients due for follow-up</p>
-              </div>
-              <label className="toggle-switch">
-                <input type="checkbox" defaultChecked={DEFAULT_SETTINGS.followUpReminders}
-                  onChange={(e) => handleToggleChange(e, 'followUpReminders', 'Follow-up reminders')} />
-                <span className="toggle-slider"></span>
-              </label>
-            </div>
-
-            <div className="settings-row">
-              <div className="settings-row-label">
-                <p className="settings-row-title">Auto daily backup</p>
-                <p className="settings-row-desc">Automatically back up database at midnight</p>
-              </div>
-              <label className="toggle-switch">
-                <input type="checkbox" defaultChecked={DEFAULT_SETTINGS.autoDailyBackup}
-                  onChange={(e) => handleToggleChange(e, 'autoDailyBackup', 'Auto daily backup')} />
-                <span className="toggle-slider"></span>
-              </label>
-            </div>
-
-            <div className="settings-row settings-row-backup">
-              <div className="settings-row-label">
-                <p className="settings-row-title">Manual backup &amp; export</p>
-                <p className="settings-row-desc">Download full system data as CSV or JSON</p>
-              </div>
-              <div className="settings-backup-actions">
-                <button type="button" className="settings-outline-btn" onClick={handleExportCsv}>Export CSV</button>
-                <button type="button" className="settings-outline-btn" onClick={handleExportJson}>Export JSON</button>
-              </div>
-            </div>
-          </div>
+        <div className="table-card settings-card">
+          <h2>Sign-in protection</h2>
+          <p className="settings-admin-sub">How accounts are protected. Every event is recorded in the activity log below.</p>
+          <Row title="Account lockout" desc="5 wrong passwords lock that account for 15 minutes" />
+          <Row title="Sessions" desc="15-minute access, renewed automatically; signing out or changing a password ends other sessions" />
+          <Row title="Passwords" desc="At least 8 characters; common and all-number passwords are refused; stored hashed" />
+          <Row title="Access" desc="Admin, staff (own branch only) and customer (own pets only)" />
         </div>
       </div>
 
+      <ActivityLog />
+
       {/* Update admin information modal */}
-      <div className={`modal-overlay${modalStep ? ' show' : ''}`} onClick={closeAdminEditModal}>
+      <Dialog open={!!(modalStep)} onClose={closeAdminEditModal} label={modalStep === 'edit' ? 'Update admin information' : 'Verify your password'}>
         <div className="modal admin-edit-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>{modalStep === 'edit' ? 'Update admin information' : 'Verify your password'}</h2>
@@ -528,7 +416,7 @@ export default function SystemSettings() {
             )}
           </div>
         </div>
-      </div>
+      </Dialog>
     </main>
   )
 }

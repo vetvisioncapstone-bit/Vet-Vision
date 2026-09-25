@@ -16,11 +16,55 @@ body {
   height: 100%;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
+
+/* ==================== ACCESSIBILITY ==================== */
+
+/* A visible ring for keyboard users only (not on mouse clicks). Zero specificity, so component styles can still refine it. */
+:where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid #2d7a4d;
+  outline-offset: 2px;
+}
+
+.sidebar :focus-visible,
+.home-page.dark :focus-visible {
+  outline-color: #a5e0b8;
+}
+
+/* No 300 ms double-tap-zoom delay on taps. */
+:where(a, button, input, select, textarea, label, summary, [role="button"]) {
+  touch-action: manipulation;
+}
+
+/* The skip target is focused by script, not by the user, so it needs no ring. */
+#main-content:focus {
+  outline: none;
+}
+
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -56px;
+  z-index: 1000;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #163a26;
+  color: #ffffff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: 8px;
+}
+
+/* People who ask their system for less motion get essentially none. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

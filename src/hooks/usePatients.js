@@ -8,19 +8,35 @@ import { useSession } from './useSession'
 //    followUpNote, createdAt, consultations: [{ id, date, weight, notes, services, availedItems,
 //    totalPrice, remarks, bloodTestImage, bloodTestName, waiverImage, waiverName, followUp, followUpNote }] }
 // Follow-up status changes are computed by the server when a consultation is added.
-// Pass { status: 'Follow-up needed' } for just the follow-ups.
-export function usePatients({ branch, status } = {}) {
+//
+// Two modes:
+//  - usePatients({ page, pageSize, q, branch, status, year, visitYear }) is server-side paginated. `status` is a string or an
+//    array. It returns { items (this page), total, totalPages, page, stats: { total, followUpNeeded,
+//    activeThisMonth, years } }. List rows leave out attached images (blood test / waiver): use usePatient(id) for those.
+//  - usePatients({ branch, status }) with no `page` still returns every matching patient (avoid on big lists).
+export function usePatients({ branch, status, q, page, pageSize, year, visitYear } = {}) {
   const { session } = useSession()
   const qs = new URLSearchParams()
-  if (branch) qs.set('branch', branch)
-  if (status) qs.set('status', status)
+  if (page) qs.set('page', String(page))
+  if (page && pageSize) qs.set('pageSize', String(pageSize))
+  if (branch && branch !== 'All Branches') qs.set('branch', branch)
+  const statuses = Array.isArray(status) ? status : status ? [status] : []
+  if (statuses.length) qs.set('status', statuses.join(','))
+  if (q) qs.set('q', q)
+  if (year) qs.set('year', String(year)) // registered in this year
+  if (visitYear) qs.set('visitYear', String(visitYear)) // had a visit in this year
   const key = `/patients/${qs.toString() ? `?${qs}` : ''}`
   const { data, loading, error, reload } = useResource(key, { enabled: !!session })
 
+  const paged = !!page && data && !Array.isArray(data)
   const refresh = () => invalidate('/patients/')
 
   return {
-    items: data || [],
+    items: paged ? data.results : Array.isArray(data) ? data : [],
+    total: paged ? data.count : Array.isArray(data) ? data.length : 0,
+    totalPages: paged ? data.totalPages : 1,
+    page: paged ? data.page : 1,
+    stats: paged ? data.stats : null,
     loading,
     error,
     reload,
@@ -37,4 +53,11 @@ export function usePatients({ branch, status } = {}) {
     // Admin only.
     removeConsultation: async (consultationId) => { await api.del(`/consultations/${consultationId}/`); await refresh() }
   }
+}
+
+// One patient with everything, including attached images. Pass null to skip the request.
+export function usePatient(id) {
+  const { session } = useSession()
+  const { data, loading, error } = useResource(id ? `/patients/${id}/` : null, { enabled: !!session && !!id })
+  return { patient: id ? data || null : null, loading, error }
 }

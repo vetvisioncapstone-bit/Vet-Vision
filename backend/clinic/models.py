@@ -108,6 +108,9 @@ class MedicalRecord(models.Model):
     waiver_name = models.CharField(max_length=200, null=True, blank=True)
     follow_up = models.BooleanField(default=False, db_default=False)
     follow_up_note = models.CharField(max_length=200, null=True, blank=True)
+    # Set on records generated from a legacy service transaction (see seed_medical_records); it links the record
+    # back to its source and stops that transaction from being listed twice in a pet's history.
+    source_txn_id = models.CharField(max_length=16, null=True, blank=True, unique=True)
 
     class Meta:
         db_table = "medical_record"

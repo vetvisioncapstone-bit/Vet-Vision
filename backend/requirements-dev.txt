@@ -1,0 +1,12 @@
+# Everything needed to run the tests (production installs requirements.txt only).
+-r requirements.txt
+pytest==9.1.1
+pytest-django==4.14.0
+# pytest's own dependencies, pinned
+colorama==0.4.6
+exceptiongroup==1.3.1
+iniconfig==2.3.0
+packaging==26.3
+pluggy==1.6.0
+Pygments==2.21.0
+tomli==2.4.1

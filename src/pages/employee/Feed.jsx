@@ -85,7 +85,7 @@ export default function Feed() {
   }
 
   return (
-    <main className="content">
+    <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
         <h1>My Branch - {branch}</h1>
       </div>
@@ -103,7 +103,7 @@ export default function Feed() {
 
           <div className="events-feed">
             {postsLoading && posts.length === 0 ? (
-              <p className="empty-state">Loading...</p>
+              <p className="empty-state">Loading…</p>
             ) : posts.length === 0 ? (
               <p className="empty-state">No announcements yet.</p>
             ) : posts.map(post => (

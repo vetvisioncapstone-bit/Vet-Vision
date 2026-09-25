@@ -10,13 +10,17 @@
     padding: 20px;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+    visibility: hidden;
+    overscroll-behavior: contain;
     z-index: 100;
 }
 
 .modal-overlay.show {
     opacity: 1;
     pointer-events: auto;
+    visibility: visible;
+    transition-delay: 0s;
 }
 
 .modal {
@@ -340,32 +344,6 @@ textarea.form-input {
     display: flex;
     align-items: center;
     gap: 10px;
-}
-
-.detail-consult-btn {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 8px 14px;
-    background: #163a26;
-    border: none;
-    border-radius: 8px;
-    font-size: 13px;
-    font-family: inherit;
-    font-weight: 600;
-    color: #ffffff;
-    cursor: pointer;
-    transition: background 0.2s ease, transform 0.2s ease;
-}
-
-.detail-consult-btn svg {
-    width: 14px;
-    height: 14px;
-}
-
-.detail-consult-btn:hover {
-    background: #0f2a1a;
-    transform: translateY(-1px);
 }
 
 .detail-history-btn {
@@ -944,9 +922,7 @@ select.form-input:disabled {
 .checkbox-col {
     width: 40px;
 }
-
-.checkbox-col input,
-.patients-table td:first-child input {
+.checkbox-col input {
     accent-color: #163a26;
     cursor: pointer;
 }
@@ -1088,4 +1064,36 @@ select.form-input:disabled {
 .page-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.filter-year { width: 100%; margin: 4px 0 12px; padding: 8px 10px; border: 1px solid #dfe3e1; border-radius: 8px; font: inherit; background: #fff; }
+.filter-clear { background: none; border: none; color: #2d7a4d; font: inherit; font-weight: 600; cursor: pointer; padding: 0; text-decoration: underline; }
+
+/* ==================== PRINT SHEET (clinic chart) ==================== */
+/* Patient modals sit at z-index 100; the sheet has to open above them. */
+.report-overlay.clinic-overlay { z-index: 200; }
+.clinic-sheet { background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; max-width: 720px; margin: 0 auto; padding: 28px 34px; border-radius: 12px; }
+.cs-actions { display: flex; gap: 10px; margin-bottom: 18px; }
+.cs-actions .report-btn { width: auto; padding: 9px 16px; }
+.cs-letterhead { display: flex; align-items: center; justify-content: center; gap: 14px; border-bottom: 3px solid #111; padding-bottom: 10px; margin-bottom: 4px; }
+.cs-letterhead img { width: 52px; height: 52px; object-fit: contain; }
+.cs-letterhead h1 { font-size: 26px; letter-spacing: 0.02em; margin: 0; }
+.cs-address { font-size: 12px; text-align: center; margin: 4px 0 18px; }
+.cs-info { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.cs-row { display: flex; gap: 22px; flex-wrap: wrap; }
+.cs-field { display: flex; align-items: baseline; gap: 6px; flex: 1; min-width: 140px; }
+.cs-label { font-weight: 700; font-size: 12.5px; white-space: nowrap; }
+.cs-value { flex: 1; border-bottom: 1px solid #111; font-size: 12.5px; padding-bottom: 1px; min-height: 14px; }
+.cs-log { width: 100%; border-collapse: collapse; border: 1.5px solid #111; }
+.cs-log th { border: 1px solid #111; padding: 6px 8px; font-size: 12.5px; background: #f2f2f2; text-align: left; }
+.cs-log td { border: 1px solid #111; padding: 8px; font-size: 12px; vertical-align: top; }
+.cs-log td:first-child { width: 90px; white-space: nowrap; }
+.cs-log td:last-child { width: 150px; }
+.cs-log tfoot td { font-weight: 700; background: #f7f7f7; }
+.cs-attach-label { font-weight: 700; font-size: 12px; margin: 14px 0 4px; }
+.cs-attach-img { max-width: 100%; max-height: 320px; border: 1px solid #ccc; border-radius: 6px; }
+.cs-note { font-size: 12px; color: #666; }
+.cs-footer { margin-top: 20px; font-size: 10.5px; color: #888; text-align: center; }
+@media print {
+  .clinic-sheet { max-width: none; padding: 0; border-radius: 0; }
 }

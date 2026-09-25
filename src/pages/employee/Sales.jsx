@@ -5,14 +5,11 @@ import { useEmployeeContext } from '../../hooks/useEmployeeContext'
 import { useToast } from '../../components/shared/Toast'
 import { errorMessage } from '../../api/client'
 import '../../styles/employee/employee-sales.css'
+import { formatPrice } from '../../utils/format'
 
 // ==================== HELPERS ====================
 // Sales are recorded through the API; the server validates stock and the
 // database deducts it, so nothing is decremented client-side.
-
-function formatPrice(amount) {
-  return `₱${Number(amount || 0).toFixed(2)}`
-}
 
 export default function Sales() {
   const { items: products, loading: inventoryLoading } = useInventory()
@@ -122,7 +119,7 @@ export default function Sales() {
   }
 
   return (
-    <main className="content">
+    <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
         <h1>My Branch - {branch}</h1>
         <div className="employee-datetime">
@@ -143,9 +140,9 @@ export default function Sales() {
 
             <div className="sale-add-row">
               <div className="form-group">
-                <label className="form-label">Product</label>
+                <label className="form-label" htmlFor="src-pages-employee-sales-f1">Product</label>
                 <div className="form-select-wrapper">
-                  <select
+                  <select id="src-pages-employee-sales-f1"
                     className="form-input"
                     value={selectedProductId}
                     disabled={inStockProducts.length === 0}
@@ -160,16 +157,16 @@ export default function Sales() {
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">Quantity</label>
-                <input
+                <label className="form-label" htmlFor="src-pages-employee-sales-f2">Quantity</label>
+                <input id="src-pages-employee-sales-f2"
                   type="number" className="form-input" min="1" step="1"
                   value={quantity} max={available === null ? undefined : available}
                   onChange={(e) => setQuantity(e.target.value)}
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Unit price (₱)</label>
-                <input
+                <label className="form-label" htmlFor="src-pages-employee-sales-f3">Unit price (₱)</label>
+                <input id="src-pages-employee-sales-f3"
                   type="number" className="form-input" min="0" step="0.01" placeholder="0.00"
                   value={price} onChange={(e) => setPrice(e.target.value)}
                 />
@@ -200,7 +197,7 @@ export default function Sales() {
                 </thead>
                 <tbody>
                   {cartItems.length === 0 ? (
-                    <tr><td colSpan="5" className="empty-state">{inventoryLoading ? 'Loading...' : 'No items added yet.'}</td></tr>
+                    <tr><td colSpan="5" className="empty-state">{inventoryLoading ? 'Loading…' : 'No items added yet.'}</td></tr>
                   ) : cartItems.map((item, index) => (
                     <tr key={index}>
                       <td>{item.name}</td>
@@ -223,7 +220,7 @@ export default function Sales() {
               <span>{formatPrice(cartTotal)}</span>
             </div>
 
-            <button type="button" className="complete-sale-btn" disabled={cartItems.length === 0 || submitting} onClick={handleCompleteSale}>{submitting ? 'Completing...' : 'Complete sale'}</button>
+            <button type="button" className="complete-sale-btn" disabled={cartItems.length === 0 || submitting} onClick={handleCompleteSale}>{submitting ? 'Completing…' : 'Complete sale'}</button>
           </div>
         </div>
 
@@ -233,7 +230,7 @@ export default function Sales() {
             <h2>Recent sales</h2>
             <ul className="recent-sales-list">
               {salesLoading && branchSales.length === 0 ? (
-                <li className="empty-state">Loading...</li>
+                <li className="empty-state">Loading…</li>
               ) : branchSales.length === 0 ? (
                 <li className="empty-state">No sales recorded yet.</li>
               ) : branchSales.map(sale => (

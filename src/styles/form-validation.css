@@ -52,7 +52,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    transition: all 0.3s ease;
+    transition: transform 0.3s ease;
 }
 
 .checkbox-group:hover {
@@ -81,7 +81,7 @@
     color: #4caf50;
     text-decoration: none;
     font-weight: 500;
-    transition: all 0.3s ease;
+    transition: color 0.3s ease;
     position: relative;
 }
 
@@ -102,4 +102,23 @@
 
 .forgot-password:hover::after {
     width: 100%;
+}
+
+button.forgot-password {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+}
+
+.login-note {
+    margin: -8px 0 16px;
+    padding: 12px 14px;
+    background: #f1f8f3;
+    border: 1px solid #cfe6d6;
+    border-radius: 8px;
+    color: #2d5f4f;
+    font-size: 13px;
+    line-height: 1.5;
 }

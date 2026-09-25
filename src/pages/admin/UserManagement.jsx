@@ -4,6 +4,8 @@ import { useToast } from '../../components/shared/Toast'
 import { errorMessage } from '../../api/client'
 import '../../styles/admin/user-management.css'
 
+import Dialog from '../../components/shared/Dialog'
+import { onActivate } from '../../utils/a11y'
 const EMPTY_FORM = {
   name: '',
   address: '',
@@ -252,7 +254,7 @@ export default function UserManagement() {
   }
 
   return (
-    <main className="content">
+    <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
         <h1>User management</h1>
       </div>
@@ -262,7 +264,7 @@ export default function UserManagement() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
           <input
             type="text"
-            placeholder="search account"
+            aria-label="Search accounts" autoComplete="off" placeholder="search account"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value.trim().toLowerCase())}
           />
@@ -300,7 +302,7 @@ export default function UserManagement() {
               ) : visibleAccounts.length === 0 ? (
                 <tr><td colSpan="6" className="empty-state">No accounts match your search.</td></tr>
               ) : visibleAccounts.map(a => (
-                <tr className="account-row" key={a.id} onClick={() => openEditAccountModal(a)}>
+                <tr className="account-row" key={a.id} tabIndex={0} onKeyDown={onActivate(() => openEditAccountModal(a))} onClick={() => openEditAccountModal(a)}>
                   <td>
                     {a.photo
                       ? <img className="account-avatar" src={a.photo} alt={a.name} />
@@ -329,7 +331,7 @@ export default function UserManagement() {
       </div>
 
       {/* Create / edit staff account modal */}
-      <div className={`modal-overlay${modalOpen ? ' show' : ''}`} onClick={closeAccountModal}>
+      <Dialog open={!!(modalOpen)} onClose={closeAccountModal} label={'Staff account'}>
         <div className="modal account-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header account-modal-header">
             <div className="account-modal-logo">
@@ -543,7 +545,7 @@ export default function UserManagement() {
             </div>
           </form>
         </div>
-      </div>
+      </Dialog>
     </main>
   )
 }
