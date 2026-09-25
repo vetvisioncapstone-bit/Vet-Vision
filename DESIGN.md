@@ -44,11 +44,6 @@ rounded:
   lg: "14px"
   xl: "20px"
   pill: "999px"
-spacing:
-  xs: "8px"
-  sm: "12px"
-  md: "16px"
-  lg: "24px"
 components:
   button-primary:
     backgroundColor: "{colors.brand-green}"
@@ -57,7 +52,7 @@ components:
     rounded: "30px"
     padding: "14px"
   button-primary-hover:
-    backgroundColor: "{colors.leaf-green}"
+    backgroundColor: "#1e5a3a"
   input:
     backgroundColor: "#fafafa"
     textColor: "{colors.ink}"
@@ -67,7 +62,7 @@ components:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.ink}"
     rounded: "{rounded.lg}"
-    padding: "{spacing.lg}"
+    padding: "24px"
   sidebar:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.ink-soft}"
@@ -158,7 +153,7 @@ Soft, rounded rectangles. Fields and small controls use 8-10px, cards 12-14px, l
 
 ### Buttons
 - **Shape:** pill (30px radius) for the primary call to action; 8-10px for in-table and toolbar buttons.
-- **Primary:** Clinic Green (#2d7a4d) fill, white 16px/600 label, 14px vertical padding; hover moves to Leaf Green.
+- **Primary:** Clinic Green (#2d7a4d) fill, white 16px/600 label, 14px vertical padding; hover darkens to #1e5a3a (white on Leaf Green fails contrast).
 - **Secondary / Ghost:** white or transparent with a hairline border and Soft Ink text.
 - **Danger:** Alarm Red text or fill for delete and reject actions.
 - **Motion:** color and transform transitions of about 0.3s. Hover scale stays small (at most 1.15) and keeps its centering transform. Reduced-motion users get essentially none.
@@ -183,12 +178,6 @@ Soft, rounded rectangles. Fields and small controls use 8-10px, cards 12-14px, l
 - Alarm Red top border with a soft red edge for low-stock alerts; Caution Amber top border for follow-ups due.
 - Hover lifts 4px and adds the Hover raise shadow.
 
-### Dialogs
-- Centered card on a dimmed backdrop, labelled for screen readers, focus moves in and is restored on close, Escape closes. Closed dialogs are hidden with `visibility` so they leave the tab order.
-
-### Tables
-- Rows that open a record are keyboard-focusable (Enter or Space) and highlight on hover and focus. Tables scroll inside their card on narrow screens.
-
 ## Do's and Don'ts
 
 ### Do:
@@ -200,7 +189,7 @@ Soft, rounded rectangles. Fields and small controls use 8-10px, cards 12-14px, l
 - **Do** say when data is thin or stale, in Caution Amber on Amber Wash.
 
 ### Don't:
-- **Don't** use Faint Ink (#9aa5a0) for text that must be read; it is too light.
+- **Don't** use Faint Ink (#9aa5a0) or Leaf Green (#4caf50) for text; use #646c68 for secondary text and Clinic Green for green text. Status text on tints: #17693a green, #8a5300 amber, #c62828 red (all ≥4.5:1).
 - **Don't** add a second brand hue, gradients or decorative color.
 - **Don't** animate `transform` in a keyframe on an element that positions itself with `transform`; the keyframe overrides the centering and the element jumps (the password eye button bug).
 - **Don't** use `transition: all`; list the properties that change.

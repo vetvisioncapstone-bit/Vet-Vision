@@ -101,14 +101,6 @@ export default function UserManagement() {
     setCanSubmit(formValid && strong && match)
   }, [form, isEditing, passwordRequired])
 
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if (e.key === 'Escape') closeAccountModal()
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
-
   function openAccountModal() {
     setEditingId(null)
     setForm(EMPTY_FORM)
@@ -331,7 +323,7 @@ export default function UserManagement() {
       </div>
 
       {/* Create / edit staff account modal */}
-      <Dialog open={!!(modalOpen)} onClose={closeAccountModal} label={'Staff account'}>
+      <Dialog open={!!modalOpen} onClose={closeAccountModal} label="Staff account">
         <div className="modal account-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header account-modal-header">
             <div className="account-modal-logo">

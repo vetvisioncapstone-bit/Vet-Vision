@@ -11,7 +11,7 @@
     left: 12px;
     width: 15px;
     height: 15px;
-    color: #9aa5a0;
+    color: #646c68;
     pointer-events: none;
 }
 
@@ -127,7 +127,7 @@
 }
 
 .stat-value.muted {
-    color: #9aa5a0;
+    color: #646c68;
 }
 
 /* ==================== PRODUCT TABLE ==================== */
@@ -150,7 +150,7 @@
     height: 40px;
     border-radius: 8px;
     background: #eef0ef;
-    color: #9aa5a0;
+    color: #646c68;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -197,7 +197,7 @@
 
 .row-action-btn.delete:hover {
     background: #fdecea;
-    color: #e53935;
+    color: #c62828;
 }
 
 /* ==================== MODAL ==================== */
@@ -332,7 +332,7 @@
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    color: #9aa5a0;
+    color: #646c68;
     font-size: 13px;
     font-weight: 500;
 }
@@ -428,7 +428,7 @@ select.form-input {
 
 .form-hint {
     font-size: 12px;
-    color: #9aa5a0;
+    color: #646c68;
     line-height: 1.5;
     margin-top: -6px;
 }
@@ -530,12 +530,12 @@ select.form-input {
 
 .status-ok {
     background: #e4f6e8;
-    color: #1f8a4c;
+    color: #17693a;
 }
 
 .status-low-stock {
     background: #fdf1e0;
-    color: #b8720a;
+    color: #8a5300;
 }
 
 .status-out-of-stock {

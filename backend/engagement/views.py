@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from clinic.models import MedicalRecord, Pet
 from core.pagination import paginate, wants_page
+from core.validators import data_url
 from accounts.audit import record
 from core.clinic_calendar import FULL_CLOSE, FULL_HOURS, OPENS, WEEKLY, day_info
 from core.permissions import IsAdmin, IsClinicStaff, assert_branch_access, branch_by_town
@@ -43,7 +44,7 @@ def post_row(p):
 
 class PostInput(serializers.Serializer):
     text = serializers.CharField(required=False, allow_blank=True)
-    photo = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    photo = serializers.CharField(required=False, allow_null=True, allow_blank=True, validators=[data_url])
 
     def validate(self, attrs):
         if not (attrs.get("text") or "").strip() and not attrs.get("photo"):

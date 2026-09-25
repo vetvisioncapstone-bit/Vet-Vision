@@ -89,15 +89,6 @@ export default function Inventory() {
     setModalOpen(false)
   }
 
-  // Escape closes the modal, same as the original's document keydown listener.
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if (e.key === 'Escape') closeModal()
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
-
   function handlePhotoChange(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -251,7 +242,7 @@ export default function Inventory() {
       </div>
 
       {/* Add / Edit product modal */}
-      <Dialog open={!!(modalOpen)} onClose={closeModal} label={editingId ? 'Edit product' : 'Add new product'}>
+      <Dialog open={!!modalOpen} onClose={closeModal} label={editingId ? 'Edit product' : 'Add new product'}>
         <div className="modal product-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>{editingId ? 'Edit product' : 'Add new product'}</h2>

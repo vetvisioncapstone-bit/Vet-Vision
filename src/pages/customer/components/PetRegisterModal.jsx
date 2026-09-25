@@ -36,7 +36,7 @@ export default function PetRegisterModal({ onDismiss, onDone }) {
   }
 
   return (
-    <Dialog open onClose={onDismiss} label={"Register a pet"} className="pet-modal-backdrop">
+    <Dialog open onClose={onDismiss} label="Register a pet" className="pet-modal-backdrop">
       <form className="pet-modal pet-form" onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit} noValidate>
         <button type="button" className="pet-modal__close" onClick={onDismiss} aria-label="Close"><CloseIcon /></button>
         <p className="pet-modal__eyebrow">New pet</p>

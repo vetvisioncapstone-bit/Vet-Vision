@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.pagination import paginate, wants_page
+from core.validators import data_url
 from core.ids import next_id
 from accounts.audit import record
 from core.permissions import IsClinicStaff, branch_by_town, scope_branch
@@ -52,7 +53,7 @@ class InventoryInput(serializers.Serializer):
     reorderPoint = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
     delivery = serializers.DateField(required=False, allow_null=True)
     expiration = serializers.DateField(required=False, allow_null=True)
-    photo = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    photo = serializers.CharField(required=False, allow_null=True, allow_blank=True, validators=[data_url])
 
 
 def _queryset(request):

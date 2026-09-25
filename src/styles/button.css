@@ -99,7 +99,7 @@
 
 .footer-text {
     text-align: center;
-    color: #999;
+    color: #646c68;
     font-size: 12px;
     margin-top: 20px;
     animation: slideInUp 0.6s ease-out 0.9s backwards;
@@ -107,8 +107,7 @@
 }
 
 .footer-text:hover {
-    color: #4caf50;
-    transform: scale(1.05);
+    color: #2d7a4d;
 }
 
 .footer-icon {

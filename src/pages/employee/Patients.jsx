@@ -116,19 +116,6 @@ export default function Patients() {
     setDetailPatientId(null)
   }
 
-  // Escape closes whichever modal is open, same as the original's document
-  // keydown listener.
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if (e.key === 'Escape') {
-        closeModal()
-        closeDetailModal()
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
-
   async function handleSubmit(e) {
     e.preventDefault()
     if (saving) return
@@ -269,7 +256,7 @@ export default function Patients() {
               <tr>
                 <th>Patient</th>
                 <th>Owner</th>
-                <th>Specie</th>
+                <th>Species</th>
                 <th>Last visit</th>
                 <th>Status</th>
                 <th className="action-col"></th>
@@ -312,7 +299,7 @@ export default function Patients() {
       </div>
 
       {/* Add / Edit patient modal */}
-      <Dialog open={!!(modalOpen)} onClose={closeModal} label={editingId ? 'Edit patient' : 'New patient'}>
+      <Dialog open={!!modalOpen} onClose={closeModal} label={editingId ? 'Edit patient' : 'New patient'}>
         <div className="modal patient-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>{editingId ? 'Edit patient' : 'New patient'}</h2>
@@ -350,7 +337,7 @@ export default function Patients() {
                 <input id="src-pages-employee-patients-f6" type="text" className="form-input" required value={form.petName} onChange={(e) => setForm(f => ({ ...f, petName: e.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label" htmlFor="src-pages-employee-patients-f7">Specie <span className="required">*</span></label>
+                <label className="form-label" htmlFor="src-pages-employee-patients-f7">Species <span className="required">*</span></label>
                 <div className="form-select-wrapper">
                   <select id="src-pages-employee-patients-f7" className="form-input" required value={form.petSpecie} onChange={(e) => setForm(f => ({ ...f, petSpecie: e.target.value }))}>
                     <option value="" disabled hidden></option>
@@ -403,7 +390,7 @@ export default function Patients() {
       </Dialog>
 
       {/* Patient detail modal */}
-      <Dialog open={!!(detailPatient)} onClose={closeDetailModal} label={'Patient details'}>
+      <Dialog open={!!detailPatient} onClose={closeDetailModal} label="Patient details">
         {detailPatient && (
           <div className="modal patient-detail-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">

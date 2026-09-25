@@ -473,12 +473,7 @@ export default function Patients() {
 
   useEffect(() => {
     function handleKeydown(e) {
-      if (e.key === 'Escape') {
-        closePatientModal()
-        closeHistoryModal()
-        closePatientDetailModal()
-        setFilterOpen(false)
-      }
+      if (e.key === 'Escape') setFilterOpen(false)
     }
     document.addEventListener('keydown', handleKeydown)
     return () => document.removeEventListener('keydown', handleKeydown)
@@ -591,10 +586,10 @@ export default function Patients() {
                 <th>Patient</th>
                 <th>Owner</th>
                 <th>Owner email</th>
-                <th>Specie</th>
+                <th>Species</th>
                 <th>Branch</th>
                 <th>Last visit</th>
-                <th>No. visit</th>
+                <th>Visits</th>
                 <th>Status</th>
                 <th className="action-col"></th>
               </tr>
@@ -650,7 +645,7 @@ export default function Patients() {
       </div>
 
       {/* New/Edit patient modal */}
-      <Dialog open={!!(patientModalOpen)} onClose={closePatientModal} label={editingPatientId ? 'Edit patient' : 'New patient'}>
+      <Dialog open={!!patientModalOpen} onClose={closePatientModal} label={editingPatientId ? 'Edit patient' : 'New patient'}>
         <div className="modal patient-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>{editingPatientId ? 'Edit patient' : 'New patient'}</h2>
@@ -702,7 +697,7 @@ export default function Patients() {
                       <input type="text" id="petName" className="form-input" required value={patientForm.petName} onChange={(e) => updatePatientField('petName', e.target.value)} />
                     </div>
                     <div className="form-group">
-                      <label className="form-label" htmlFor="petSpecie">Specie <span className="required">*</span></label>
+                      <label className="form-label" htmlFor="petSpecie">Species <span className="required">*</span></label>
                       <div className="form-select-wrapper">
                         <select id="petSpecie" className="form-input" required value={patientForm.petSpecie} onChange={(e) => updatePatientField('petSpecie', e.target.value)}>
                           <option value="" disabled hidden></option>
@@ -771,7 +766,7 @@ export default function Patients() {
       </Dialog>
 
       {/* Patient detail modal */}
-      <Dialog open={!!(currentPatient)} onClose={closePatientDetailModal} label={'Patient details'}>
+      <Dialog open={!!currentPatient} onClose={closePatientDetailModal} label="Patient details">
         {currentPatient && (
           <div className="modal patient-detail-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -962,7 +957,7 @@ export default function Patients() {
       </Dialog>
 
       {/* Consultation history modal */}
-      <Dialog open={!!(historyOpen && currentPatient)} onClose={closeHistoryModal} label={'Consultation history'}>
+      <Dialog open={!!(historyOpen && currentPatient)} onClose={closeHistoryModal} label="Consultation history">
         {historyOpen && currentPatient && (
           <div className="modal patient-history-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">

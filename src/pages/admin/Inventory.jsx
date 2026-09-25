@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react'
 import { useInventory } from '../../hooks/useInventory'
+import { useAnalytics } from '../../hooks/useAnalytics'
 import { useToast } from '../../components/shared/Toast'
 import { errorMessage } from '../../api/client'
 import '../../styles/admin/inventory.css'
@@ -29,6 +30,11 @@ const EMPTY_FORM = {
 
 export default function Inventory() {
   const { items: products, loading, create, update, remove } = useInventory()
+  const movement = useAnalytics('inventory')
+  const lowStockCount = useMemo(() => products.filter((p) => p.quantity <= p.reorderPoint).length, [products])
+  const fastCount = movement.data
+    ? Object.values(movement.data.summary || {}).reduce((n, s) => n + (s.fast || 0), 0)
+    : movement.error ? '—' : null
   const showToast = useToast()
   const [saving, setSaving] = useState(false)
 
@@ -180,13 +186,13 @@ export default function Inventory() {
           <p className="stat-label">Total SKUs</p>
           <p className="stat-value">{products.length}</p>
         </div>
-        <div className="stat-card">
+        <div className={`stat-card${lowStockCount ? ' alert' : ''}`}>
           <p className="stat-label">Low stock alerts</p>
-          <p className="stat-value muted">—</p>
+          <p className="stat-value">{loading && !products.length ? '…' : lowStockCount}</p>
         </div>
         <div className="stat-card">
           <p className="stat-label">Fast moving items</p>
-          <p className="stat-value muted">—</p>
+          <p className="stat-value">{fastCount === null ? '…' : fastCount}</p>
         </div>
       </div>
 
@@ -243,7 +249,7 @@ export default function Inventory() {
         </div>
       </div>
 
-      <Dialog open={!!(modalOpen)} onClose={closeModal} label={editingId ? 'Edit product' : 'Add new product'}>
+      <Dialog open={!!modalOpen} onClose={closeModal} label={editingId ? 'Edit product' : 'Add new product'}>
         <div className="modal product-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>{editingId ? 'Edit product' : 'Add new product'}</h2>
@@ -323,7 +329,7 @@ export default function Inventory() {
         </div>
       </Dialog>
 
-      <Dialog open={!!(detailProduct)} onClose={() => setDetailProduct(null)} label={'Product details'}>
+      <Dialog open={!!detailProduct} onClose={() => setDetailProduct(null)} label="Product details">
         {detailProduct && (
           <div className="modal detail-modal" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close detail-modal-close" aria-label="Close" onClick={() => setDetailProduct(null)}>

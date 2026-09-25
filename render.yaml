@@ -7,7 +7,9 @@ services:
     plan: free
     rootDir: backend
     buildCommand: pip install -r requirements.txt && python manage.py migrate --noinput
-    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 60
+    # One worker (with threads): rate-limit counters and the forecast cache live in process memory, so a second
+    # worker would count separately and double every limit. Add a shared cache before adding workers.
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 60
     healthCheckPath: /api/health/
     envVars:
       - key: DJANGO_DEBUG

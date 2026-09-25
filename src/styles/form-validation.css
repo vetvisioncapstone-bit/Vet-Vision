@@ -78,7 +78,7 @@
 }
 
 .forgot-password {
-    color: #4caf50;
+    color: #2d7a4d;
     text-decoration: none;
     font-weight: 500;
     transition: color 0.3s ease;
@@ -97,7 +97,7 @@
 }
 
 .forgot-password:hover {
-    color: #388e3c;
+    color: #1e5a3a;
 }
 
 .forgot-password:hover::after {

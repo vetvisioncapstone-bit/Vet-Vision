@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import RequireRole from './components/shared/RequireRole'
+import ErrorBoundary from './components/shared/ErrorBoundary'
 import AdminLayout from './components/shared/AdminLayout'
 import EmployeeLayout from './components/shared/EmployeeLayout'
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
@@ -23,6 +24,7 @@ const CustomerApp = lazy(() => import('./pages/customer/CustomerApp'))
 function App() {
   return (
     <Router>
+      <ErrorBoundary>
       <Suspense fallback={<div className="skeleton" style={{ height: 120, margin: 24 }} />}>
       <Routes>
         <Route path="/" element={<LoginPage />} />
@@ -54,6 +56,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </Suspense>
+      </ErrorBoundary>
     </Router>
   )
 }

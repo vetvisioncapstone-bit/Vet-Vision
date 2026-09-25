@@ -14,6 +14,7 @@ from accounts.models import User
 from accounts.views import revoke_sessions
 from core.ids import branch_letter, next_id
 from core.pagination import paginate, wants_page
+from core.validators import data_url
 from core.permissions import IsAdmin, IsClinicStaff, IsCustomer, branch_by_town, scope_branch
 
 from sales.models import ServiceDetail, ServiceTransaction
@@ -294,9 +295,9 @@ class ConsultationInput(serializers.Serializer):
     availedItems = serializers.ListField(child=serializers.DictField(), required=False)
     totalPrice = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, min_value=0)
     remarks = serializers.CharField(required=False, allow_blank=True)
-    bloodTestImage = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    bloodTestImage = serializers.CharField(required=False, allow_null=True, allow_blank=True, validators=[data_url])
     bloodTestName = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=200)
-    waiverImage = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    waiverImage = serializers.CharField(required=False, allow_null=True, allow_blank=True, validators=[data_url])
     waiverName = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=200)
     followUp = serializers.BooleanField(required=False, default=False)
     followUpNote = serializers.CharField(required=False, allow_blank=True, max_length=200)
@@ -388,7 +389,7 @@ class StaffInput(serializers.Serializer):
     mobile = serializers.CharField(max_length=30, required=False, allow_blank=True)
     branch = serializers.CharField()
     position = serializers.CharField(max_length=40)
-    photo = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    photo = serializers.CharField(required=False, allow_null=True, allow_blank=True, validators=[data_url])
     password = serializers.CharField(required=False, allow_blank=True)
 
 

@@ -11,7 +11,7 @@
     left: 14px;
     width: 15px;
     height: 15px;
-    color: #9aa5a0;
+    color: #646c68;
     pointer-events: none;
 }
 
@@ -98,7 +98,7 @@
 .insight-value.muted {
     font-size: 15px;
     font-weight: 500;
-    color: #9aa5a0;
+    color: #646c68;
 }
 
 .insight-desc {

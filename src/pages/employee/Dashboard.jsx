@@ -114,6 +114,7 @@ function SalesTrendChart({ branch }) {
             <text className="line-chart-day-label" key={d.key} x={d.x} y={chart.height - 6} textAnchor="middle">{d.label}</text>
           ))}
         </svg>
+        {chart.weekTotal === 0 && <p className="line-chart-empty">No sales recorded at this branch this week.</p>}
       </div>
     </div>
   )

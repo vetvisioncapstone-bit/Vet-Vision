@@ -138,16 +138,6 @@ export default function SystemSettings() {
     }
   }, [modalStep])
 
-  // Escape closes the modal, same as the original's document-level listener.
-  useEffect(() => {
-    if (!modalStep) return undefined
-    function handleKeydown(e) {
-      if (e.key === 'Escape') closeAdminEditModal()
-    }
-    document.addEventListener('keydown', handleKeydown)
-    return () => document.removeEventListener('keydown', handleKeydown)
-  }, [modalStep])
-
   // ==================== DEEP LINK ====================
   // Clicking the name/avatar in the profile popover (any page) navigates
   // here with ?openAdminEdit=1 so the edit flow opens immediately. This is
@@ -287,7 +277,7 @@ export default function SystemSettings() {
       <ActivityLog />
 
       {/* Update admin information modal */}
-      <Dialog open={!!(modalStep)} onClose={closeAdminEditModal} label={modalStep === 'edit' ? 'Update admin information' : 'Verify your password'}>
+      <Dialog open={!!modalStep} onClose={closeAdminEditModal} label={modalStep === 'edit' ? 'Update admin information' : 'Verify your password'}>
         <div className="modal admin-edit-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>{modalStep === 'edit' ? 'Update admin information' : 'Verify your password'}</h2>

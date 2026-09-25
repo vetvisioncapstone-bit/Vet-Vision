@@ -79,7 +79,7 @@ export default function Forecasting() {
         </p>
       )}
 
-      {stale && <p className="load-error">The latest record is {stale} days old, so the forecast is built on history that may be out of date.</p>}
+      {stale && <p className="load-warn" role="status">The latest record is {stale} days old, so the forecast is built on history that may be out of date.</p>}
 
       <h2 className="section-title">Overall outlook · {fmtMonth(forecastMonth, true)}</h2>
       <div className="stats-grid">

@@ -67,7 +67,7 @@ export default function HomeScreen({ session, page, onOpenNav, darkMode, onToggl
         <main id="main-content" tabIndex={-1} className="content home-content">
           <div className="page-topbar">
             {menuButton}
-            <p className="page-greeting page-topbar__title">Hi {firstName}</p>
+            <h1 className="page-greeting page-topbar__title">Hi {firstName}</h1>
             {notifButton}
           </div>
 
@@ -90,8 +90,52 @@ export default function HomeScreen({ session, page, onOpenNav, darkMode, onToggl
             </div>
           </div>
 
+          {reminders.items.length > 0 && (
+            <div className="settings-card">
+              <h2 className="settings-card__label">Coming up</h2>
+              <ul className="notif-list">
+                {reminders.items.slice(0, 3).map((r) => (
+                  <li key={r.id} className="notif-item">
+                    <p className="notif-item__meta">
+                      {r.petName} · {new Date(`${r.dueDate}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      {r.overdue ? " · overdue" : ""}
+                    </p>
+                    <p className="notif-item__text">{r.title}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="settings-card">
+            <h2 className="settings-card__label">My pets</h2>
+            {petsLoading && pets.length === 0 ? (
+              <p className="records-card__meta">Loading your pets…</p>
+            ) : pets.length === 0 ? (
+              <p className="records-card__meta">Register your pet to see its visits and vaccine reminders here.</p>
+            ) : (
+              <div className="pet-list">
+                {pets.map((pet) => (
+                  <button type="button" className="pet-row" key={pet.id} onClick={() => setSelectedHistoryPet(pet)}>
+                    <span className="pet-row__icon"><PetIcon species={pet.species} /></span>
+                    <div>
+                      <p className="pet-row__name">{pet.name}</p>
+                      <p className="pet-row__meta">
+                        {pet.lastCheckup
+                          ? `Last visit ${new Date(`${pet.lastCheckup}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
+                          : "No visits yet"}
+                      </p>
+                    </div>
+                    <ChevronRightIcon />
+                  </button>
+                ))}
+              </div>
+            )}
+            <button type="button" className="ll-submit pet-add-btn" onClick={() => setRegisteringPet(true)}>Register a pet</button>
+          </div>
+
           <div className="settings-card announce-card">
-            <p className="settings-card__label">Clinic announcements</p>
+            <h2 className="settings-card__label">Clinic announcements</h2>
             {announcements.items.length === 0 ? (
               <p className="records-card__meta">No announcements right now.</p>
             ) : (
@@ -160,7 +204,10 @@ export default function HomeScreen({ session, page, onOpenNav, darkMode, onToggl
             {petsLoading && pets.length === 0 && <p className="records-card__meta">Loading your pets…</p>}
             {petsError && <p className="records-card__meta">Could not load your pets. Please try again.</p>}
             {!petsLoading && !petsError && pets.length === 0 && (
-              <p className="records-card__meta">You have not registered a pet yet. Add one in Settings.</p>
+              <div className="records-card">
+                <p className="records-card__meta">You have not registered a pet yet.</p>
+                <button type="button" className="ll-submit pet-add-btn" onClick={() => setRegisteringPet(true)}>Register a pet</button>
+              </div>
             )}
             {pets.map((pet) => (
               <div className="records-card" key={pet.id}>
@@ -184,9 +231,6 @@ export default function HomeScreen({ session, page, onOpenNav, darkMode, onToggl
             ))}
           </div>
 
-          {selectedHistoryPet && (
-            <PetHistoryModal pet={selectedHistoryPet} onDismiss={() => setSelectedHistoryPet(null)} />
-          )}
         </main>
       )}
 
@@ -227,9 +271,6 @@ export default function HomeScreen({ session, page, onOpenNav, darkMode, onToggl
             <button type="button" className="ll-submit pet-add-btn" onClick={() => setRegisteringPet(true)}>Register a pet</button>
           </div>
 
-          {selectedPet && <PetDetailModal pet={selectedPet} onDismiss={() => setSelectedPet(null)} />}
-          {registeringPet && <PetRegisterModal onDismiss={() => setRegisteringPet(false)} onDone={() => setRegisteringPet(false)} />}
-
           <div className="settings-card">
             <p className="settings-card__label">System</p>
             <div className="settings-toggle-row">
@@ -265,6 +306,11 @@ export default function HomeScreen({ session, page, onOpenNav, darkMode, onToggl
           </div>
         </main>
       )}
+
+      {/* Shared by the Home, Records and Settings pages. */}
+      {selectedHistoryPet && <PetHistoryModal pet={selectedHistoryPet} onDismiss={() => setSelectedHistoryPet(null)} />}
+      {selectedPet && <PetDetailModal pet={selectedPet} onDismiss={() => setSelectedPet(null)} />}
+      {registeringPet && <PetRegisterModal onDismiss={() => setRegisteringPet(false)} onDone={() => setRegisteringPet(false)} />}
     </>
   );
 }
