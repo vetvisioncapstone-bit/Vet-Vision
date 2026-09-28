@@ -11,6 +11,7 @@ from core.pagination import paginate, wants_page
 from core.ids import branch_letter, next_id
 from accounts.audit import record
 from core.permissions import IsClinicStaff, branch_by_town, scope_branch
+from clinic.models import Customer
 from inventory.models import Inventory, InventoryTransaction, ProductBranchPrice
 
 from .models import Sale, SaleDetail
@@ -23,6 +24,8 @@ def sale_row(sale):
         "branch": sale.branch.town,
         "staffId": sale.staff_id,
         "staffName": sale.staff.staff_name if sale.staff_id else "",
+        "customerId": sale.customer_id,
+        "customerName": sale.customer.customer_name if sale.customer_id else "",
         "items": [
             {
                 "productId": d.product_id,
@@ -46,6 +49,7 @@ class SaleItemInput(serializers.Serializer):
 class SaleInput(serializers.Serializer):
     items = SaleItemInput(many=True, allow_empty=False)
     branch = serializers.CharField(required=False)
+    customerId = serializers.CharField(required=False, allow_blank=True, max_length=10)  # blank = walk-in
     paymentMethod = serializers.CharField(required=False, max_length=15, default="Cash")
 
 
@@ -132,7 +136,7 @@ class SaleList(APIView):
     permission_classes = [IsClinicStaff]
 
     def get(self, request):
-        qs = Sale.objects.select_related("branch", "staff").prefetch_related("details__product")
+        qs = Sale.objects.select_related("branch", "staff", "customer").prefetch_related("details__product")
         qs = scope_branch(qs, request.user, requested_town=request.query_params.get("branch"))
         since = request.query_params.get("since")
         if since:
@@ -153,6 +157,13 @@ class SaleList(APIView):
         d = s.validated_data
         user = request.user
         branch = user.staff.branch if user.role == "staff" else branch_by_town(d.get("branch") or "")
-        sale = create_sale(request, branch, d["items"], payment_method=d.get("paymentMethod", "Cash"))
-        sale = Sale.objects.select_related("branch", "staff").prefetch_related("details__product").get(pk=sale.pk)
+        customer = None
+        if d.get("customerId"):
+            customer = Customer.objects.filter(pk=d["customerId"], branch=branch).first()
+            if customer is None:
+                raise serializers.ValidationError({"customerId": "That owner is not on this branch's records."})
+        sale = create_sale(request, branch, d["items"], customer=customer,
+                           payment_method=d.get("paymentMethod", "Cash"))
+        sale = (Sale.objects.select_related("branch", "staff", "customer").prefetch_related("details__product")
+                .get(pk=sale.pk))
         return Response(sale_row(sale), status=status.HTTP_201_CREATED)

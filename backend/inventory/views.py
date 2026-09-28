@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.db import transaction
 from rest_framework import serializers, status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -13,7 +13,7 @@ from core.ids import next_id
 from accounts.audit import record
 from core.permissions import IsClinicStaff, branch_by_town, scope_branch
 
-from .models import Inventory, InventoryTransaction, Product
+from .models import Inventory, InventoryTransaction, Product, ProductBranchPrice
 
 
 def iso(d):
@@ -41,7 +41,8 @@ def inventory_row(inv):
         "delivery": iso(inv.delivery_date),
         "expiration": iso(inv.expiration_date),
         "photo": inv.photo,
-        "unitPrice": num(price.unit_price) if price else None,
+        "unitPrice": None if price is None or price.unit_price is None else num(price.unit_price),
+        "unitCost": None if price is None or price.unit_capital is None else num(price.unit_capital),
     }
 
 
@@ -54,6 +55,26 @@ class InventoryInput(serializers.Serializer):
     delivery = serializers.DateField(required=False, allow_null=True)
     expiration = serializers.DateField(required=False, allow_null=True)
     photo = serializers.CharField(required=False, allow_null=True, allow_blank=True, validators=[data_url])
+    # Selling price and cost at this branch. Only the admin sets them (staff see the price, never change it).
+    unitPrice = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True)
+    unitCost = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True)
+
+
+class ReceiveInput(serializers.Serializer):
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0.01"))
+    delivery = serializers.DateField(required=False, allow_null=True)
+    expiration = serializers.DateField(required=False, allow_null=True)
+
+
+def _set_prices(request, product, branch, d):
+    """Save the branch price/cost when the admin sent them. Staff are refused, so a price is never changed at the
+    counter by accident."""
+    if "unitPrice" not in d and "unitCost" not in d:
+        return
+    if request.user.role != "admin":
+        raise PermissionDenied("Only the admin sets prices.")
+    fields = {k: d[src] for k, src in (("unit_price", "unitPrice"), ("unit_capital", "unitCost")) if src in d}
+    ProductBranchPrice.objects.update_or_create(product=product, branch=branch, defaults=fields)
 
 
 def _queryset(request):
@@ -121,6 +142,7 @@ class InventoryList(APIView):
             photo=d.get("photo") or None,
         )
         _log_adjustment(inv, Decimal(0), d["quantity"], user)
+        _set_prices(request, product, branch, d)
         inv = _queryset(request).get(pk=inv.pk)
         return Response(inventory_row(inv), status=status.HTTP_201_CREATED)
 
@@ -131,8 +153,6 @@ class InventoryDetail(APIView):
     def _get(self, request, pk):
         inv = _queryset(request).filter(pk=pk).first()
         if inv is None:
-            from rest_framework.exceptions import NotFound
-
             raise NotFound()
         return inv
 
@@ -155,6 +175,7 @@ class InventoryDetail(APIView):
             inv.photo = d["photo"] or None
         inv.save()
         _log_adjustment(inv, before, d["quantity"], request.user)
+        _set_prices(request, product, inv.branch, d)
         return Response(inventory_row(_queryset(request).get(pk=inv.pk)))
 
     patch = put
@@ -166,3 +187,33 @@ class InventoryDetail(APIView):
         record(request, "product.delete", target=inv.inventory_id)
         inv.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class InventoryReceive(APIView):
+    """A delivery arrived: add it to the shelf and log it as a restock (not a correction), so the stock history can
+    tell deliveries from adjustments. Staff (own branch) and the admin."""
+
+    permission_classes = [IsClinicStaff]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        inv = _queryset(request).select_for_update(of=("self",)).filter(pk=pk).first()
+        if inv is None:
+            raise NotFound()
+        s = ReceiveInput(data=request.data)
+        s.is_valid(raise_exception=True)
+        d = s.validated_data
+        inv.quantity_on_hand += d["quantity"]
+        inv.delivery_date = d.get("delivery") or date.today()
+        if d.get("expiration"):
+            inv.expiration_date = d["expiration"]
+        inv.save(update_fields=["quantity_on_hand", "delivery_date", "expiration_date"])
+        user = request.user
+        InventoryTransaction.objects.create(
+            txn_id=next_id(InventoryTransaction, "txn_id", "ITX-", 8), product=inv.product, branch=inv.branch,
+            txn_type="restock", quantity_change=d["quantity"], reference_id=inv.inventory_id,
+            remarks=f"Delivery received by {user.name}", txn_date=date.today(),
+            created_by=user.staff if user.staff_id else None,
+        )
+        record(request, "stock.receive", target=inv.inventory_id, detail=str(d["quantity"]))
+        return Response(inventory_row(_queryset(request).get(pk=inv.pk)))

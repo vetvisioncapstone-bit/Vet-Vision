@@ -20,7 +20,7 @@ from core.pagination import paginate, wants_page
 from core.validators import data_url
 from core.permissions import IsAdmin, IsClinicStaff, IsCustomer, branch_by_town, scope_branch
 
-from inventory.models import Inventory, Service, ServiceBranchPrice
+from inventory.models import Inventory, Product, Service, ServiceBranchPrice, ServiceProductUsage
 from sales.models import Sale, ServiceDetail, ServiceTransaction
 from sales.views import create_sale, undo_sale
 
@@ -462,18 +462,101 @@ class ConsultationDetail(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class BranchPriceInput(serializers.Serializer):
+    price = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, allow_null=True, required=False)
+    cost = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0, allow_null=True, required=False)
+
+
+class SupplyInput(serializers.Serializer):
+    productId = serializers.CharField(max_length=10)
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0.01"))
+
+
+class ServiceInput(serializers.Serializer):
+    name = serializers.CharField(max_length=120)
+    category = serializers.CharField(max_length=60)
+    prices = serializers.DictField(child=BranchPriceInput(), required=False)  # {"Ibaan": {price, cost}, ...}
+    supplies = SupplyInput(many=True, required=False)  # products one service uses up (deducted by the trigger)
+
+
+def service_row(s, admin):
+    row = {"id": s.service_id, "name": s.service_name, "category": s.category,
+           "prices": {p.branch.town: None if p.unit_price is None else float(p.unit_price) for p in s.prices_}}
+    if admin:  # costs and supplies are the owner's business
+        row["costs"] = {p.branch.town: None if p.unit_capital is None else float(p.unit_capital) for p in s.prices_}
+        row["supplies"] = [{"productId": u.product_id, "name": u.product.product_name, "quantity": float(u.qty_per_service)}
+                           for u in s.supplies_]
+    return row
+
+
+def _services():
+    return Service.objects.order_by("category", "service_name").prefetch_related(
+        Prefetch("servicebranchprice_set", queryset=ServiceBranchPrice.objects.select_related("branch"), to_attr="prices_"),
+        Prefetch("serviceproductusage_set", queryset=ServiceProductUsage.objects.select_related("product"),
+                 to_attr="supplies_"),
+    )
+
+
+def _save_service(service, d):
+    """Name/category, then each branch price given, then the supply list (replaced as a whole when sent)."""
+    name, category = d["name"].strip(), d["category"].strip().upper()
+    clash = Service.objects.filter(service_name__iexact=name).exclude(pk=service.pk if service.pk else None)
+    if clash.exists():
+        raise serializers.ValidationError({"name": "A service with this name already exists."})
+    service.service_name, service.category = name, category
+    service.save()
+    for town, pc in (d.get("prices") or {}).items():
+        branch = branch_by_town(town)
+        ServiceBranchPrice.objects.update_or_create(
+            service=service, branch=branch, defaults={"unit_price": pc.get("price"), "unit_capital": pc.get("cost")})
+    if "supplies" in d:
+        wanted = {x["productId"]: x["quantity"] for x in d["supplies"]}
+        known = set(Product.objects.filter(pk__in=wanted).values_list("pk", flat=True))
+        if set(wanted) - known:
+            raise serializers.ValidationError({"supplies": f"Unknown product: {', '.join(sorted(set(wanted) - known))}."})
+        ServiceProductUsage.objects.filter(service=service).exclude(product_id__in=wanted).delete()
+        for pid, qty in wanted.items():
+            ServiceProductUsage.objects.update_or_create(service=service, product_id=pid, defaults={"qty_per_service": qty})
+
+
 class ServiceCatalog(APIView):
-    """The clinic's services with each branch's price, for the consultation form."""
+    """GET: the clinic's services with each branch's price (staff and admin; costs and supplies for the admin).
+    POST: the admin adds a service."""
 
     permission_classes = [IsClinicStaff]
 
     def get(self, request):
-        prices = {}
-        for p in ServiceBranchPrice.objects.select_related("branch"):
-            prices.setdefault(p.service_id, {})[p.branch.town] = None if p.unit_price is None else float(p.unit_price)
-        return Response([{"id": s.service_id, "name": s.service_name, "category": s.category,
-                          "prices": prices.get(s.service_id, {})}
-                         for s in Service.objects.order_by("category", "service_name")])
+        admin = request.user.role == "admin"
+        return Response([service_row(s, admin) for s in _services()])
+
+    @transaction.atomic
+    def post(self, request):
+        if request.user.role != "admin":
+            raise PermissionDenied("Only the admin manages services.")
+        s = ServiceInput(data=request.data)
+        s.is_valid(raise_exception=True)
+        service = Service(service_id=next_id(Service, "service_id", "SRV-", 4))
+        _save_service(service, s.validated_data)
+        record(request, "service.create", target=service.service_id)
+        return Response(service_row(_services().get(pk=service.pk), True), status=status.HTTP_201_CREATED)
+
+
+class ServiceDetailView(APIView):
+    """The admin edits a service: name, category, branch prices and costs, supplies. Services are never deleted
+    here: past visits point at them."""
+
+    permission_classes = [IsAdmin]
+
+    @transaction.atomic
+    def put(self, request, pk):
+        service = Service.objects.filter(pk=pk).first()
+        if service is None:
+            raise NotFound()
+        s = ServiceInput(data=request.data)
+        s.is_valid(raise_exception=True)
+        _save_service(service, s.validated_data)
+        record(request, "service.update", target=service.service_id)
+        return Response(service_row(_services().get(pk=service.pk), True))
 
 
 # ---------------- staff accounts (admin only) ----------------

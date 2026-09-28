@@ -14,6 +14,7 @@ const AdminReports = lazy(() => import('./pages/admin/Reports'))
 const AdminPatients = lazy(() => import('./pages/admin/Patients'))
 const AdminUserManagement = lazy(() => import('./pages/admin/UserManagement'))
 const AdminSystemSettings = lazy(() => import('./pages/admin/SystemSettings'))
+const AdminServices = lazy(() => import('./pages/admin/Services'))
 const EmployeeDashboard = lazy(() => import('./pages/employee/Dashboard'))
 const EmployeeFeed = lazy(() => import('./pages/employee/Feed'))
 const EmployeeInventory = lazy(() => import('./pages/employee/Inventory'))
@@ -34,6 +35,7 @@ function App() {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="sales-analytics" element={<AdminSalesAnalytics />} />
           <Route path="inventory" element={<AdminInventory />} />
+          <Route path="services" element={<AdminServices />} />
           <Route path="forecasting" element={<AdminForecasting />} />
           <Route path="events" element={<AdminEvents />} />
           <Route path="reports" element={<AdminReports />} />

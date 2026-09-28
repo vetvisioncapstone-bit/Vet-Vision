@@ -6,6 +6,7 @@ import { useToast } from '../../components/shared/Toast'
 import { errorMessage } from '../../api/client'
 import '../../styles/employee/employee-sales.css'
 import { formatPrice } from '../../utils/format'
+import OwnerPicker from '../../components/shared/OwnerPicker'
 
 // ==================== HELPERS ====================
 // Sales are recorded through the API; the server validates stock and the
@@ -28,6 +29,7 @@ export default function Sales() {
   const [quantity, setQuantity] = useState(1)
   const [price, setPrice] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [owner, setOwner] = useState(null) // { id, name } or null for a walk-in
 
   const branchProducts = useMemo(() => products.filter(p => p.branch === branch), [products, branch])
   const inStockProducts = useMemo(() => branchProducts.filter(p => p.quantity > 0), [branchProducts])
@@ -57,6 +59,13 @@ export default function Sales() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inStockProducts])
+
+  // The admin's selling price for this branch, when set; still editable (discounts).
+  function pickProduct(id) {
+    setSelectedProductId(id)
+    const p = branchProducts.find(x => x.id === id)
+    setPrice(p?.unitPrice != null ? String(p.unitPrice) : '')
+  }
 
   function handleAddToCart() {
     const inventoryId = selectedProductId
@@ -108,9 +117,11 @@ export default function Sales() {
     setSubmitting(true)
     try {
       const total = cartTotal
-      await createSale(cartItems.map(i => ({ inventoryId: i.inventoryId, quantity: i.quantity, price: i.price })))
-      showToast(`Sale completed — ${formatPrice(total)}.`)
+      await createSale(cartItems.map(i => ({ inventoryId: i.inventoryId, quantity: i.quantity, price: i.price })),
+        { customerId: owner?.id || '' })
+      showToast(`Sale completed — ${formatPrice(total)}${owner ? ` for ${owner.name}` : ''}.`)
       setCartItems([])
+      setOwner(null)
     } catch (err) {
       showToast(errorMessage(err))
     } finally {
@@ -138,6 +149,11 @@ export default function Sales() {
           <div className="table-card">
             <h2>New sale</h2>
 
+            <div className="form-group sale-owner">
+              <label className="form-label" htmlFor="saleOwner">Customer <span className="optional">(optional)</span></label>
+              <OwnerPicker value={owner} onChange={setOwner} />
+            </div>
+
             <div className="sale-add-row">
               <div className="form-group">
                 <label className="form-label" htmlFor="src-pages-employee-sales-f1">Product</label>
@@ -146,7 +162,7 @@ export default function Sales() {
                     className="form-input"
                     value={selectedProductId}
                     disabled={inStockProducts.length === 0}
-                    onChange={(e) => setSelectedProductId(e.target.value)}
+                    onChange={(e) => pickProduct(e.target.value)}
                   >
                     <option value="" disabled hidden>{inStockProducts.length === 0 ? 'No products in stock' : 'Select a product'}</option>
                     {inStockProducts.map(p => (
@@ -236,11 +252,11 @@ export default function Sales() {
               ) : branchSales.map(sale => (
                 <li className="recent-sale-item" key={sale.id}>
                   <div className="recent-sale-top">
-                    <span>{sale.staffName}</span>
+                    <span>{sale.customerName || 'Walk-in'}</span>
                     <span className="recent-sale-total">{formatPrice(sale.total)}</span>
                   </div>
                   <p className="recent-sale-items">{sale.items.map(i => `${i.name} x${i.quantity}`).join(', ')}</p>
-                  <p className="recent-sale-time">{new Date(sale.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+                  <p className="recent-sale-time">{new Date(sale.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}{sale.staffName ? ` · ${sale.staffName}` : ''}</p>
                 </li>
               ))}
             </ul>

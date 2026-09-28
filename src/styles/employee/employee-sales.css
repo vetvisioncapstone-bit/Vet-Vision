@@ -258,3 +258,58 @@ select.form-input {
     font-size: 11.5px;
     color: #646c68;
 }
+
+/* Optional customer on a sale (components/shared/OwnerPicker.jsx) */
+.sale-owner {
+    margin-top: 14px;
+    max-width: 420px;
+}
+
+.owner-picker {
+    position: relative;
+}
+
+.owner-results {
+    position: absolute;
+    z-index: 5;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    background: #ffffff;
+    border: 1px solid #dfe3e1;
+    border-radius: 10px;
+    box-shadow: 0 10px 24px rgba(20, 40, 30, 0.12);
+}
+
+.owner-results button {
+    display: block;
+    width: 100%;
+    padding: 9px 10px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    font: inherit;
+    font-size: 13.5px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.owner-results button:hover,
+.owner-results button:focus-visible {
+    background: #e4f6e8;
+}
+
+.owner-results span {
+    color: #646c68;
+}
+
+.owner-picked {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 42px;
+    font-weight: 600;
+}

@@ -195,6 +195,11 @@
     color: #1a1a1a;
 }
 
+.row-action-btn.receive:hover {
+    background: #e4f6e8;
+    color: #17693a;
+}
+
 .row-action-btn.delete:hover {
     background: #fdecea;
     color: #c62828;

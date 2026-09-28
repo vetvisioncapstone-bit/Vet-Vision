@@ -4,9 +4,10 @@ import { useAnalytics } from '../../hooks/useAnalytics'
 import { useToast } from '../../components/shared/Toast'
 import { errorMessage } from '../../api/client'
 import '../../styles/admin/inventory.css'
-import { formatDate } from '../../utils/format'
+import { formatDate, formatPrice } from '../../utils/format'
 
 import Dialog from '../../components/shared/Dialog'
+import ReceiveStockDialog from '../../components/shared/ReceiveStockDialog'
 import { onActivate } from '../../utils/a11y'
 function getStatus(product) {
   if (product.quantity <= 0) return { label: 'Out of stock', cls: 'status-out-of-stock' }
@@ -25,7 +26,7 @@ function compareExpiration(a, b) {
 
 const EMPTY_FORM = {
   name: '', category: '', branch: '', quantity: '', reorderPoint: '',
-  delivery: '', expiration: '', photo: null
+  delivery: '', expiration: '', photo: null, unitPrice: '', unitCost: ''
 }
 
 export default function Inventory() {
@@ -48,6 +49,7 @@ export default function Inventory() {
   const fileInputRef = useRef(null)
 
   const [detailProduct, setDetailProduct] = useState(null)
+  const [receiving, setReceiving] = useState(null) // product whose delivery is being entered
 
   const categories = useMemo(() => [...new Set(products.map(p => p.category))].sort(), [products])
 
@@ -85,7 +87,9 @@ export default function Inventory() {
       reorderPoint: product.reorderPoint,
       delivery: product.delivery,
       expiration: product.expiration,
-      photo: product.photo || null
+      photo: product.photo || null,
+      unitPrice: product.unitPrice ?? '',
+      unitCost: product.unitCost ?? ''
     })
     setModalOpen(true)
   }
@@ -113,7 +117,10 @@ export default function Inventory() {
       reorderPoint: Number(form.reorderPoint),
       delivery: form.delivery,
       expiration: form.expiration,
-      photo: form.photo
+      photo: form.photo,
+      // Blank means "no price yet"; the Sales page and consultations pre-fill from these.
+      unitPrice: form.unitPrice === '' ? null : Number(form.unitPrice),
+      unitCost: form.unitCost === '' ? null : Number(form.unitCost)
     }
 
     setSaving(true)
@@ -233,6 +240,9 @@ export default function Inventory() {
                     <td><span className={`status-pill ${status.cls}`}>{status.label}</span></td>
                     <td>
                       <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                        <button type="button" className="row-action-btn receive" aria-label={`Receive stock of ${p.name}`} title="Receive stock" onClick={() => setReceiving(p)}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5Z" /><path d="M12 13v8" /><path d="m3 8 9 5 9-5" /><path d="M16 5.5 7.5 10.3" /></svg>
+                        </button>
                         <button type="button" className="row-action-btn edit" aria-label="Edit product" onClick={() => openEditModal(p)}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" /></svg>
                         </button>
@@ -309,6 +319,19 @@ export default function Inventory() {
 
                 <div className="form-row">
                   <div className="form-group">
+                    <label className="form-label" htmlFor="inventoryPrice">Selling price (₱)</label>
+                    <input id="inventoryPrice" type="number" className="form-input" min="0" step="0.01" placeholder="e.g. 350"
+                      value={form.unitPrice} onChange={(e) => setForm(f => ({ ...f, unitPrice: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="inventoryCost">Cost (₱)</label>
+                    <input id="inventoryCost" type="number" className="form-input" min="0" step="0.01" placeholder="what the clinic pays"
+                      value={form.unitCost} onChange={(e) => setForm(f => ({ ...f, unitCost: e.target.value }))} />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
                     <label className="form-label" htmlFor="src-pages-admin-inventory-f6">Delivery date</label>
                     <input id="src-pages-admin-inventory-f6" type="date" className="form-input" required
                       value={form.delivery} onChange={(e) => setForm(f => ({ ...f, delivery: e.target.value }))} />
@@ -349,6 +372,8 @@ export default function Inventory() {
               <div className="detail-grid">
                 <div><p className="kpi-label">Quantity</p><p className="kpi-value">{detailProduct.quantity}</p></div>
                 <div><p className="kpi-label">Reorder point</p><p className="kpi-value">{detailProduct.reorderPoint}</p></div>
+                <div><p className="kpi-label">Selling price</p><p className="kpi-value">{detailProduct.unitPrice == null ? 'Not set' : formatPrice(detailProduct.unitPrice)}</p></div>
+                <div><p className="kpi-label">Cost</p><p className="kpi-value">{detailProduct.unitCost == null ? 'Not set' : formatPrice(detailProduct.unitCost)}</p></div>
                 <div><p className="kpi-label">Delivery date</p><p className="kpi-value">{formatDate(detailProduct.delivery)}</p></div>
                 <div><p className="kpi-label">Expiration date</p><p className="kpi-value">{formatDate(detailProduct.expiration)}</p></div>
               </div>
@@ -356,6 +381,8 @@ export default function Inventory() {
           </div>
         )}
       </Dialog>
+
+      <ReceiveStockDialog product={receiving} onClose={() => setReceiving(null)} />
     </main>
   )
 }
