@@ -13,7 +13,7 @@ import calendar
 import hashlib
 import math
 from collections import namedtuple
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.core.cache import cache
@@ -113,6 +113,22 @@ def period_totals(start, end, bsql, bparams):
     }
 
 
+def picked_month(request, win):
+    """First day of the month picked with ?month=YYYY-MM, or None for the latest (running) month. A month after the
+    latest one, or anything unreadable, also means the latest."""
+    try:
+        month = datetime.strptime(request.query_params.get("month") or "", "%Y-%m").date()
+    except ValueError:
+        return None
+    return month if month < win.cur else None
+
+
+def active_months():
+    """Every month with any sale or visit, newest first ('YYYY-MM'): the choices for the dashboard's month filter."""
+    return [month_key(r["month"]) for r in rows(
+        "SELECT month FROM v_branch_monthly_kpi GROUP BY month HAVING sum(sale_txns + service_txns) > 0 ORDER BY month DESC")]
+
+
 def branch_filter(request):
     """(branch row or None, sql fragment, params). The UI names branches by town."""
     town = (request.query_params.get("branch") or "").strip()
@@ -159,8 +175,10 @@ def branch_towns():
 
 
 class Overview(APIView):
-    """Dashboard cards, 12-month trend, branch share and most availed services for the current month.
-    While the month is running the cards are month-to-date and compare with the same days of the last month."""
+    """Dashboard cards, 12-month trend, branch share and most availed services for the current month, or for a past
+    month picked with ?month=YYYY-MM. While the month is running the cards are month-to-date and compare with the
+    same days of the last month; a past month is complete and compares with the whole month before it.
+    Stock counts are always today's: the system keeps no history of stock levels per month."""
 
     permission_classes = [IsAdmin]
 
@@ -169,7 +187,12 @@ class Overview(APIView):
         if not win:
             return empty()
         _, bsql, bparams = branch_filter(request)
-        cur, latest = win.cur, win.latest
+        picked = picked_month(request, win)
+        if picked:
+            cur, latest = picked, add_months(picked, 1) - timedelta(days=1)
+        else:
+            cur, latest = win.cur, win.latest
+        partial = cur == win.cur and not win.complete
         prev = add_months(cur, -1)
         prev_end = prev.replace(day=min(latest.day, days_in(prev)))  # same number of days as this month so far
         towns = branch_towns()
@@ -183,7 +206,7 @@ class Overview(APIView):
         for m in month_range(cur, 12):
             per_branch = {towns.get(r["branch_id"], r["branch_name"]): num(r["total_gross"]) for r in kpi if r["month"] == m}
             trend.append({"month": month_key(m), "total": num(total_by_month.get(m, 0)), "branches": per_branch,
-                          "partial": m == cur and not win.complete})
+                          "partial": m == win.cur and not win.complete})
 
         share = [{
             "branch": towns.get(r["branch_id"], r["branch_name"]), "total": num(r["total_gross"]),
@@ -220,9 +243,10 @@ class Overview(APIView):
         ]
 
         return Response({
-            "asOf": as_of(win),
+            "asOf": as_of(win, cur),
+            "months": active_months(),
             "comparison": {"to": prev_end.isoformat(),
-                           "label": "same days last month" if not win.complete else "previous month"},
+                           "label": "same days last month" if partial else "previous month"},
             "kpis": {
                 "totalSales": num(now["total"]),
                 "previousTotalSales": num(before["total"]),
@@ -240,7 +264,8 @@ class Overview(APIView):
 
 class Live(APIView):
     """Today's activity: cheap enough to poll every few seconds. `today` is the latest date with records, which is
-    the real current day whenever the clinic is recording."""
+    the real current day whenever the clinic is recording. With ?month=YYYY-MM (a past month) it is that month's
+    last recorded day instead, and the recent transactions are the last ones of that month."""
 
     permission_classes = [IsAdmin]
 
@@ -250,7 +275,15 @@ class Live(APIView):
             return empty()
         branch, bsql, bparams = branch_filter(request)
         towns = branch_towns()
+        picked = picked_month(request, win)
+        until = add_months(picked, 1) - timedelta(days=1) if picked else win.latest
         day = win.latest
+        if picked:
+            day = rows(
+                "SELECT GREATEST((SELECT max(sale_date) FROM sale WHERE sale_date BETWEEN %s AND %s), "
+                "(SELECT max(txn_date) FROM service_transaction WHERE txn_date BETWEEN %s AND %s)) AS d",
+                (picked, until, picked, until),
+            )[0]["d"] or until
         totals = {
             town: {"sales": 0.0, "services": 0.0, "total": 0.0, "saleTxns": 0, "serviceTxns": 0}
             for bid, town in towns.items() if not branch or bid == branch.branch_id
@@ -276,8 +309,8 @@ class Live(APIView):
             " UNION ALL SELECT 'Visit', x.service_txn_id, x.txn_date, x.txn_time, x.branch_id, "
             "  COALESCE(c.customer_name, 'Walk-in'), x.total_amount "
             "  FROM service_transaction x LEFT JOIN customer c ON c.customer_id = x.customer_id"
-            ") u WHERE TRUE" + bsql + " ORDER BY d DESC, t DESC NULLS LAST, id DESC LIMIT 10",
-            bparams,
+            ") u WHERE d <= %s" + bsql + " ORDER BY d DESC, t DESC NULLS LAST, id DESC LIMIT 10",
+            (until, *bparams),
         )
         return Response({
             "asOf": as_of(win),

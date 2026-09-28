@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .assistant import Assistant
 from .views import Forecast, InventoryAnalytics, Live, Overview, ReportData, SalesAnalytics
 
 urlpatterns = [
@@ -9,4 +10,5 @@ urlpatterns = [
     path("inventory/", InventoryAnalytics.as_view()),
     path("forecast/", Forecast.as_view()),
     path("report/", ReportData.as_view()),
+    path("assistant/", Assistant.as_view()),
 ]

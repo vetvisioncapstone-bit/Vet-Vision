@@ -42,9 +42,9 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('vv-auth-expired', onExpired)
   }, [])
 
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email, password, captcha) => {
     try {
-      const data = await api.post('/auth/login/', { email, password })
+      const data = await api.post('/auth/login/', { email, password, captcha })
       setTokens({ access: data.access, refresh: data.refresh })
       setUser(data.user)
       return { success: true, session: toSession(data.user) }

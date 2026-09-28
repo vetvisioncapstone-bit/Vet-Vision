@@ -20,6 +20,10 @@ services:
         value: vet-vision-api.onrender.com
       - key: CORS_ALLOWED_ORIGINS
         sync: false   # e.g. https://vet-vision.pages.dev
+      - key: TURNSTILE_SECRET_KEY
+        sync: false   # Cloudflare Turnstile secret key (the site key goes in the frontend build as VITE_TURNSTILE_SITE_KEY)
+      - key: GEMINI_API_KEY
+        sync: false   # admin AI assistant (Google Gemini, free tier)
       - key: DATABASE_URL
         sync: false   # Supabase connection string
       - key: PYTHON_VERSION

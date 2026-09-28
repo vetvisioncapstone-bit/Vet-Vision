@@ -87,12 +87,36 @@ Staff cannot hard-delete: they raise an approval request and the admin's approva
   them at once.
 - 5 wrong passwords lock that account for 15 minutes (`accounts/audit.py`), on top of the per-IP rate limits (login
   10/min, refresh 30/min, sign-up 5/min, 1500/min per user).
+- **Cloudflare Turnstile** guards sign-in and sign-up (`core/turnstile.py`): the page sends a one-time token, the server
+  verifies it with Cloudflare before looking at the password, and a missing/rejected token or Cloudflare being
+  unreachable is refused (400, logged as `captcha_failed`, not counted towards the lockout). Keys: `TURNSTILE_SECRET_KEY`
+  in `backend/.env`, `VITE_TURNSTILE_SITE_KEY` in the frontend `.env.local`. Both example files hold Cloudflare's public
+  test keys (always pass). Production refuses to start without a secret key.
 - Every sign-in, failure, lockout, password change, sign-up and destructive action is written to `AuditLog`
   (`GET /api/auth/audit/`, shown on the admin System Settings page).
 - With `DJANGO_DEBUG=False`: HTTPS redirect, secure cookies, HSTS, JSON-only API; the Django admin site is off unless
   `DJANGO_ENABLE_ADMIN=True`. Check with `python manage.py check --deploy`.
 - `tests/test_security.py` walks every API route and asserts anonymous callers get 401, customers 403 on clinic routes and
   staff 403 on admin routes.
+
+## AI assistant (admin only, thesis section 3.6)
+
+`POST /api/analytics/assistant/` with `{message, history?, page?}` returns `{reply}` from Google Gemini (free tier),
+code in `analytics/assistant.py`.
+
+- **Setup:** create a key at <https://aistudio.google.com> in a project **without billing** (that keeps it on the
+  free tier: going over the limits returns "busy", never a bill). Put it in `backend/.env` as `GEMINI_API_KEY=...`.
+  `GEMINI_MODEL` (default `gemini-3.6-flash`) and `GEMINI_FALLBACK_MODEL` (default `gemini-3.5-flash-lite`, used when
+  the first is overloaded or out of free quota) switch models without code changes. See your limits in AI Studio.
+- **What Gemini sees:** the dashboard's aggregated figures for both branches (sales, services, inventory movement,
+  KPIs, forecasts, product/service names), about 5,500 tokens, built fresh for each question. Never customer names or
+  contact details, pets or medical records (`tests/test_assistant.py` checks this). Google may use free-tier prompts
+  to improve its products, which is another reason only aggregates are sent.
+- **Behaviour:** answers from those figures only, explains (does not redo) the forecasts and fast/slow classification,
+  frames recommendations as suggestions, replies in English, Filipino or Taglish, declines off-topic and veterinary
+  medical questions.
+- **Privacy and limits:** the conversation lives in the browser for the session; the server keeps only an `ai_query`
+  audit entry (who, when; not the question). 10 questions a minute per admin.
 
 ## Backup and recovery
 
@@ -119,9 +143,11 @@ if it is not on the PATH).
 1. **Database (Supabase):** create a project, restore your data (`pg_restore` a `backup_db` dump), copy the connection
    string (Project settings -> Database -> URI).
 2. **API (Render):** New -> Blueprint from this repo (`render.yaml`). Set `DATABASE_URL` (the string above),
-   `CORS_ALLOWED_ORIGINS` (your Pages URL) and `DJANGO_ALLOWED_HOSTS`. The build runs the migrations.
-3. **Web app (any static host, for example Cloudflare Pages, Netlify or Vercel):** build command `npm run build`, output `dist`, environment variable
-   `VITE_API_URL=https://<your-api>.onrender.com/api`. `public/_redirects` makes deep links work.
+   `CORS_ALLOWED_ORIGINS` (your Pages URL), `DJANGO_ALLOWED_HOSTS` and `TURNSTILE_SECRET_KEY`. The build runs the
+   migrations.
+3. **Web app (any static host, for example Cloudflare Pages, Netlify or Vercel):** build command `npm run build`, output `dist`, environment variables
+   `VITE_API_URL=https://<your-api>.onrender.com/api` and `VITE_TURNSTILE_SITE_KEY`. `public/_redirects` makes deep links
+   work. In the Cloudflare dashboard (Turnstile -> Add widget) add the site's hostname to get the real site and secret keys.
 4. Create the admin login (`python manage.py createsuperuser` in the Render shell), then delete any test accounts.
 
 Customer records are personal data (Data Privacy Act): use the real clinic data only on a host you control and keep the

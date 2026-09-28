@@ -125,6 +125,25 @@ def test_a_finished_month_is_compared_with_the_whole_previous_month(admin, histo
     assert r["asOf"]["partial"] is False and r["comparison"]["label"] == "previous month"
 
 
+def test_a_past_month_can_be_viewed_while_the_current_one_is_running(admin, history, branches):
+    add_sale(branches[0], 100, date(2026, 9, 20), 5, history)  # September is running
+    r = get(admin, "overview/?month=2026-03").data
+    assert r["asOf"]["month"] == "2026-03" and r["asOf"]["partial"] is False
+    assert r["kpis"]["totalSales"] == 30 * PRICE and r["kpis"]["previousTotalSales"] == 20 * PRICE  # whole Feb
+    assert r["comparison"]["label"] == "previous month"
+    assert r["trend"][-1]["month"] == "2026-03" and not any(t["partial"] for t in r["trend"])
+    assert r["months"][:3] == ["2026-09", "2026-08", "2026-07"] and r["months"][-1] == "2026-01"
+    live = get(admin, "live/?month=2026-03").data
+    assert live["today"] == "2026-03-15"  # that month's last recorded day
+    assert live["totals"]["total"] == 30 * PRICE and {t["date"] for t in live["recent"]} <= {"2026-03-15", "2026-02-15", "2026-01-15"}
+
+
+def test_a_future_or_garbled_month_means_the_latest(admin, history):
+    for month in ("2031-01", "nonsense", "2026-13"):
+        assert get(admin, f"overview/?month={month}").data["asOf"]["month"] == "2026-08", month
+    assert get(admin, "live/?month=2031-01").data["today"] == "2026-08-31"
+
+
 def test_new_sale_shows_up_on_the_next_request(admin, history, branches):
     before = get(admin, "overview/").data["kpis"]["totalSales"]
     add_sale(branches[0], 101, date(2026, 9, 1), 4, history)

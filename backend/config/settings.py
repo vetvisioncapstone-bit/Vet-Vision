@@ -128,6 +128,7 @@ REST_FRAMEWORK = {
         "login": os.getenv("LOGIN_THROTTLE", "10/min"),  # per IP; the per-account lockout is in accounts/audit.py
         "refresh": "30/min",
         "register": "5/min",
+        "assistant": "10/min",  # AI free tiers allow only a handful of requests a minute
         "anon": "300/min",
         "user": "1500/min",  # a busy admin dashboard polls every 10 s
     },
@@ -144,6 +145,18 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,    # ... and the old one stops working (stolen copies die)
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
+
+# Cloudflare Turnstile on sign-in and sign-up (core/turnstile.py). Empty switches the check off, which is
+# allowed only while developing: production refuses to start without it.
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "").strip()
+if not DEBUG and not TURNSTILE_SECRET_KEY:
+    raise RuntimeError("Set TURNSTILE_SECRET_KEY in backend/.env (see .env.example).")
+
+# Admin AI assistant (analytics/assistant.py, thesis section 3.6): Google Gemini, free tier. Without a key the chat
+# says it is not set up. The model can be changed without touching the code.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
+GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite").strip()  # when the first is busy
 
 CORS_ALLOWED_ORIGINS = [
     o.strip()

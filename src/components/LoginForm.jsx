@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import EmailInput from './EmailInput'
 import PasswordInput from './PasswordInput'
 import LoginButton from './LoginButton'
+import Turnstile, { turnstileEnabled } from './Turnstile'
 
 function LoginForm({ onLogin }) {
   const [email, setEmail] = useState('')
@@ -14,6 +15,8 @@ function LoginForm({ onLogin }) {
   const [loginError, setLoginError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [forgotNote, setForgotNote] = useState(false)
+  const [captcha, setCaptcha] = useState('')
+  const [attempt, setAttempt] = useState(0) // new Turnstile widget (and token) per attempt
 
   useEffect(() => {
     // Keyboard shortcuts
@@ -86,12 +89,19 @@ function LoginForm({ onLogin }) {
       return
     }
 
+    if (turnstileEnabled && !captcha) {
+      setLoginError('Please wait for the security check below to finish, then sign in.')
+      return
+    }
+
     setIsLoading(true)
     setLoginError('')
 
-    const result = await onLogin(email, password, remember)
+    const result = await onLogin(email, password, remember, captcha)
 
     if (!result.success) {
+      setCaptcha('')
+      setAttempt((n) => n + 1) // each token works once
       setEmailError(true)
       setPasswordError(true)
       setLoginError(result.message)
@@ -171,6 +181,8 @@ function LoginForm({ onLogin }) {
           clinic.
         </div>
       )}
+
+      <Turnstile key={attempt} action="login" onToken={setCaptcha} />
 
       <LoginButton isLoading={isLoading} />
 

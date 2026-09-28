@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import LoginButton from './LoginButton'
+import Turnstile, { turnstileEnabled } from './Turnstile'
 import { useAuth } from '../hooks/useAuth'
 
 const EMPTY = { firstName: '', lastName: '', email: '', mobile: '', branch: 'Ibaan', password: '', confirm: '' }
@@ -10,6 +11,8 @@ function SignUpForm({ onSignedUp }) {
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [captcha, setCaptcha] = useState('')
+  const [attempt, setAttempt] = useState(0) // new Turnstile widget (and token) per attempt
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
   const handleSubmit = async (e) => {
@@ -22,16 +25,22 @@ function SignUpForm({ onSignedUp }) {
       setError('The passwords do not match.')
       return
     }
+    if (turnstileEnabled && !captcha) {
+      setError('Please wait for the security check below to finish, then try again.')
+      return
+    }
     setError('')
     setIsLoading(true)
     const result = await register({
       firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim(),
-      mobile: form.mobile.trim(), branch: form.branch, password: form.password
+      mobile: form.mobile.trim(), branch: form.branch, password: form.password, captcha
     })
     if (result.success) {
       onSignedUp()
       return
     }
+    setCaptcha('')
+    setAttempt((n) => n + 1) // each token works once
     setError(result.message)
     setIsLoading(false)
   }
@@ -81,6 +90,8 @@ function SignUpForm({ onSignedUp }) {
         <input id="su-confirm" type="password" className="form-input plain" autoComplete="new-password"
           value={form.confirm} onChange={set('confirm')} />
       </div>
+
+      <Turnstile key={attempt} action="register" onToken={setCaptcha} />
 
       <LoginButton isLoading={isLoading} label="Create account" />
     </form>

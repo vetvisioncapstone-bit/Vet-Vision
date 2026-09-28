@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { BarChart, Donut, Legend } from '../../components/shared/charts'
 import { BRANCH_COLORS, branchColor, fmtClock, fmtMoney, fmtMonth, fmtNum, fmtPct, useAnalytics } from '../../hooks/useAnalytics'
 
@@ -11,8 +11,15 @@ function Trend({ pct, label }) {
 
 export default function Dashboard() {
   const [branch, setBranch] = useState('All Branches')
-  const { data, loading, error, reload, updatedAt } = useAnalytics('overview', { branch })
-  const live = useAnalytics('live', { branch })
+  const [month, setMonth] = useState('') // '' = the latest month; else 'YYYY-MM' for a past one
+  const { data, loading, error, reload, updatedAt } = useAnalytics('overview', { branch, month })
+  const live = useAnalytics('live', { branch, month })
+  const past = Boolean(month)
+  // Keep the month list while another month loads, so the picker does not empty and jump back to "Latest".
+  const knownMonths = useRef([])
+  if (data?.months) knownMonths.current = data.months
+  // [['2026', ['2026-06', ...]], ['2025', [...]]], newest first; the newest month itself is the 'Latest' choice.
+  const years = [...Map.groupBy(knownMonths.current.slice(1), (m) => m.slice(0, 4))]
 
   const asOf = data?.asOf?.month ? fmtMonth(data.asOf.month, true) : null
   const partial = Boolean(data?.asOf?.partial)
@@ -26,6 +33,21 @@ export default function Dashboard() {
     <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
         <h1>Overview</h1>
+        <div className="dashboard-filters">
+        <div className="branch-filter">
+          <label htmlFor="monthSelect">Month:</label>
+          <div className="select-wrapper">
+            <select id="monthSelect" value={month} onChange={(e) => setMonth(e.target.value)}>
+              <option value="">Latest{knownMonths.current[0] ? ` (${fmtMonth(knownMonths.current[0], true)})` : ''}</option>
+              {years.map(([year, months]) => (
+                <optgroup key={year} label={year}>
+                  {months.map((m) => <option key={m} value={m}>{fmtMonth(m, true)}</option>)}
+                </optgroup>
+              ))}
+            </select>
+            <svg className="select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+          </div>
+        </div>
         <div className="branch-filter">
           <label htmlFor="branchSelect">Branches:</label>
           <div className="select-wrapper">
@@ -36,6 +58,7 @@ export default function Dashboard() {
             <svg className="select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
           </div>
         </div>
+        </div>
       </div>
 
       {error && (
@@ -44,7 +67,13 @@ export default function Dashboard() {
         </div>
       )}
       {data?.empty && <p className="empty-state">No sales or service records yet.</p>}
-      {asOf && (
+      {asOf && past && (
+        <p className="as-of">
+          Viewing {asOf} (a past month) ·{' '}
+          <button type="button" className="link-btn" onClick={() => setMonth('')}>Back to the latest month</button>
+        </p>
+      )}
+      {asOf && !past && (
         <p className="as-of">
           <span className="live-badge" title="Refreshes automatically"><i />Live</span>
           {partial ? `${asOf} so far` : asOf} · last record {data.asOf.latestDate}
@@ -66,9 +95,9 @@ export default function Dashboard() {
           <p className="stat-sub">Distinct customers who bought or visited{partial ? ' this month so far' : ''}</p>
         </div>
         <div className={`stat-card${kpis?.lowStockItems ? ' alert' : ''}`}>
-          <p className="stat-label">Low stock items</p>
+          <p className="stat-label">Low stock items{past ? ' · now' : ''}</p>
           <p className="stat-value">{loading ? '…' : fmtNum(kpis?.lowStockItems)}</p>
-          {kpis && <p className="stat-sub">{fmtNum(kpis.outOfStockItems)} at zero of {fmtNum(kpis.trackedItems)} tracked</p>}
+          {kpis && <p className="stat-sub">{fmtNum(kpis.outOfStockItems)} at zero of {fmtNum(kpis.trackedItems)} tracked{past ? ' (stock has no monthly history)' : ''}</p>}
         </div>
         <div className="stat-card">
           <p className="stat-label">Ibaan vs San Jose</p>
@@ -88,12 +117,12 @@ export default function Dashboard() {
       <div className="live-grid">
         <div className="table-card">
           <div className="live-head">
-            <h2>Today{live.data?.today ? ` · ${live.data.today}` : ''}</h2>
-            <span className="live-badge"><i />Live</span>
+            <h2>{past ? 'Last recorded day' : 'Today'}{live.data?.today ? ` · ${live.data.today}` : ''}</h2>
+            {!past && <span className="live-badge"><i />Live</span>}
           </div>
           {live.data?.totals ? (
             <div className="live-stats">
-              <div><p className="stat-label">Sales today</p><p className="stat-value">{fmtMoney(live.data.totals.total)}</p></div>
+              <div><p className="stat-label">{past ? 'Sales that day' : 'Sales today'}</p><p className="stat-value">{fmtMoney(live.data.totals.total)}</p></div>
               <div><p className="stat-label">Product sales made</p><p className="stat-value">{fmtNum(live.data.totals.saleTxns)}</p></div>
               <div><p className="stat-label">Clinic visits</p><p className="stat-value">{fmtNum(live.data.totals.serviceTxns)}</p></div>
             </div>
@@ -106,7 +135,7 @@ export default function Dashboard() {
         </div>
 
         <div className="table-card">
-          <h2>Latest transactions</h2>
+          <h2>{past && asOf ? `Last transactions of ${asOf}` : 'Latest transactions'}</h2>
           <div className="table-scroll">
             <table>
               <thead><tr><th>When</th><th>Type</th><th>Customer</th><th>Branch</th><th>Amount</th></tr></thead>

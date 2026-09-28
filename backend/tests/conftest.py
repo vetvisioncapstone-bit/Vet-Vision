@@ -64,6 +64,13 @@ def stocked(branches):
 
 
 @pytest.fixture(autouse=True)
+def _no_turnstile(settings):
+    """Tests never call Cloudflare or Gemini; test_turnstile.py and test_assistant.py fake them where needed."""
+    settings.TURNSTILE_SECRET_KEY = ""
+    settings.GEMINI_API_KEY = ""
+
+
+@pytest.fixture(autouse=True)
 def _fresh_throttles():
     """Throttle counters live in the cache; do not let one test's requests count against the next."""
     from django.core.cache import cache

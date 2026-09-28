@@ -27,8 +27,8 @@ function LoginPage() {
 
   const { login } = useAuth()
 
-  const handleLogin = async (email, password, remember) => {
-    const result = await login(email.trim(), password)
+  const handleLogin = async (email, password, remember, captcha) => {
+    const result = await login(email.trim(), password, captcha)
     if (!result.success) return result
 
     setSuccessData({ email, remember })

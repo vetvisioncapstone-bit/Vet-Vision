@@ -16,11 +16,12 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from clinic.models import Customer
 
+from core import turnstile
 from core.pagination import paginate, wants_page
 from core.ids import branch_letter, next_id
 from core.permissions import IsAdmin, branch_by_town
 
-from .audit import is_locked, record
+from .audit import client_ip, is_locked, record
 from .models import AuditLog, User
 
 
@@ -50,6 +51,16 @@ def revoke_sessions(user):
         BlacklistedToken.objects.get_or_create(token=token)
 
 
+def human_check_failed(request, email=""):
+    """None when the Turnstile token is genuine, else the 400 response to send back (and an audit entry).
+    Checked before the password, so a script without a token never gets to try passwords at all."""
+    if turnstile.verify(request.data.get("captcha"), client_ip(request)):
+        return None
+    record(request, "captcha_failed", email=email)
+    return Response({"detail": "The security check did not pass. Please complete it and try again."},
+                    status=status.HTTP_400_BAD_REQUEST)
+
+
 def session_response(user, status_code=200):
     refresh = RefreshToken.for_user(user)
     return Response({"access": str(refresh.access_token), "refresh": str(refresh), "user": user_payload(user)},
@@ -75,6 +86,9 @@ class RegisterView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        failed = human_check_failed(request, str(request.data.get("email", "")).strip().lower())
+        if failed:
+            return failed
         s = RegisterInput(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
@@ -126,6 +140,9 @@ class LoginView(APIView):
     def post(self, request):
         email = str(request.data.get("email", "")).strip().lower()
         password = request.data.get("password", "")
+        failed = human_check_failed(request, email)
+        if failed:
+            return failed
         if is_locked(email):
             record(request, "login_locked", email=email)
             return Response({"detail": "Too many failed attempts. Try again in 15 minutes."},
