@@ -12,13 +12,14 @@ import '../../styles/employee/employee-patients.css'
 import { formatDate, todayIso, dash, getStatusClass } from '../../utils/format'
 
 import Dialog from '../../components/shared/Dialog'
+import AvailedItemsPicker, { toPayload } from '../../components/shared/AvailedItemsPicker'
 import { onActivate } from '../../utils/a11y'
 // ==================== HELPERS ====================
 // Ported from employee-patients.js - uses the same API-backed patients as the
-// admin Patients page; the server scopes them to this employee's own branch. Only
-// a simplified consultation form is kept here (no availed-items pricing,
-// no blood-test/waiver upload, no follow-up flagging, no print) - matching
-// the reduced scope of the original employee-patients.html.
+// admin Patients page; the server scopes them to this employee's own branch. The
+// consultation form is simpler than the admin's (no blood-test/waiver upload, no
+// follow-up flagging, no print) but bills services and products the same way, so
+// visits recorded at the counter count on the dashboard.
 
 const PAGE_SIZE = 50
 
@@ -27,7 +28,7 @@ const EMPTY_PATIENT_FORM = {
   petName: '', petSpecie: '', petBreed: '', petSex: '', petDob: '', petAge: '', petMarking: ''
 }
 
-const EMPTY_CONSULT_FORM = { date: '', weight: '', notes: '', remarks: '' }
+const EMPTY_CONSULT_FORM = { date: '', weight: '', notes: '', remarks: '', availedItems: [] }
 
 export default function Patients() {
   const showToast = useToast()
@@ -180,7 +181,8 @@ export default function Patients() {
         date: consultForm.date,
         weight: consultForm.weight.trim(),
         notes: consultForm.notes.trim(),
-        remarks: consultForm.remarks.trim()
+        remarks: consultForm.remarks.trim(),
+        availedItems: toPayload(consultForm.availedItems)
       })
       setConsultForm({ ...EMPTY_CONSULT_FORM, date: todayIso() })
       showToast('Consultation logged.')
@@ -320,8 +322,8 @@ export default function Patients() {
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="src-pages-employee-patients-f3">Owner email <span className="required">*</span></label>
-              <input id="src-pages-employee-patients-f3" type="email" className="form-input" required value={form.ownerEmail} onChange={(e) => setForm(f => ({ ...f, ownerEmail: e.target.value }))} />
+              <label className="form-label" htmlFor="src-pages-employee-patients-f3">Owner email <span className="optional">(optional)</span></label>
+              <input id="src-pages-employee-patients-f3" type="email" className="form-input" value={form.ownerEmail} onChange={(e) => setForm(f => ({ ...f, ownerEmail: e.target.value }))} />
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="src-pages-employee-patients-f4">Owner address <span className="required">*</span></label>
@@ -439,6 +441,11 @@ export default function Patients() {
                 <div className="form-group">
                   <label className="form-label" htmlFor="src-pages-employee-patients-f16">Remarks</label>
                   <input id="src-pages-employee-patients-f16" type="text" className="form-input" value={consultForm.remarks} onChange={(e) => setConsultForm(f => ({ ...f, remarks: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <span className="form-label">Services / products</span>
+                  <AvailedItemsPicker branch={detailPatient.branch} items={consultForm.availedItems}
+                    onChange={(availedItems) => setConsultForm(f => ({ ...f, availedItems }))} />
                 </div>
                 <div className="consultation-form-actions">
                   <button type="submit" className="patient-save-btn" disabled={saving}>Save consultation</button>

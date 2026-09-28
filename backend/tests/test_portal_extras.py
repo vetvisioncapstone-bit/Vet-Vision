@@ -20,7 +20,7 @@ def test_owner_can_register_and_is_signed_in(api, branches):
     assert r.status_code == 201 and r.data["access"] and r.data["user"]["role"] == "customer"
     u = User.objects.get(email="maria.santos@gmail.com")
     assert u.customer.customer_name == "Maria Santos" and u.customer.branch.town == "Ibaan"
-    assert u.check_password(PASSWORD) and not u.must_change_password
+    assert u.check_password(PASSWORD)
     assert AuditLog.objects.filter(action="register").exists()
 
 

@@ -7,11 +7,10 @@ import "../../styles/customer/style.css";
 import SkipLink from "../../components/shared/SkipLink";
 import SideNav from "./components/SideNav";
 import HomeScreen from "./components/HomeScreen";
-import ChangePasswordScreen from "./components/ChangePasswordScreen";
 import { useAuth } from "../../hooks/useAuth";
 
 export default function CustomerApp() {
-  const { session, logout, setUser } = useAuth();
+  const { session, logout } = useAuth();
   const [page, setPage] = useState("home");
   const [navExpanded, setNavExpanded] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
@@ -55,10 +54,6 @@ export default function CustomerApp() {
   function handleNavigate(id) {
     setPage(id);
     setNavExpanded(false);
-  }
-
-  if (session?.mustChangePassword) {
-    return <ChangePasswordScreen email={session.email} onDone={setUser} onCancel={handleLogout} />;
   }
 
   return (

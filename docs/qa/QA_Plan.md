@@ -84,7 +84,7 @@ Tester fills the last column: Pass / Fail / note. Use a staff and an admin accou
 | C-21 | System settings | Open the activity log, search an email | Sign-ins, failures and deletions listed | |
 | C-22 | Customer portal | On the login page choose "Create an account" and register | Signed in to the portal; empty pets list | |
 | C-23 | Customer portal | Register a pet; open its record page | Pet listed; "No visits yet" | |
-| C-24 | Customer portal | Legacy owner signs in with the starter password | Forced to choose a new password | |
+| C-24 | Customer portal | Imported owner tries the old starter password, then signs up with the email on their clinic record | Sign-in refused; sign-up refused with "already on a clinic record" | |
 | C-25 | Customer portal | Open the bell | Reminders (follow-up, vaccine booster) and announcements | |
 | C-26 | Customer portal | Open Calendar, click a Sunday and a holiday | Shown closed with the reason; half days marked | |
 | C-27 | Customer portal | Try to open another owner's pet URL / API | Not found or forbidden | |

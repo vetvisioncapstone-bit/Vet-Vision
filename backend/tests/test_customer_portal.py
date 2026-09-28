@@ -32,23 +32,16 @@ def login(api, email, password):
     return api.post("/api/auth/login/", {"email": email, "password": password})
 
 
-def test_first_login_creates_linked_user_and_forces_password_change(api, owners):
-    r = login(api, "Clarissa.Umali@gmail.com", "password")
-    assert r.status_code == 200
-    u = r.data["user"]
-    assert u["role"] == "customer" and u["customerId"] == "CUS-I0001" and u["mustChangePassword"] is True
-    assert User.objects.get(email="clarissa.umali@gmail.com").customer_id == "CUS-I0001"
-    assert login(api, "clarissa.umali@gmail.com", "wrong").status_code == 401
-
-
-def test_changed_password_replaces_legacy_hash(api, owners):
-    tokens = login(api, "clarissa.umali@gmail.com", "password").data
-    c = client_for(User.objects.get(email="clarissa.umali@gmail.com"))
-    assert c.patch("/api/auth/me/", {"currentPassword": "password", "newPassword": "Br@nd-new-Pass77"}).status_code == 200
+def test_imported_customers_have_no_login_even_with_the_old_starter_password(api, owners):
     assert login(api, "clarissa.umali@gmail.com", "password").status_code == 401
-    r = login(api, "clarissa.umali@gmail.com", "Br@nd-new-Pass77")
-    assert r.status_code == 200 and r.data["user"]["mustChangePassword"] is False
-    assert tokens["access"]
+    assert not User.objects.filter(role="customer").exists()
+
+
+def test_a_clinic_record_email_cannot_be_claimed_by_signing_up(api, owners):
+    r = api.post("/api/auth/register/", {"firstName": "Clarissa", "lastName": "Umali", "email": "clarissa.umali@gmail.com",
+                                         "password": "Br@nd-new-Pass77"})
+    assert r.status_code == 400 and "clinic record" in str(r.data)
+    assert not User.objects.filter(email="clarissa.umali@gmail.com").exists()
 
 
 def test_history_includes_legacy_service_visits(owners, branches):

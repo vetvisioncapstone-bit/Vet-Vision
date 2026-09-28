@@ -4,7 +4,8 @@ import { usePatient, usePatients } from '../../hooks/usePatients'
 import PatientPrintSheet from './PatientPrintSheet'
 import { useDebounced } from '../../hooks/useDebounced'
 import { getLastVisitDate } from '../../utils/visits'
-import { useInventory } from '../../hooks/useInventory'
+import { useServiceCatalog } from '../../hooks/useInventory'
+import AvailedItemsPicker, { toPayload } from '../../components/shared/AvailedItemsPicker'
 import { useToast } from '../../components/shared/Toast'
 import { errorMessage } from '../../api/client'
 import '../../styles/admin/patients.css'
@@ -13,25 +14,6 @@ import { formatDate, todayIso, formatPrice, dash, getStatusClass, isImageDataUrl
 import Dialog from '../../components/shared/Dialog'
 import { onActivate } from '../../utils/a11y'
 // ==================== CONSTANTS ====================
-// The clinic's service catalog. Products, on the other hand, come from the
-// Inventory page's own records (useInventory) so the two stay a single
-// source of truth instead of drifting apart. Ported verbatim from
-// admin/patients.js's CLINIC_SERVICES.
-const CLINIC_SERVICES = [
-  'Consultation / Check-up',
-  'Vaccination',
-  'Deworming',
-  'Grooming',
-  'Dental Cleaning',
-  'Spay/Neuter Surgery',
-  'X-Ray',
-  'Laboratory Test',
-  'Ultrasound',
-  'Boarding',
-  'Wound Care / Minor Surgery',
-  'Microchipping'
-]
-
 const PAGE_SIZE = 50
 
 const EMPTY_PATIENT_FORM = {
@@ -49,7 +31,7 @@ function getVisitCount(patient) {
 }
 
 export default function Patients() {
-  const { items: inventoryItems } = useInventory()
+  const { data: serviceCatalog } = useServiceCatalog()
   const showToast = useToast()
   const [saving, setSaving] = useState(false)
   const [page, setPage] = useState(1)
@@ -86,9 +68,6 @@ export default function Patients() {
   const [consultDate, setConsultDate] = useState(todayIso())
   const [consultWeight, setConsultWeight] = useState('')
   const [consultNotes, setConsultNotes] = useState('')
-  const [availedType, setAvailedType] = useState('')
-  const [availedItem, setAvailedItem] = useState('')
-  const [availedPrice, setAvailedPrice] = useState('')
   const [pendingAvailedItems, setPendingAvailedItems] = useState([])
   const [bloodTest, setBloodTest] = useState({ dataUrl: null, name: '' })
   const [waiver, setWaiver] = useState({ dataUrl: null, name: '' })
@@ -144,20 +123,6 @@ export default function Patients() {
     [detailFromServer, patients, currentDetailPatientId]
   )
 
-  const availedItemOptions = useMemo(() => {
-    if (!availedType) return []
-    if (availedType === 'Service') return CLINIC_SERVICES
-    return [...new Set(inventoryItems.map(p => p.name).filter(Boolean))].sort((a, b) => a.localeCompare(b))
-  }, [availedType, inventoryItems])
-
-  // Suggested price per product name (first inventory row with a unit price).
-  const productPrices = useMemo(() => {
-    const map = new Map()
-    inventoryItems.forEach(p => {
-      if (p.name && p.unitPrice != null && p.unitPrice !== '' && !map.has(p.name)) map.set(p.name, p.unitPrice)
-    })
-    return map
-  }, [inventoryItems])
 
   // ==================== NEW / EDIT PATIENT MODAL ====================
 
@@ -299,9 +264,6 @@ export default function Patients() {
     setConsultWeight('')
     setConsultNotes('')
     setPendingAvailedItems([])
-    setAvailedType('')
-    setAvailedItem('')
-    setAvailedPrice('')
     setBloodTest({ dataUrl: null, name: '' })
     if (bloodTestInputRef.current) bloodTestInputRef.current.value = ''
     setWaiver({ dataUrl: null, name: '' })
@@ -326,29 +288,6 @@ export default function Patients() {
     if (patient) openEditModal(patient)
   }
 
-  function handleAvailedTypeChange(value) {
-    setAvailedType(value)
-    setAvailedItem('')
-  }
-
-  function handleAvailedAdd() {
-    if (!availedType || !availedItem) {
-      showToast('Pick a type and an item first.')
-      return
-    }
-    setPendingAvailedItems(prev => [...prev, { type: availedType, name: availedItem, price: Number(availedPrice) || 0 }])
-    setAvailedItem('')
-    setAvailedPrice('')
-  }
-
-  function setAvailedItemAndPrice(name) {
-    setAvailedItem(name)
-    if (availedType === 'Product' && productPrices.has(name)) setAvailedPrice(String(productPrices.get(name)))
-  }
-
-  function handleAvailedRemove(index) {
-    setPendingAvailedItems(prev => prev.filter((_, i) => i !== index))
-  }
 
   function handleBloodTestChange(e) {
     const file = e.target.files[0]
@@ -404,9 +343,7 @@ export default function Patients() {
       date: consultDate,
       weight: consultWeight.trim(),
       notes: consultNotes.trim(),
-      services: pendingAvailedItems.map(item => `${item.type}: ${item.name} — ${formatPrice(item.price)}`).join(', '),
-      availedItems: pendingAvailedItems.slice(),
-      totalPrice: pendingAvailedItems.reduce((sum, item) => sum + Number(item.price || 0), 0),
+      availedItems: toPayload(pendingAvailedItems),
       remarks: consultRemarks.trim(),
       bloodTestImage: bloodTest.dataUrl,
       bloodTestName: bloodTest.name,
@@ -671,8 +608,8 @@ export default function Patients() {
                     <input type="text" id="ownerSurname" className="form-input" required value={patientForm.ownerSurname} onChange={(e) => updatePatientField('ownerSurname', e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label" htmlFor="ownerEmail">Email <span className="required">*</span></label>
-                    <input type="email" id="ownerEmail" className="form-input" required value={patientForm.ownerEmail} onChange={(e) => updatePatientField('ownerEmail', e.target.value)} />
+                    <label className="form-label" htmlFor="ownerEmail">Email <span className="optional">(optional)</span></label>
+                    <input type="email" id="ownerEmail" className="form-input" value={patientForm.ownerEmail} onChange={(e) => updatePatientField('ownerEmail', e.target.value)} />
                   </div>
                   <div className="form-group">
                     <label className="form-label" htmlFor="ownerAddress">Address <span className="required">*</span></label>
@@ -833,58 +770,11 @@ export default function Patients() {
                 </div>
                 <div className="form-group">
                   <label className="form-label" htmlFor="consultNotes">Treatment / findings <span className="required">*</span></label>
-                  <textarea id="consultNotes" className="form-input" rows="3" placeholder="Diagnosis, prescription, dosage…\" required value={consultNotes} onChange={(e) => setConsultNotes(e.target.value)}></textarea>
+                  <textarea id="consultNotes" className="form-input" rows="3" placeholder="Diagnosis, prescription, dosage…" required value={consultNotes} onChange={(e) => setConsultNotes(e.target.value)}></textarea>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Services / products</label>
-                  <div className="availed-picker">
-                    <div className="form-row availed-picker-row">
-                      <div className="form-group">
-                        <label className="form-label" htmlFor="availedType">Type</label>
-                        <div className="form-select-wrapper">
-                          <select id="availedType" className="form-input" value={availedType} onChange={(e) => handleAvailedTypeChange(e.target.value)}>
-                            <option value="" disabled hidden>Select type</option>
-                            <option value="Service">Service</option>
-                            <option value="Product">Product</option>
-                          </select>
-                          <svg className="form-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                        </div>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label" htmlFor="availedItem">Item</label>
-                        <div className="form-select-wrapper">
-                          <select id="availedItem" className="form-input" disabled={!availedType || availedItemOptions.length === 0} value={availedItem} onChange={(e) => setAvailedItemAndPrice(e.target.value)}>
-                            <option value="" disabled hidden>
-                              {!availedType ? 'Select type first' : (availedItemOptions.length === 0 ? 'No products in inventory yet' : 'Select item')}
-                            </option>
-                            {availedItemOptions.map(name => <option key={name} value={name}>{name}</option>)}
-                          </select>
-                          <svg className="form-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                        </div>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label" htmlFor="availedPrice">Price (₱)</label>
-                        <input type="number" id="availedPrice" className="form-input" min="0" step="0.01" placeholder="0.00" value={availedPrice} onChange={(e) => setAvailedPrice(e.target.value)} />
-                      </div>
-                    </div>
-                    <button type="button" className="availed-add-btn" onClick={handleAvailedAdd}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                      <span>Add to list</span>
-                    </button>
-                    <div className="availed-chip-list">
-                      {pendingAvailedItems.map((item, index) => (
-                        <span className={`availed-chip type-${item.type.toLowerCase()}`} key={index}>
-                          {item.type}: {item.name} — {formatPrice(item.price)}
-                          <button type="button" className="availed-chip-remove" aria-label={`Remove ${item.name}`} onClick={() => handleAvailedRemove(index)}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                          </button>
-                        </span>
-                      ))}
-                      {pendingAvailedItems.length > 0 && (
-                        <span className="availed-total">Total: {formatPrice(pendingAvailedItems.reduce((sum, item) => sum + Number(item.price || 0), 0))}</span>
-                      )}
-                    </div>
-                  </div>
+                  <AvailedItemsPicker branch={currentPatient.branch} items={pendingAvailedItems} onChange={setPendingAvailedItems} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Blood test result</label>
@@ -939,7 +829,7 @@ export default function Patients() {
                       <div className="form-select-wrapper">
                         <select id="consultFollowUpNote" className="form-input" ref={followUpNoteFieldRef} required value={consultFollowUpNote} onChange={(e) => setConsultFollowUpNote(e.target.value)}>
                           <option value="" disabled hidden>Select service</option>
-                          {CLINIC_SERVICES.map(name => <option key={name} value={name}>{name}</option>)}
+                          {(serviceCatalog || []).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                         </select>
                         <svg className="form-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                       </div>

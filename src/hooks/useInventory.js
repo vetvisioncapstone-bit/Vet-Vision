@@ -6,6 +6,12 @@ import { useSession } from './useSession'
 //                        delivery, expiration, photo, unitPrice }   (empty string for missing dates)
 // Staff are confined to their own branch by the server; admins may pass { branch: 'Ibaan' }.
 // Mutations throw ApiError (use errorMessage(err) from ../api/client for a toast).
+// The clinic's services: [{ id, name, category, prices: { Ibaan: 450, 'San Jose': 400 } }] (a branch may have none).
+export function useServiceCatalog() {
+  const { session } = useSession()
+  return useResource('/services/', { enabled: !!session })
+}
+
 export function useInventory({ branch } = {}) {
   const { session } = useSession()
   const key = `/inventory/${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`

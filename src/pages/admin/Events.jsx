@@ -192,7 +192,7 @@ export default function Events() {
               <textarea
                 id="postComposerInput"
                 className="composer-input"
-                placeholder="Share an announcement or update with pet owners…\"
+                placeholder="Share an announcement or update with pet owners…"
                 rows="2"
                 value={composerText}
                 onChange={(e) => setComposerText(e.target.value)}

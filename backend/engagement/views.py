@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from clinic.models import MedicalRecord, Pet
+from clinic.views import remove_consultation
 from core.pagination import paginate, wants_page
 from core.validators import data_url
 from accounts.audit import record
@@ -245,11 +246,12 @@ class RequestAction(APIView):
 
     @staticmethod
     def _execute_delete(r):
-        model = {
-            ApprovalRequest.DELETE_PRODUCT: Inventory,
-            ApprovalRequest.DELETE_PATIENT: Pet,
-            ApprovalRequest.DELETE_CONSULTATION: MedicalRecord,
-        }[r.kind]
+        if r.kind == ApprovalRequest.DELETE_CONSULTATION:
+            rec = MedicalRecord.objects.filter(pk=r.target_id).first()
+            if rec:  # already gone is fine
+                remove_consultation(rec)  # also drops the visit and sale it billed
+            return
+        model = {ApprovalRequest.DELETE_PRODUCT: Inventory, ApprovalRequest.DELETE_PATIENT: Pet}[r.kind]
         model.objects.filter(pk=r.target_id).delete()  # already gone is fine
 
 

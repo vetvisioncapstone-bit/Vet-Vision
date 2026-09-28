@@ -1,7 +1,8 @@
 from django.urls import path
 
 from .views import (
-    BranchList, ConsultationCreate, ConsultationDetail, MyPets, MyReminders, PatientDetail, PatientList, StaffDetail, StaffList,
+    BranchList, ConsultationCreate, ConsultationDetail,
+    ServiceCatalog, MyPets, MyReminders, PatientDetail, PatientList, StaffDetail, StaffList,
 )
 
 urlpatterns = [
@@ -12,6 +13,7 @@ urlpatterns = [
     path("patients/<str:pk>/", PatientDetail.as_view()),
     path("patients/<str:pk>/consultations/", ConsultationCreate.as_view()),
     path("consultations/<str:pk>/", ConsultationDetail.as_view()),
+    path("services/", ServiceCatalog.as_view()),
     path("staff-accounts/", StaffList.as_view()),
     path("staff-accounts/<str:pk>/", StaffDetail.as_view()),
 ]

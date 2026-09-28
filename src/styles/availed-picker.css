@@ -1,0 +1,114 @@
+/* Services / products billed on a visit (components/shared/AvailedItemsPicker.jsx), used by the admin and staff
+   Patients pages, so it has its own sheet instead of living in one page's CSS. */
+
+.availed-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: #f9fbfa;
+    border: 1px solid #ececec;
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.availed-picker .form-row {
+    gap: 12px;
+}
+
+.availed-picker .availed-picker-row { /* beats the page sheets' .form-row, whatever order they load in */
+    grid-template-columns: 120px minmax(0, 1fr) 64px 104px; /* type, item, qty, price */
+}
+
+@media (max-width: 640px) {
+    .availed-picker .availed-picker-row {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+select.form-input:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.availed-add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    align-self: flex-start;
+    padding: 8px 14px;
+    background: #ffffff;
+    border: 1px solid #dfe3e1;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 600;
+    color: #163a26;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.availed-add-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.availed-add-btn:hover {
+    background: #f0f4f1;
+}
+
+.availed-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.availed-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px 6px 12px;
+    background: #e4f6e8;
+    color: #17693a;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.availed-chip.type-product {
+    background: #eaf1fb;
+    color: #1d5fae;
+}
+
+.availed-chip-remove {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.08);
+    color: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.availed-chip-remove svg {
+    width: 10px;
+    height: 10px;
+}
+
+.availed-total {
+    display: flex;
+    align-items: center;
+    padding: 6px 4px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #163a26;
+    width: 100%;
+}
+
+.availed-chip-remove:hover {
+    background: rgba(0, 0, 0, 0.16);
+}

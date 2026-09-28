@@ -45,13 +45,17 @@ export function usePatients({ branch, status, q, page, pageSize, year, visitYear
     // Admin only. Staff raise a delete request instead.
     remove: async (id) => { await api.del(`/patients/${id}/`); await refresh() },
     // Resolves with the updated patient (including the new status and consultations).
+    // A consultation bills services and sells products, so stock and the dashboard change too.
     addConsultation: async (patientId, input) => {
       const row = await api.post(`/patients/${patientId}/consultations/`, input)
-      await refresh()
+      await Promise.all([refresh(), invalidate('/inventory/'), invalidate('/analytics/')])
       return row
     },
-    // Admin only.
-    removeConsultation: async (consultationId) => { await api.del(`/consultations/${consultationId}/`); await refresh() }
+    // Admin only. Also undoes the visit's billing and returns its products to stock.
+    removeConsultation: async (consultationId) => {
+      await api.del(`/consultations/${consultationId}/`)
+      await Promise.all([refresh(), invalidate('/inventory/'), invalidate('/analytics/')])
+    }
   }
 }
 

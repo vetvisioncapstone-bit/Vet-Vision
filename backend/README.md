@@ -38,7 +38,8 @@ Staff logins are created from the admin UI (User Management). The 7 seeded staff
 If the schema and data are already in PostgreSQL (for example restored from `vetvisiondb.sql` in pgAdmin), skip
 `load_legacy_data` and run `python manage.py adopt_existing_db` once (back up first). It adds only the columns and tables
 the backend needs and marks the migrations as applied. `python manage.py fill_customer_fields` fills empty customer
-names, emails and starter passwords (customers must change the starter password at first login).
+names. It invents no emails or passwords: customer accounts come only from pet owners registering on the
+sign-in page (or test accounts).
 
 ## Tests
 
@@ -80,8 +81,9 @@ Staff cannot hard-delete: they raise an approval request and the admin's approva
 
 ## Security
 
-- Passwords are hashed (PBKDF2) and validated (length, common, all-numeric). Customers imported with a starter password must
-  change it at first sign-in.
+- Passwords are hashed (PBKDF2) and validated (length, common, all-numeric). Imported customer records have no login
+  (the old starter-password hashes on the customer table are never checked); a sign-up cannot use an email that is
+  already on a clinic record, so nobody can claim someone else's pets.
 - Access tokens last 15 minutes; refresh tokens 1 day, **rotate on every use** and the old one is blacklisted. Sign-out
   blacklists the token; changing (or an admin resetting) a password ends every other session; deactivating a user stops
   them at once.
@@ -150,8 +152,7 @@ if it is not on the PATH).
    work. In the Cloudflare dashboard (Turnstile -> Add widget) add the site's hostname to get the real site and secret keys.
 4. Create the admin login (`python manage.py createsuperuser` in the Render shell), then delete any test accounts.
 
-Customer records are personal data (Data Privacy Act): use the real clinic data only on a host you control and keep the
-starter-password forced change on.
+Customer records are personal data (Data Privacy Act): use the real clinic data only on a host you control.
 
 ## Notes
 

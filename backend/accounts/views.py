@@ -1,5 +1,4 @@
 from django.contrib.auth import authenticate
-from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
@@ -41,7 +40,6 @@ def user_payload(user):
         "staffId": user.staff_id,
         "position": user.staff.role if user.staff_id else None,
         "customerId": user.customer_id,
-        "mustChangePassword": user.must_change_password,
     }
 
 
@@ -93,8 +91,12 @@ class RegisterView(APIView):
         s.is_valid(raise_exception=True)
         d = s.validated_data
         email = d["email"].strip().lower()
-        if User.objects.filter(email=email).exists() or Customer.objects.filter(email__iexact=email).exists():
+        if User.objects.filter(email=email).exists():
             raise serializers.ValidationError({"email": "An account with this email already exists. Try signing in."})
+        if Customer.objects.filter(email__iexact=email).exists():
+            # A clinic record already uses this email. Linking it here would let anyone claim someone else's pets.
+            raise serializers.ValidationError({"email": "This email is already on a clinic record. Please ask the "
+                                                        "clinic to set up your account, or use another email."})
         try:
             validate_password(d["password"])
         except DjangoValidationError as e:
@@ -113,25 +115,6 @@ class RegisterView(APIView):
         return session_response(user, status.HTTP_201_CREATED)
 
 
-def customer_first_login(email, password):
-    """Customers from the legacy data have a password hash on the customer row but no login user yet.
-    Create the linked user the first time they sign in with it. Once a user exists, the customer row's
-    hash is ignored, so an old password never keeps working after a change."""
-    customer = Customer.objects.filter(email__iexact=email, is_active=True).first()
-    if not customer or not customer.password_hash or hasattr(customer, "user"):
-        return None
-    if User.objects.filter(email=email).exists() or not check_password(password, customer.password_hash):
-        return None
-    return User.objects.create(
-        email=email,
-        name=customer.customer_name,
-        role=User.ROLE_CUSTOMER,
-        customer=customer,
-        password=customer.password_hash,
-        must_change_password=True,
-    )
-
-
 class LoginView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -147,7 +130,9 @@ class LoginView(APIView):
             record(request, "login_locked", email=email)
             return Response({"detail": "Too many failed attempts. Try again in 15 minutes."},
                             status=status.HTTP_429_TOO_MANY_REQUESTS)
-        user = authenticate(request, username=email, password=password) or customer_first_login(email, password)
+        # Customer logins exist only for owners who registered (or test accounts). Imported customer records have no
+        # login: the old starter-password hashes on the customer table are never checked.
+        user = authenticate(request, username=email, password=password)
         if user is None or not user.is_active or (user.staff_id and not user.staff.is_active):
             record(request, "login_failed", email=email)
             return Response({"detail": "Incorrect email or password."}, status=status.HTTP_401_UNAUTHORIZED)
@@ -226,7 +211,6 @@ class MeView(APIView):
             except DjangoValidationError as e:
                 return Response({"newPassword": list(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
             user.set_password(data["newPassword"])
-            user.must_change_password = False
         user.save()
         payload = user_payload(user)
         if data.get("newPassword"):

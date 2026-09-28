@@ -1,8 +1,11 @@
+import re
 from datetime import date, timedelta
+from decimal import Decimal
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.utils import timezone
 from django.db.models import Exists, F, Max, OuterRef, Prefetch, Q, Subquery
 from rest_framework import serializers, status
 from rest_framework.exceptions import NotFound, PermissionDenied
@@ -17,7 +20,9 @@ from core.pagination import paginate, wants_page
 from core.validators import data_url
 from core.permissions import IsAdmin, IsClinicStaff, IsCustomer, branch_by_town, scope_branch
 
-from sales.models import ServiceDetail, ServiceTransaction
+from inventory.models import Inventory, Service, ServiceBranchPrice
+from sales.models import Sale, ServiceDetail, ServiceTransaction
+from sales.views import create_sale, undo_sale
 
 from .models import Branch, Customer, MedicalRecord, Pet, Staff
 
@@ -179,7 +184,7 @@ def _patient_stats(request):
 class PatientInput(serializers.Serializer):
     ownerName = serializers.CharField(max_length=60)
     ownerSurname = serializers.CharField(max_length=60)
-    ownerEmail = serializers.EmailField(max_length=100)
+    ownerEmail = serializers.EmailField(max_length=100, required=False, allow_blank=True)  # many owners have none
     ownerAddress = serializers.CharField(max_length=120)
     ownerMobile = serializers.CharField(max_length=20)
     petName = serializers.CharField(max_length=40)
@@ -196,7 +201,7 @@ def _apply_owner(customer, d):
     customer.first_name = d["ownerName"].strip()
     customer.last_name = d["ownerSurname"].strip()
     customer.customer_name = f"{customer.first_name} {customer.last_name}".strip()[:80]
-    customer.email = d["ownerEmail"].strip().lower()
+    customer.email = d.get("ownerEmail", "").strip().lower() or None  # NULL, not "": the column is unique
     customer.address = d["ownerAddress"].strip()
     customer.contact_no = d["ownerMobile"].strip()
 
@@ -229,8 +234,8 @@ class PatientList(APIView):
         d = s.validated_data
         user = request.user
         branch = user.staff.branch if user.role == "staff" else branch_by_town(d.get("branch") or "")
-        email = d["ownerEmail"].strip().lower()
-        if Customer.objects.filter(email__iexact=email).exists():
+        email = d.get("ownerEmail", "").strip().lower()
+        if email and Customer.objects.filter(email__iexact=email).exists():
             raise serializers.ValidationError(EMAIL_TAKEN)
         letter = branch_letter(branch.branch_id)
         customer = Customer(
@@ -265,8 +270,8 @@ class PatientDetail(APIView):
         s.is_valid(raise_exception=True)
         d = s.validated_data
         customer = pet.customer
-        email = d["ownerEmail"].strip().lower()
-        if Customer.objects.filter(email__iexact=email).exclude(pk=customer.pk).exists():
+        email = d.get("ownerEmail", "").strip().lower()
+        if email and Customer.objects.filter(email__iexact=email).exclude(pk=customer.pk).exists():
             raise serializers.ValidationError(EMAIL_TAKEN)
         _apply_owner(customer, d)
         if request.user.role == "admin" and d.get("branch"):
@@ -287,13 +292,27 @@ class PatientDetail(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class AvailedItem(serializers.Serializer):
+    """One thing billed on a visit: a service from the clinic's catalog or a product from the branch's stock."""
+
+    type = serializers.ChoiceField(choices=["Service", "Product"])
+    serviceId = serializers.CharField(required=False, max_length=10)
+    inventoryId = serializers.CharField(required=False, max_length=12)
+    quantity = serializers.IntegerField(min_value=1, max_value=999, default=1)
+    price = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
+
+    def validate(self, attrs):
+        key = "serviceId" if attrs["type"] == "Service" else "inventoryId"
+        if not attrs.get(key):
+            raise serializers.ValidationError({key: "Pick the item from the list."})
+        return attrs
+
+
 class ConsultationInput(serializers.Serializer):
     date = serializers.DateField()
     weight = serializers.CharField(required=False, allow_blank=True, max_length=40)
     notes = serializers.CharField(allow_blank=False)
-    services = serializers.CharField(required=False, allow_blank=True)
-    availedItems = serializers.ListField(child=serializers.DictField(), required=False)
-    totalPrice = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, min_value=0)
+    availedItems = AvailedItem(many=True, required=False)
     remarks = serializers.CharField(required=False, allow_blank=True)
     bloodTestImage = serializers.CharField(required=False, allow_null=True, allow_blank=True, validators=[data_url])
     bloodTestName = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=200)
@@ -303,7 +322,51 @@ class ConsultationInput(serializers.Serializer):
     followUpNote = serializers.CharField(required=False, allow_blank=True, max_length=200)
 
 
+def _kg(text):
+    """'3.5 kg' -> Decimal('3.5'); None when there is no number."""
+    m = re.search(r"\d+(?:\.\d+)?", text or "")
+    return Decimal(m.group()) if m else None
+
+
+def _bill_services(request, pet, branch, items, on, weight):
+    """The visit's services become a service transaction, exactly like the clinic's own records, so they count
+    in revenue, service demand, forecasts and reports. Prices are as entered (fees vary per case); the cost comes
+    from the catalog. The service trigger deducts any supplies listed in service_product_usage."""
+    catalog = {s.service_id: s for s in Service.objects.filter(pk__in=[i["serviceId"] for i in items])}
+    missing = sorted({i["serviceId"] for i in items} - set(catalog))
+    if missing:
+        raise serializers.ValidationError({"availedItems": f"Unknown service: {', '.join(missing)}."})
+    costs = {p.service_id: p.unit_capital
+             for p in ServiceBranchPrice.objects.filter(service_id__in=list(catalog), branch=branch)}
+    staff = request.user.staff if request.user.staff_id else None
+    txn = ServiceTransaction.objects.create(
+        service_txn_id=next_id(ServiceTransaction, "service_txn_id", f"SV-{branch_letter(branch.branch_id)}-", 6),
+        branch=branch, customer=pet.customer, pet=pet, txn_date=on,
+        txn_time=timezone.localtime().time().replace(microsecond=0), weight_kg=_kg(weight),
+        payment_method="Cash", payment_status="Paid", total_amount=Decimal(0), created_by=staff,
+    )
+    total = Decimal(0)
+    for i in items:
+        capital = costs.get(i["serviceId"]) or Decimal(0)
+        line_total, line_capital = i["price"] * i["quantity"], capital * i["quantity"]
+        total += line_total
+        ServiceDetail.objects.create(
+            service_detail_id=next_id(ServiceDetail, "service_detail_id", "VD-", 7), service_txn=txn,
+            service=catalog[i["serviceId"]], staff=staff, quantity=i["quantity"], unit_price=i["price"],
+            unit_capital=capital, line_total=line_total, line_capital=line_capital,
+            line_profit=line_total - line_capital,
+        )
+    txn.total_amount = total
+    txn.save(update_fields=["total_amount"])
+    record(request, "visit.create", target=txn.service_txn_id)
+    return txn, catalog
+
+
 class ConsultationCreate(APIView):
+    """Save a visit. Besides the medical record, the billed services become a service transaction and the products
+    handed out become a sale to the owner (stock is deducted by the database triggers), so the visit shows up on the
+    dashboard, in forecasts and reports, and once in the owner's history."""
+
     permission_classes = [IsClinicStaff]
 
     @transaction.atomic
@@ -318,48 +381,99 @@ class ConsultationCreate(APIView):
         note = (d.get("followUpNote") or "").strip() if follow_up else ""
         if follow_up and not note:
             raise serializers.ValidationError({"followUpNote": "Say what the follow-up is for."})
+
+        branch = pet.customer.branch
         items = d.get("availedItems", [])
+        services = [i for i in items if i["type"] == "Service"]
+        products = [i for i in items if i["type"] == "Product"]
+        txn, catalog = (None, {})
+        if services:
+            txn, catalog = _bill_services(request, pet, branch, services, d["date"], d.get("weight"))
+        sale = create_sale(request, branch, products, customer=pet.customer, on=d["date"]) if products else None
+        names = {inv.inventory_id: inv.product.product_name for inv in
+                 Inventory.objects.select_related("product").filter(pk__in=[i["inventoryId"] for i in products])}
+
+        availed = []
+        for i in items:
+            service = i["type"] == "Service"
+            entry = {
+                "type": i["type"],
+                "id": i["serviceId"] if service else i["inventoryId"],
+                "name": catalog[i["serviceId"]].service_name if service else names[i["inventoryId"]],
+                "quantity": i["quantity"],
+                "price": float(i["price"]),
+            }
+            if not service:
+                entry["saleId"] = sale.sale_id
+            availed.append(entry)
+
         MedicalRecord.objects.create(
             record_id=next_id(MedicalRecord, "record_id", "MR-", 8),
             pet=pet,
-            branch=pet.customer.branch,
+            branch=branch,
             staff=request.user.staff if request.user.staff_id else None,
             record_date=d["date"],
             record_type="Consultation",
             treatment=d["notes"].strip(),
             remarks=(d.get("remarks") or "").strip() or None,
             weight=(d.get("weight") or "").strip() or None,
-            services=d.get("services") or None,
-            availed_items=items,
-            total_price=d.get("totalPrice", sum(float(i.get("price") or 0) for i in items)),
+            services=", ".join(f"{a['name']} x{a['quantity']}" for a in availed) or None,
+            availed_items=availed,
+            total_price=sum((Decimal(str(a["price"])) * a["quantity"] for a in availed), Decimal(0)),
             blood_test_image=d.get("bloodTestImage") or None,
             blood_test_name=d.get("bloodTestName") or None,
             waiver_image=d.get("waiverImage") or None,
             waiver_name=d.get("waiverName") or None,
             follow_up=follow_up,
             follow_up_note=note or None,
+            source_txn_id=txn.service_txn_id if txn else None,  # the owner's history then lists the visit once
         )
         if follow_up:
             pet.status, pet.follow_up_note = FOLLOW_UP, note
-        elif pet.status == FOLLOW_UP and any(
-            i.get("type") == "Service" and i.get("name") == pet.follow_up_note for i in items
-        ):
+        elif pet.status == FOLLOW_UP and any(a["type"] == "Service" and a["name"] == pet.follow_up_note for a in availed):
             # Resolved only when the very service that was due got availed on this visit.
             pet.status, pet.follow_up_note = "Active", None
         pet.save(update_fields=["status", "follow_up_note"])
         return Response(patient_row(_pets(request).get(pk=pet.pk)), status=status.HTTP_201_CREATED)
 
 
+def remove_consultation(rec):
+    """Delete a consultation together with the visit it billed and the products it sold (they go back on the
+    shelf), so revenue and stock drop back as if it had never been entered. Call inside a transaction."""
+    if rec.source_txn_id:
+        ServiceTransaction.objects.filter(pk=rec.source_txn_id).delete()
+    for sale_id in {i.get("saleId") for i in rec.availed_items or [] if isinstance(i, dict) and i.get("saleId")}:
+        sale = Sale.objects.filter(pk=sale_id).first()
+        if sale:
+            undo_sale(sale, f"Returned: consultation {rec.record_id} deleted")
+    rec.delete()
+
+
 class ConsultationDetail(APIView):
     permission_classes = [IsAdmin]
 
+    @transaction.atomic
     def delete(self, request, pk):
         rec = MedicalRecord.objects.filter(pk=pk).first()
         if rec is None:
             raise NotFound()
         record(request, "consultation.delete", target=rec.pk)
-        rec.delete()
+        remove_consultation(rec)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ServiceCatalog(APIView):
+    """The clinic's services with each branch's price, for the consultation form."""
+
+    permission_classes = [IsClinicStaff]
+
+    def get(self, request):
+        prices = {}
+        for p in ServiceBranchPrice.objects.select_related("branch"):
+            prices.setdefault(p.service_id, {})[p.branch.town] = None if p.unit_price is None else float(p.unit_price)
+        return Response([{"id": s.service_id, "name": s.service_name, "category": s.category,
+                          "prices": prices.get(s.service_id, {})}
+                         for s in Service.objects.order_by("category", "service_name")])
 
 
 # ---------------- staff accounts (admin only) ----------------
