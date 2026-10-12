@@ -89,13 +89,14 @@ def test_stats_ignore_search_but_follow_branch(admin, staff_ibaan, herd):
 def test_list_rows_leave_out_images_but_detail_has_them(admin, herd):
     pet = Pet.objects.get(pk="PET-I00001")
     MedicalRecord.objects.create(record_id="MR-00000002", pet=pet, branch=pet.customer.branch,
-                                 record_date=date(2026, 9, 1), blood_test_image="data:image/png;base64,AAAA",
-                                 waiver_image="data:image/png;base64,BBBB")
+                                 record_date=date(2026, 9, 1),
+                                 lab_results=[{"name": "cbc.png", "image": "data:image/png;base64,AAAA"}],
+                                 waivers=[{"name": "waiver.pdf", "image": "data:image/png;base64,BBBB"}])
     c = client_for(admin)
     row = c.get("/api/patients/?page=1&q=pet01").data["results"][0]
-    assert row["consultations"][0]["bloodTestImage"] is None and row["consultations"][0]["waiverImage"] is None
+    assert row["consultations"][0]["labResults"] == [] and row["consultations"][0]["waivers"] == []
     full = c.get("/api/patients/PET-I00001/").data["consultations"][0]
-    assert full["bloodTestImage"].endswith("AAAA") and full["waiverImage"].endswith("BBBB")
+    assert full["labResults"][0]["image"].endswith("AAAA") and full["waivers"][0]["image"].endswith("BBBB")
 
 
 def test_sales_inventory_and_posts_paginate(admin, staff_ibaan, stocked):

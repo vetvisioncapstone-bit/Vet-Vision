@@ -15,13 +15,23 @@
     gap: 12px;
 }
 
-.availed-picker .availed-picker-row { /* beats the page sheets' .form-row, whatever order they load in */
-    grid-template-columns: 120px minmax(0, 1fr) 64px 104px; /* type, item, qty, price */
+/* The picker sits in narrow places (the patient window's side column), so it follows its own width, not the
+   screen's: one row of four when there is room, else type + item over qty + price. */
+.availed-picker {
+    container-type: inline-size;
 }
 
-@media (max-width: 640px) {
+.availed-picker .availed-picker-row { /* beats the page sheets' .form-row, whatever order they load in */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.availed-picker .availed-picker-row > * {
+    min-width: 0;
+}
+
+@container (min-width: 560px) {
     .availed-picker .availed-picker-row {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 120px minmax(0, 1fr) 72px 110px; /* type, item, qty, price */
     }
 }
 
@@ -111,4 +121,24 @@ select.form-input:disabled {
 
 .availed-chip-remove:hover {
     background: rgba(0, 0, 0, 0.16);
+}
+
+/* The item box is a search field with the browser's own suggestion list. */
+.availed-search {
+    position: relative;
+}
+
+.availed-search svg {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    width: 15px;
+    height: 15px;
+    transform: translateY(-50%);
+    color: #646c68;
+    pointer-events: none;
+}
+
+.availed-picker .availed-search .form-input {
+    padding-left: 36px;
 }

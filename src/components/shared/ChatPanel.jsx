@@ -153,7 +153,8 @@ export default function ChatPanel() {
       <button
         ref={fab}
         type="button"
-        className="chat-fab"
+        className="icon-btn chat-toggle"
+        title="AI assistant"
         aria-label={open ? 'Close assistant' : 'Open assistant'}
         aria-expanded={open}
         aria-controls="vv-assistant"

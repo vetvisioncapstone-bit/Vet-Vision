@@ -108,8 +108,21 @@ code in `analytics/assistant.py`.
 
 - **Setup:** create a key at <https://aistudio.google.com> in a project **without billing** (that keeps it on the
   free tier: going over the limits returns "busy", never a bill). Put it in `backend/.env` as `GEMINI_API_KEY=...`.
-  `GEMINI_MODEL` (default `gemini-3.6-flash`) and `GEMINI_FALLBACK_MODEL` (default `gemini-3.5-flash-lite`, used when
-  the first is overloaded or out of free quota) switch models without code changes. See your limits in AI Studio.
+  `GEMINI_MODEL` (default `gemini-3.6-flash`) and `GEMINI_FALLBACK_MODEL` (comma-separated, default
+  `gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-flash-lite-latest`) switch models without code
+  changes. See your limits in AI Studio.
+- **Staying available:** free-tier models are often "high demand" (503) or out of quota (429). Each question tries the
+  models in order until one answers; each has its own quota. A model that was busy, out of quota, retired (404) or
+  unreachable is skipped for 60 seconds, so the next questions go straight to one that works. Tries stop after
+  45 seconds (the web server allows 60). A connection dropped before Google answers (some networks reset many TLS
+  handshakes) is retried at once on the same model, up to 4 times.
+- **Daily reports (function calling):** the monthly context does not break figures down by day, so Gemini is given
+  one function, `get_daily_report(start_date, end_date)`. When a question is about particular days or a week ("July
+  14", "kahapon", "first week of July"), Gemini asks for it, `daily_report()` runs the query and returns per day and
+  per branch: product sales, sale count, units sold, service revenue, visits, gross profit, stock received and
+  adjusted, plus period totals, the top 10 products and services and visits by species. At most 31 days per call
+  and 3 lookups per question. Only totals and product/service names; no customer, pet, staff or transaction detail.
+  Today's date goes in the prompt so "yesterday" resolves; days without records are reported as such.
 - **What Gemini sees:** the dashboard's aggregated figures for both branches (sales, services, inventory movement,
   KPIs, forecasts, product/service names), about 5,500 tokens, built fresh for each question. Never customer names or
   contact details, pets or medical records (`tests/test_assistant.py` checks this). Google may use free-tier prompts

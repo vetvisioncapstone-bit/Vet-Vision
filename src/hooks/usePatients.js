@@ -6,13 +6,13 @@ import { useSession } from './useSession'
 //  { id, ownerId, ownerName, ownerSurname, ownerEmail, ownerAddress, ownerMobile, petName, petSpecie,
 //    petBreed, petSex, petDob, petAge, petMarking, branch, status ('Active' | 'Follow-up needed'),
 //    followUpNote, createdAt, consultations: [{ id, date, weight, notes, services, availedItems,
-//    totalPrice, remarks, bloodTestImage, bloodTestName, waiverImage, waiverName, followUp, followUpNote }] }
+//    totalPrice, remarks, labResults: [{ name, image }], waivers: [{ name, image }], followUp, followUpNote }] }
 // Follow-up status changes are computed by the server when a consultation is added.
 //
 // Two modes:
 //  - usePatients({ page, pageSize, q, branch, status, year, visitYear }) is server-side paginated. `status` is a string or an
 //    array. It returns { items (this page), total, totalPages, page, stats: { total, followUpNeeded,
-//    activeThisMonth, years } }. List rows leave out attached images (blood test / waiver): use usePatient(id) for those.
+//    activeThisMonth, years } }. List rows leave out attached images (lab results / waiver): use usePatient(id) for those.
 //  - usePatients({ branch, status }) with no `page` still returns every matching patient (avoid on big lists).
 export function usePatients({ branch, status, q, page, pageSize, year, visitYear } = {}) {
   const { session } = useSession()

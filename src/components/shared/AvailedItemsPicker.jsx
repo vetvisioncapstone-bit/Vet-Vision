@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { useInventory, useServiceCatalog } from '../../hooks/useInventory'
 import { useToast } from './Toast'
 import { formatPrice } from '../../utils/format'
-import '../../styles/availed-picker.css'
+import '../../styles/shared/availed-picker.css'
 
 // What a visit is billed for: services from the clinic's catalog and products from the patient's branch stock.
 // Saving the consultation turns these into a service transaction and a sale, so they count on the dashboard and
@@ -19,33 +19,39 @@ export default function AvailedItemsPicker({ branch, items, onChange }) {
   const { items: stock } = useInventory()
   const [type, setType] = useState('')
   const [id, setId] = useState('')
+  const [query, setQuery] = useState('') // what is typed in the item box
   const [price, setPrice] = useState('')
   const [quantity, setQuantity] = useState('1')
 
-  const byCategory = useMemo(() => {
-    const groups = new Map()
-    for (const s of catalog || []) groups.set(s.category, [...(groups.get(s.category) || []), s])
-    return [...groups]
-  }, [catalog])
   const products = useMemo(
     () => stock.filter((p) => p.branch === branch && p.quantity > 0).sort((a, b) => a.name.localeCompare(b.name)),
     [stock, branch]
   )
 
-  function pick(value) {
-    setId(value)
-    const found = type === 'Service' ? (catalog || []).find((s) => s.id === value) : products.find((p) => p.id === value)
-    const suggested = type === 'Service' ? found?.prices?.[branch] : found?.unitPrice
-    setPrice(suggested != null ? String(suggested) : '')
+  // The item box is a search: typing filters the browser's own suggestion list (a <datalist>), and choosing one
+  // fills in its id and price. Anything typed that is not on the list leaves the item unpicked.
+  const options = type === 'Service'
+    ? (catalog || []).map((s) => ({ id: s.id, name: s.name, hint: s.category, price: s.prices?.[branch] }))
+    : type === 'Product'
+      ? products.map((p) => ({ id: p.id, name: p.name, hint: `${p.quantity} left`, price: p.unitPrice }))
+      : []
+
+  function search(text) {
+    setQuery(text)
+    const found = options.find((o) => o.name.toLowerCase() === text.trim().toLowerCase())
+    setId(found ? found.id : '')
+    setPrice(found && found.price != null ? String(found.price) : '')
   }
 
   function add() {
     const qty = Math.max(1, parseInt(quantity, 10) || 1)
-    if (!type || !id) return showToast('Pick a type and an item first.')
+    if (!type) return showToast('Pick a type first.')
+    if (!id) return showToast(query.trim() ? `"${query.trim()}" is not on the list. Pick an item from the suggestions.` : 'Search for an item first.')
     if (price === '' || Number(price) < 0) return showToast('Enter the price.')
-    const name = type === 'Service' ? catalog.find((s) => s.id === id)?.name : products.find((p) => p.id === id)?.name
+    const name = options.find((o) => o.id === id)?.name
     onChange([...items, { type, [type === 'Service' ? 'serviceId' : 'inventoryId']: id, name, price: Number(price), quantity: qty }])
     setId('')
+    setQuery('')
     setPrice('')
     setQuantity('1')
   }
@@ -56,7 +62,7 @@ export default function AvailedItemsPicker({ branch, items, onChange }) {
         <div className="form-group">
           <label className="form-label" htmlFor="availedType">Type</label>
           <div className="form-select-wrapper">
-            <select id="availedType" className="form-input" value={type} onChange={(e) => { setType(e.target.value); setId(''); setPrice('') }}>
+            <select id="availedType" className="form-input" value={type} onChange={(e) => { setType(e.target.value); setId(''); setQuery(''); setPrice('') }}>
               <option value="" disabled hidden>Select type</option>
               <option value="Service">Service</option>
               <option value="Product">Product</option>
@@ -66,19 +72,15 @@ export default function AvailedItemsPicker({ branch, items, onChange }) {
         </div>
         <div className="form-group">
           <label className="form-label" htmlFor="availedItem">Item</label>
-          <div className="form-select-wrapper">
-            <select id="availedItem" className="form-input" disabled={!type} value={id} onChange={(e) => pick(e.target.value)}>
-              <option value="" disabled hidden>
-                {!type ? 'Select type first' : type === 'Product' && !products.length ? `No ${branch} stock` : 'Select item'}
-              </option>
-              {type === 'Service' && byCategory.map(([category, services]) => (
-                <optgroup key={category} label={category}>
-                  {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </optgroup>
-              ))}
-              {type === 'Product' && products.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.quantity} left)</option>)}
-            </select>
-            <svg className="form-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+          <div className="availed-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+            <input id="availedItem" className="form-input" list="availedItemOptions" autoComplete="off" disabled={!type}
+              placeholder={!type ? 'Select type first' : type === 'Product' && !products.length ? `No ${branch} stock` : `Search ${type.toLowerCase()}…`}
+              value={query} onChange={(e) => search(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (id) add() } }} />
+            <datalist id="availedItemOptions">
+              {options.map((o) => <option key={o.id} value={o.name} label={o.hint} />)}
+            </datalist>
           </div>
         </div>
         <div className="form-group availed-qty">

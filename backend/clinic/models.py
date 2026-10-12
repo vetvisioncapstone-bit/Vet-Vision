@@ -102,15 +102,18 @@ class MedicalRecord(models.Model):
     services = models.TextField(null=True, blank=True)
     availed_items = models.JSONField(default=list, blank=True, db_default=[])
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0, db_default=0)
-    blood_test_image = models.TextField(null=True, blank=True)
-    blood_test_name = models.CharField(max_length=200, null=True, blank=True)
-    waiver_image = models.TextField(null=True, blank=True)
-    waiver_name = models.CharField(max_length=200, null=True, blank=True)
+    # Attachments, several per visit, each [{"name", "image"}] with the file as a data URL: laboratory test result
+    # pictures, and signed waivers (pictures or PDFs).
+    lab_results = models.JSONField(default=list, blank=True, db_default=[])
+    waivers = models.JSONField(default=list, blank=True, db_default=[])
     follow_up = models.BooleanField(default=False, db_default=False)
     follow_up_note = models.CharField(max_length=200, null=True, blank=True)
     # Set on records generated from a legacy service transaction (see seed_medical_records); it links the record
     # back to its source and stops that transaction from being listed twice in a pet's history.
     source_txn_id = models.CharField(max_length=16, null=True, blank=True, unique=True)
+    # The vet's prescription, printed on the clinic's Rx pad: {rx, nextAppointment, veterinarian, licenseNo, ptr}.
+    # The diagnosis goes in `diagnosis`.
+    prescription = models.JSONField(null=True, blank=True)
 
     class Meta:
         db_table = "medical_record"

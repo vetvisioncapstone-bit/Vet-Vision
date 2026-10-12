@@ -2,18 +2,22 @@
 administrator's questions about the clinic's analytics. Nothing is trained here.
 
 Only aggregated figures leave the system: sales totals, service counts, inventory movement, KPIs, forecasts and
-product/service names, always for both branches. Customer names and contact details, pets and medical records are
+product/service names, always for both branches, plus day-by-day totals when a question needs them (Gemini asks
+for them through function calling, see daily_report). Customer names and contact details, pets and medical records are
 never included. The forecasts and the fast/slow classification are computed by the system; the AI only explains them.
 The conversation is kept by the browser for the session and is not stored here.
 """
 import json
 import logging
+import time
+from datetime import date
 from types import SimpleNamespace
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -32,12 +36,15 @@ Rules:
 - Copy figures exactly as they appear in CLINIC DATA. Prefer a ready-made total (for example branchShare.transactions) \
 over adding numbers yourself; if you must calculate, say that the figure is calculated.
 - Money is in Philippine pesos: write it like ₱336,645 (peso sign, thousands separators, no decimals). Say which month or period a figure covers. dataAsOf.latestDate is the newest record.
+- CLINIC DATA is monthly. For particular days, a week, or any dates it does not break down, call get_daily_report \
+(at most 31 days per call; split longer periods). Read words like today, yesterday or last week against today's date \
+below; if that period has no records, say so and mention dataAsOf.latestDate.
 - The system computes the forecasts and the fast/moderate/slow-moving classification; explain them, do not redo them. \
 Forecast: Moving Average of the previous 6 complete months. Fast/slow-moving: top/bottom third of each product \
 category by average monthly units sold per branch. MAE, MAPE and WAPE measure forecast error (lower is better).
 - Recommendations are suggestions. The final decision stays with clinic management; say so when you recommend buying, cutting or changing something.
 - You have no information about individual customers, pets or medical records, and you do not give veterinary medical advice.
-- Reply in the language the administrator writes in: English, Filipino or Taglish.
+- Reply in the language of the administrator's latest message: English, Filipino or Taglish.
 - Be concise and plain: a short paragraph or a few bullet points, about 200 words unless asked for more detail.
 - Answer only questions about this clinic's operations and data; politely decline anything else."""
 
@@ -118,8 +125,33 @@ def call_model(system, turns):
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "model" if t["role"] == "assistant" else "user", "parts": [{"text": t["text"]}]}
                      for t in turns],
+        "tools": [{"functionDeclarations": [DAILY_REPORT_TOOL]}],
         "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096},
     }
+    # When the question needs figures for particular days, Gemini asks for them (a functionCall), the system runs
+    # daily_report and sends the aggregates back (a functionResponse), and Gemini answers with them. The model's own
+    # turn goes back unchanged: Gemini 3 models check the "thought signature" inside it.
+    for round_no in range(TOOL_ROUNDS + 1):
+        if round_no == TOOL_ROUNDS:
+            body["toolConfig"] = {"functionCallingConfig": {"mode": "NONE"}}  # enough lookups: answer now
+        candidate, data = _ask(body)
+        parts = (candidate.get("content") or {}).get("parts", [])
+        calls = [p["functionCall"] for p in parts if "functionCall" in p]
+        if not calls:
+            break
+        body["contents"] += [candidate["content"], {"role": "user", "parts": [
+            {"functionResponse": {"name": c.get("name"), "response": run_tool(c)}} for c in calls]}]
+
+    text = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()  # thinking models: skip thoughts
+    if not text:
+        log.info("event=gemini_empty finish=%s block=%s", candidate.get("finishReason"),
+                 (data.get("promptFeedback") or {}).get("blockReason"))
+        raise AssistantError("Gemini gave no answer to that. Try rephrasing the question.")
+    return text
+
+
+def _ask(body):
+    """One Gemini call; returns (first candidate, whole response). Failures become friendly AssistantErrors."""
     try:
         data = _post(body)
     except HTTPError as e:
@@ -132,36 +164,165 @@ def call_model(system, turns):
         if e.code in (400, 401, 403, 404):
             raise AssistantError("Gemini refused the request. Check GEMINI_API_KEY and GEMINI_MODEL in backend/.env.")
         raise AssistantError("Gemini had a problem. Try again shortly.")
-    except (URLError, TimeoutError, ValueError) as e:
+    except (URLError, ConnectionError, TimeoutError, ValueError) as e:
         log.warning("event=gemini_unreachable error=%s", e)
         raise AssistantError("Could not reach Gemini. Check the internet connection and try again.")
+    return (data.get("candidates") or [{}])[0], data
 
-    candidate = (data.get("candidates") or [{}])[0]
-    parts = (candidate.get("content") or {}).get("parts", [])
-    text = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()  # thinking models: skip thoughts
-    if not text:
-        log.info("event=gemini_empty finish=%s block=%s", candidate.get("finishReason"),
-                 (data.get("promptFeedback") or {}).get("blockReason"))
-        raise AssistantError("Gemini gave no answer to that. Try rephrasing the question.")
-    return text
+
+# ------------------------------- daily reports (function calling) -------------------------------
+
+TOOL_ROUNDS = 3  # lookups Gemini may make for one question
+MAX_DAYS = 31
+DAILY_REPORT_TOOL = {
+    "name": "get_daily_report",
+    "description": "Day-by-day clinic figures for both branches between two dates (at most 31 days): product sales, "
+                   "service visits, gross profit, stock received and adjusted, plus the top products and services and "
+                   "visits by species for the period. Use it whenever a question is about particular days, a week, "
+                   "or dates that the monthly CLINIC DATA does not break down.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "start_date": {"type": "string", "description": "First day, YYYY-MM-DD."},
+            "end_date": {"type": "string", "description": "Last day, YYYY-MM-DD. Same as start_date for one day."},
+        },
+        "required": ["start_date"],
+    },
+}
+
+
+def run_tool(call):
+    args = call.get("args") or {}
+    if call.get("name") != DAILY_REPORT_TOOL["name"]:
+        return {"error": "Unknown function."}
+    try:
+        start = date.fromisoformat(str(args.get("start_date")))
+        end = date.fromisoformat(str(args.get("end_date") or start))
+    except ValueError:
+        return {"error": "Dates must be written YYYY-MM-DD."}
+    log.info("event=assistant_daily_report days=%s", (end - start).days + 1)  # dates only, never the question
+    return daily_report(start, end)
+
+
+def daily_report(start, end):
+    """Aggregated figures per day and branch between `start` and `end`. Only totals and product/service names:
+    no customer, pet, staff or transaction-level detail."""
+    if end < start:
+        start, end = end, start
+    if (end - start).days >= MAX_DAYS:
+        return {"error": f"Ask for at most {MAX_DAYS} days at a time; split longer periods into months or weeks."}
+    first, latest = av.rows(
+        "SELECT LEAST((SELECT min(sale_date) FROM sale), (SELECT min(txn_date) FROM service_transaction)) AS a, "
+        "GREATEST((SELECT max(sale_date) FROM sale), (SELECT max(txn_date) FROM service_transaction)) AS b")[0].values()
+    towns = av.branch_towns()
+    span = (start, end)
+    empty = {"sales": 0, "salesTxns": 0, "unitsSold": 0, "services": 0, "serviceVisits": 0, "grossProfit": 0,
+             "stockReceived": 0, "stockAdjusted": 0}
+    days = {}
+
+    def cell(d, branch_id):
+        day = days.setdefault(d.isoformat(), {})
+        return day.setdefault(towns.get(branch_id, branch_id), dict(empty))
+
+    for r in av.rows("SELECT sale_date AS d, branch_id, sum(line_total) AS g, sum(line_profit) AS p, "
+                     "count(DISTINCT sale_id) AS n, sum(quantity) AS u FROM v_sale_lines "
+                     "WHERE sale_date BETWEEN %s AND %s GROUP BY 1, 2", span):
+        c = cell(r["d"], r["branch_id"])
+        c.update(sales=av.num(r["g"]), salesTxns=r["n"], unitsSold=av.num(r["u"]))
+        c["grossProfit"] += float(r["p"] or 0)
+    for r in av.rows("SELECT txn_date AS d, branch_id, sum(line_total) AS g, sum(line_profit) AS p, "
+                     "count(DISTINCT service_txn_id) AS n FROM v_service_lines "
+                     "WHERE txn_date BETWEEN %s AND %s GROUP BY 1, 2", span):
+        c = cell(r["d"], r["branch_id"])
+        c.update(services=av.num(r["g"]), serviceVisits=r["n"])
+        c["grossProfit"] += float(r["p"] or 0)
+    for r in av.rows("SELECT txn_date AS d, branch_id, txn_type, sum(quantity_change) AS q FROM inventory_transaction "
+                     "WHERE txn_date BETWEEN %s AND %s AND txn_type IN ('restock', 'adjustment') GROUP BY 1, 2, 3",
+                     span):
+        cell(r["d"], r["branch_id"])["stockReceived" if r["txn_type"] == "restock" else "stockAdjusted"] = av.num(r["q"])
+
+    totals = {}
+    for branches in days.values():
+        for town, c in branches.items():
+            c["grossProfit"] = av.num(c["grossProfit"])
+            c["total"] = av.num(c["sales"] + c["services"])
+            t = totals.setdefault(town, dict(empty, total=0))
+            for k in t:
+                t[k] = av.num(t[k] + c[k])
+    totals["Both branches"] = {k: av.num(sum(t[k] for t in totals.values())) for k in dict(empty, total=0)}
+
+    return {
+        "from": start.isoformat(), "to": end.isoformat(),
+        "recordsExistFrom": first and first.isoformat(), "recordsExistTo": latest and latest.isoformat(),
+        "note": "Days missing from `days` have no records (the clinic was closed or nothing was recorded).",
+        "days": dict(sorted(days.items())),
+        "totals": totals,
+        "topProducts": [{k: av.num(v) for k, v in r.items()} for r in av.rows(
+            "SELECT product_name AS name, b.town AS branch, sum(quantity) AS units, sum(line_total) AS revenue "
+            "FROM v_sale_lines JOIN branch b USING (branch_id) WHERE sale_date BETWEEN %s AND %s "
+            "GROUP BY 1, 2 ORDER BY revenue DESC LIMIT 10", span)],
+        "topServices": [{k: av.num(v) for k, v in r.items()} for r in av.rows(
+            "SELECT service_name AS name, b.town AS branch, count(DISTINCT service_txn_id) AS visits, "
+            "sum(line_total) AS revenue FROM v_service_lines JOIN branch b USING (branch_id) "
+            "WHERE txn_date BETWEEN %s AND %s GROUP BY 1, 2 ORDER BY visits DESC LIMIT 10", span)],
+        "visitsBySpecies": {r["species"] or "Unknown": r["visits"] for r in av.rows(
+            "SELECT species, count(DISTINCT service_txn_id) AS visits FROM v_service_lines "
+            "WHERE txn_date BETWEEN %s AND %s GROUP BY 1 ORDER BY 2 DESC", span)},
+    }
+
+
+# Model -> time.monotonic() until which it is skipped after answering "busy" or "limit reached".
+# ponytail: per-process memory; fine for one web worker, share it through the cache if more workers are added.
+_resting = {}
+REST_SECONDS = 60
+DEADLINE_SECONDS = 45  # the web server gives a request 60 s; stop trying models before that
+
+
+def _models():
+    """GEMINI_MODEL first, then each GEMINI_FALLBACK_MODEL (comma-separated). Every free-tier model has its own
+    quota and its own load, so a longer list means the assistant almost always finds one that answers."""
+    names = [settings.GEMINI_MODEL, *settings.GEMINI_FALLBACK_MODEL.split(",")]
+    models = list(dict.fromkeys(m.strip() for m in names if m.strip()))
+    now = time.monotonic()
+    ready = [m for m in models if _resting.get(m, 0) <= now]
+    return ready or models  # all resting: try them all anyway rather than refuse
+
+
+def _send(req, tries=4):
+    """One request. A connection dropped before an answer (seen on some networks: many TLS handshakes with Google are
+    reset) is retried at once; the model is fine, so it is not rested for it. Timeouts and HTTP errors pass through."""
+    for attempt in range(tries):
+        try:
+            with urlopen(req, timeout=25) as r:
+                return json.load(r)
+        except (URLError, ConnectionError) as e:  # a reset while reading the answer is a bare ConnectionError
+            dropped = isinstance(e, ConnectionError) or isinstance(getattr(e, "reason", None), ConnectionError)
+            if isinstance(e, HTTPError) or not dropped or attempt == tries - 1:
+                raise
+            log.info("event=gemini_retry reason=%s", type(getattr(e, "reason", e)).__name__)
+            time.sleep(0.3 * (attempt + 1))
 
 
 def _post(body):
-    """Ask GEMINI_MODEL; if it is overloaded or its free quota is used up, ask GEMINI_FALLBACK_MODEL, which has a
-    quota of its own. Free-tier Flash models are often busy, so this keeps the assistant answering."""
-    models = list(dict.fromkeys(m for m in (settings.GEMINI_MODEL, settings.GEMINI_FALLBACK_MODEL) if m))
+    """Ask each model in turn until one answers. A model that is overloaded (500/503), out of free quota (429),
+    retired (404) or unreachable is rested for a minute and the next one is asked; other errors (bad key, bad
+    request) would fail the same way on every model, so they stop at once."""
+    models = _models()
+    start = time.monotonic()
     for i, model in enumerate(models):
         req = Request(GEMINI_URL.format(model=quote(model, safe="")), data=json.dumps(body).encode(), method="POST",
                       headers={"Content-Type": "application/json", "x-goog-api-key": settings.GEMINI_API_KEY})
         try:
-            with urlopen(req, timeout=60) as r:
-                data = json.load(r)
+            data = _send(req)
             log.info("event=gemini_answer model=%s", model)  # which model answered, for QA of answer quality
             return data
-        except HTTPError as e:
-            if e.code not in (429, 500, 503) or i == len(models) - 1:
+        except (HTTPError, URLError, ConnectionError, TimeoutError) as e:
+            code = getattr(e, "code", None)
+            last = i == len(models) - 1 or time.monotonic() - start > DEADLINE_SECONDS
+            if code not in (None, 404, 429, 500, 503) or last:
                 raise
-            log.info("event=gemini_fallback from=%s status=%s", model, e.code)
+            _resting[model] = time.monotonic() + REST_SECONDS
+            log.info("event=gemini_fallback from=%s status=%s", model, code or "unreachable")
 
 
 class Turn(serializers.Serializer):
@@ -185,7 +346,7 @@ class Assistant(APIView):
         s = AssistantInput(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
-        system = SYSTEM
+        system = SYSTEM + f"\n\nToday's date is {timezone.localdate():%A, %Y-%m-%d}."
         if d.get("page"):
             system += f"\n\nThe administrator is on the '{d['page']}' page of the dashboard."
         system += "\n\nCLINIC DATA (JSON):\n" + json.dumps(build_context(), default=str, separators=(",", ":"))

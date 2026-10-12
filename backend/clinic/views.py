@@ -6,7 +6,8 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils import timezone
-from django.db.models import Exists, F, Max, OuterRef, Prefetch, Q, Subquery
+from django.db.models import DateField, Exists, F, Max, OuterRef, Prefetch, Q, Subquery
+from django.db.models.functions import Cast, Greatest
 from rest_framework import serializers, status
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
@@ -54,12 +55,12 @@ def consultation_row(r, light=False):
         "availedItems": r.availed_items or [],
         "totalPrice": float(r.total_price or 0),
         "remarks": r.remarks or "",
-        "bloodTestImage": None if light else r.blood_test_image,
-        "bloodTestName": r.blood_test_name or "",
-        "waiverImage": None if light else r.waiver_image,
-        "waiverName": r.waiver_name or "",
+        "labResults": [] if light else (r.lab_results or []),
+        "waivers": [] if light else (r.waivers or []),
         "followUp": r.follow_up,
         "followUpNote": r.follow_up_note or "",
+        "diagnosis": r.diagnosis or "",
+        "prescription": r.prescription,
     }
 
 
@@ -121,7 +122,7 @@ def _visited_in(year):
 def _pets(request, light=False):
     records = MedicalRecord.objects.order_by("record_date", "record_id")
     if light:
-        records = records.defer("blood_test_image", "waiver_image")
+        records = records.defer("lab_results", "waivers")
     qs = (
         Pet.objects.select_related("customer__branch")
         .prefetch_related(Prefetch("records", queryset=records))
@@ -153,7 +154,10 @@ def _pets(request, light=False):
     visit_year = _year_param(request, "visitYear")
     if visit_year:
         qs = qs.filter(_visited_in(visit_year))
-    return qs.order_by(F("created_at").desc(nulls_last=True), "-pet_id")
+    # Most recent activity first: the latest visit, or the registration date for a pet not seen yet (PostgreSQL's
+    # GREATEST skips NULLs). Sorting by registration alone put a page of new, never-seen pets on top.
+    activity = Greatest("last_record", "last_service", Cast("created_at", DateField()))
+    return qs.order_by(activity.desc(nulls_last=True), F("created_at").desc(nulls_last=True), "-pet_id")
 
 
 def _patient_stats(request):
@@ -308,18 +312,38 @@ class AvailedItem(serializers.Serializer):
         return attrs
 
 
+MAX_ATTACHMENTS = 10  # per list, per visit
+
+
+class Attachment(serializers.Serializer):
+    name = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    image = serializers.CharField(validators=[data_url])
+
+
+class PrescriptionInput(serializers.Serializer):
+    diagnosis = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    rx = serializers.CharField(max_length=4000)
+    nextAppointment = serializers.DateField(required=False, allow_null=True)
+    veterinarian = serializers.CharField(required=False, allow_blank=True, max_length=80)
+    licenseNo = serializers.CharField(required=False, allow_blank=True, max_length=40)
+    ptr = serializers.CharField(required=False, allow_blank=True, max_length=40)
+
+
 class ConsultationInput(serializers.Serializer):
     date = serializers.DateField()
     weight = serializers.CharField(required=False, allow_blank=True, max_length=40)
     notes = serializers.CharField(allow_blank=False)
     availedItems = AvailedItem(many=True, required=False)
     remarks = serializers.CharField(required=False, allow_blank=True)
-    bloodTestImage = serializers.CharField(required=False, allow_null=True, allow_blank=True, validators=[data_url])
-    bloodTestName = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=200)
-    waiverImage = serializers.CharField(required=False, allow_null=True, allow_blank=True, validators=[data_url])
-    waiverName = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=200)
+    labResults = Attachment(many=True, required=False, max_length=MAX_ATTACHMENTS)
+    waivers = Attachment(many=True, required=False, max_length=MAX_ATTACHMENTS)
     followUp = serializers.BooleanField(required=False, default=False)
     followUpNote = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    prescription = PrescriptionInput(required=False, allow_null=True)
+
+
+def _attachments(items):
+    return [{"name": (x.get("name") or "").strip(), "image": x["image"]} for x in items or []]
 
 
 def _kg(text):
@@ -383,6 +407,7 @@ class ConsultationCreate(APIView):
             raise serializers.ValidationError({"followUpNote": "Say what the follow-up is for."})
 
         branch = pet.customer.branch
+        rx = d.get("prescription")
         items = d.get("availedItems", [])
         services = [i for i in items if i["type"] == "Service"]
         products = [i for i in items if i["type"] == "Product"]
@@ -420,12 +445,16 @@ class ConsultationCreate(APIView):
             services=", ".join(f"{a['name']} x{a['quantity']}" for a in availed) or None,
             availed_items=availed,
             total_price=sum((Decimal(str(a["price"])) * a["quantity"] for a in availed), Decimal(0)),
-            blood_test_image=d.get("bloodTestImage") or None,
-            blood_test_name=d.get("bloodTestName") or None,
-            waiver_image=d.get("waiverImage") or None,
-            waiver_name=d.get("waiverName") or None,
+            lab_results=_attachments(d.get("labResults")),
+            waivers=_attachments(d.get("waivers")),
             follow_up=follow_up,
             follow_up_note=note or None,
+            diagnosis=(rx or {}).get("diagnosis", "").strip() or None,
+            prescription=rx and {
+                "rx": rx["rx"].strip(),
+                "nextAppointment": rx["nextAppointment"].isoformat() if rx.get("nextAppointment") else "",
+                **{k: (rx.get(k) or "").strip() for k in ("veterinarian", "licenseNo", "ptr")},
+            },
             source_txn_id=txn.service_txn_id if txn else None,  # the owner's history then lists the visit once
         )
         if follow_up:

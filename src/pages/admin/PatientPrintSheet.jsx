@@ -1,12 +1,14 @@
 import React, { useEffect } from 'react'
 import { formatDate, formatPrice, isImageDataUrl, todayIso } from '../../utils/format'
+import { RxPad } from './Prescription'
 
 // The clinic's paper chart: Ecovet letterhead, client and pet fields, then a Date | Treatment | Remarks log.
 // It is shown over the page and printed with the browser's own print dialog (see the @media print rules in
 // reports.css, which hide everything except .report-overlay), so no pop-up window is needed.
 //
-// job: { patient, consultations, single }
-//  - single: one receipt with its blood test / waiver images and blank rows to write in.
+// job: { patient, consultations, single, rx }
+//  - rx: the first consultation's prescription on the clinic's Rx pad instead of the chart.
+//  - single: one receipt with its laboratory / waiver images and blank rows to write in.
 //  - otherwise: the running history log with a grand total, without the heavy images.
 
 // Older consultations (saved before per-item pricing existed) only have the flat "services" string.
@@ -27,8 +29,8 @@ function remarkLines(c) {
   return [
     c.remarks || '',
     c.followUp ? `Follow-up needed: ${c.followUpNote || '—'}` : '',
-    c.bloodTestImage ? 'Blood test result attached' : '',
-    c.waiverImage ? 'Signed waiver attached' : ''
+    c.labResults?.length ? `Laboratory test results attached (${c.labResults.length})` : '',
+    c.waivers?.length ? `Signed waiver attached (${c.waivers.length})` : ''
   ].filter(Boolean)
 }
 
@@ -72,7 +74,7 @@ function Letterhead({ patient }) {
           <Field label="Breed:" value={patient.petBreed} />
         </div>
         <div className="cs-row">
-          <Field label="Pet's Date of birth:" value={formatDate(patient.petDob)} />
+          <Field label="Pet's Date of birth:" value={formatDate(patient.petDob)} grow />
           <Field label="Age:" value={String(patient.petAge ?? '')} />
           <Field label="Sex:" value={patient.petSex} />
           <Field label="Color Marking:" value={patient.petMarking} />
@@ -83,7 +85,7 @@ function Letterhead({ patient }) {
 }
 
 export default function PatientPrintSheet({ job, onClose }) {
-  const { patient, consultations, single } = job
+  const { patient, consultations, single, rx } = job
 
   // Escape closes the sheet only, not the patient modals underneath it (capture phase runs first).
   useEffect(() => {
@@ -99,13 +101,28 @@ export default function PatientPrintSheet({ job, onClose }) {
   const rows = consultations.map((c) => ({ c, t: treatmentLines(c) }))
   const grandTotal = rows.reduce((sum, r) => sum + r.t.total, 0)
 
+  const actions = (
+    <div className="cs-actions no-print">
+      <button type="button" className="report-btn" onClick={() => window.print()}>Print</button>
+      <button type="button" className="report-btn secondary" onClick={onClose}>Close</button>
+    </div>
+  )
+
+  if (rx) {
+    return (
+      <div className="report-overlay clinic-overlay" role="dialog" aria-modal="true" aria-label={`Prescription for ${patient.petName}`}>
+        <div className="rx-wrap">
+          {actions}
+          <RxPad patient={patient} consultation={consultations[0]} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="report-overlay clinic-overlay" role="dialog" aria-modal="true" aria-label={`Print ${patient.petName}`}>
       <div className="clinic-sheet">
-        <div className="cs-actions no-print">
-          <button type="button" className="report-btn" onClick={() => window.print()}>Print</button>
-          <button type="button" className="report-btn secondary" onClick={onClose}>Close</button>
-        </div>
+        {actions}
 
         <Letterhead patient={patient} />
 
@@ -132,20 +149,20 @@ export default function PatientPrintSheet({ job, onClose }) {
 
         {single && consultations.map((c) => (
           <React.Fragment key={c.id}>
-            {c.bloodTestImage && (
-              <>
-                <p className="cs-attach-label">Blood test result — {formatDate(c.date)}</p>
-                <img className="cs-attach-img" src={c.bloodTestImage} alt="Blood test result" />
-              </>
-            )}
-            {c.waiverImage && (
-              <>
-                <p className="cs-attach-label">Signed waiver — {formatDate(c.date)}</p>
-                {isImageDataUrl(c.waiverImage)
-                  ? <img className="cs-attach-img" src={c.waiverImage} alt="Signed waiver" />
-                  : <p className="cs-note">(waiver on file - not an image, open from the app to view)</p>}
-              </>
-            )}
+            {(c.labResults || []).map((pic, i) => (
+              <React.Fragment key={i}>
+                <p className="cs-attach-label">Laboratory test result {c.labResults.length > 1 ? `${i + 1} of ${c.labResults.length} ` : ''}— {formatDate(c.date)}</p>
+                <img className="cs-attach-img" src={pic.image} alt={`Laboratory test result ${i + 1}`} />
+              </React.Fragment>
+            ))}
+            {(c.waivers || []).map((file, i) => (
+              <React.Fragment key={`w${i}`}>
+                <p className="cs-attach-label">Signed waiver {c.waivers.length > 1 ? `${i + 1} of ${c.waivers.length} ` : ''}— {formatDate(c.date)}</p>
+                {isImageDataUrl(file.image)
+                  ? <img className="cs-attach-img" src={file.image} alt={`Signed waiver ${i + 1}`} />
+                  : <p className="cs-note">({file.name || 'waiver'} is a PDF - open it from the app to view)</p>}
+              </React.Fragment>
+            ))}
           </React.Fragment>
         ))}
 

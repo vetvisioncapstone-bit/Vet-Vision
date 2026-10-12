@@ -156,7 +156,10 @@ if not DEBUG and not TURNSTILE_SECRET_KEY:
 # says it is not set up. The model can be changed without touching the code.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
-GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite").strip()  # when the first is busy
+# Tried in order when the first is busy or out of free quota; each has its own quota. Comma-separated.
+GEMINI_FALLBACK_MODEL = os.getenv(
+    "GEMINI_FALLBACK_MODEL", "gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-flash-lite-latest"
+).strip()
 
 CORS_ALLOWED_ORIGINS = [
     o.strip()

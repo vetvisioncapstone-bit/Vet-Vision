@@ -1,7 +1,7 @@
 import io
 import json
 from datetime import date, time
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 import pytest
 
@@ -86,6 +86,7 @@ def gemini(settings, monkeypatch):
     """Fake Gemini endpoint: records each request; `replies` holds what it answers (a dict, or an exception)."""
     settings.GEMINI_API_KEY, settings.GEMINI_MODEL, settings.GEMINI_FALLBACK_MODEL = "test-key", "gemini-test-flash", ""
     calls, replies = [], []
+    assistant._resting.clear()  # which models are resting is remembered between questions
 
     def fake_urlopen(req, timeout):
         calls.append({"url": req.full_url, "headers": dict(req.header_items()), "body": json.loads(req.data)})
@@ -132,6 +133,26 @@ def test_a_busy_model_falls_back_to_the_second(gemini, settings):
                                                             "gemini-test-lite:generateContent"]
 
 
+def test_a_busy_model_is_skipped_for_a_while_and_retired_models_are_passed_over(gemini, settings):
+    calls, replies = gemini
+    settings.GEMINI_FALLBACK_MODEL = "gemini-test-gone, gemini-test-lite"
+    replies += [HTTPError("u", 503, "Unavailable", {}, io.BytesIO(b"{}")),
+                HTTPError("u", 404, "Not Found", {}, io.BytesIO(b"{}")), answer({"text": "one"}), answer({"text": "two"})]
+    assert assistant.call_model("RULES", [{"role": "user", "text": "hi"}]) == "one"
+    assert assistant.call_model("RULES", [{"role": "user", "text": "hi"}]) == "two"
+    asked = [c["url"].rsplit("/", 1)[1].split(":")[0] for c in calls]
+    assert asked == ["gemini-test-flash", "gemini-test-gone", "gemini-test-lite", "gemini-test-lite"]
+
+
+def test_a_bad_key_stops_at_once(gemini, settings):
+    calls, replies = gemini
+    settings.GEMINI_FALLBACK_MODEL = "gemini-test-lite"
+    replies.append(HTTPError("u", 403, "Forbidden", {}, io.BytesIO(b"{}")))
+    with pytest.raises(assistant.AssistantError) as e:
+        assistant.call_model("RULES", [{"role": "user", "text": "hi"}])
+    assert len(calls) == 1 and "GEMINI_API_KEY" in str(e.value)
+
+
 def test_when_both_are_busy_it_says_so(gemini, settings):
     _, replies = gemini
     settings.GEMINI_FALLBACK_MODEL = "gemini-test-lite"
@@ -153,3 +174,42 @@ def test_oversized_input_is_refused(admin, model):
     assert c.post(URL, {"message": "x" * 2001}, format="json").status_code == 400
     too_long = [{"role": "user", "text": "x"}] * 13
     assert c.post(URL, {"message": "hi", "history": too_long}, format="json").status_code == 400
+
+
+# ------------------------------- daily reports (function calling) -------------------------------
+
+
+def test_gemini_can_look_up_a_day_and_gets_only_totals(gemini, one_sale):
+    calls, replies = gemini
+    ask = {"functionCall": {"name": "get_daily_report", "args": {"start_date": "2026-07-01"}}, "thoughtSignature": "sig"}
+    replies += [answer(ask), answer({"text": "Sales on July 1 were ₱500."})]
+    assert assistant.call_model("RULES", [{"role": "user", "text": "Sales on July 1?"}]) == "Sales on July 1 were ₱500."
+    assert calls[0]["body"]["tools"][0]["functionDeclarations"][0]["name"] == "get_daily_report"
+    model_turn, result = calls[1]["body"]["contents"][-2:]
+    assert model_turn["parts"][0] == ask  # sent back unchanged, thought signature included
+    report = result["parts"][0]["functionResponse"]["response"]
+    assert report["totals"]["Ibaan"]["sales"] == 500 and report["days"]["2026-07-01"]["Ibaan"]["salesTxns"] == 1
+    sent = json.dumps(calls[1]["body"])
+    for secret in ("Juana", "Dela Cruz", "juana.secret@example.com", "09171112222", "CUS-I0001", "SAL-1"):
+        assert secret not in sent
+
+
+def test_lookups_are_capped_then_it_must_answer(gemini, branches):
+    calls, replies = gemini
+    ask = answer({"functionCall": {"name": "get_daily_report", "args": {"start_date": "2026-07-01"}}})
+    replies += [ask] * assistant.TOOL_ROUNDS + [answer({"text": "Done"})]
+    assert assistant.call_model("RULES", [{"role": "user", "text": "hi"}]) == "Done"
+    assert calls[-1]["body"]["toolConfig"]["functionCallingConfig"]["mode"] == "NONE"
+
+
+def test_daily_report_rejects_bad_dates_and_long_ranges(branches):
+    assert "YYYY-MM-DD" in assistant.run_tool({"name": "get_daily_report", "args": {"start_date": "July 1"}})["error"]
+    assert "31 days" in assistant.daily_report(date(2026, 1, 1), date(2026, 3, 1))["error"]
+
+
+def test_a_dropped_connection_is_retried_without_resting_the_model(gemini, monkeypatch):
+    calls, replies = gemini
+    monkeypatch.setattr(assistant.time, "sleep", lambda s: None)
+    replies += [URLError(ConnectionResetError(10054, "reset")), answer({"text": "OK"})]
+    assert assistant.call_model("RULES", [{"role": "user", "text": "hi"}]) == "OK"
+    assert len(calls) == 2 and calls[0]["url"] == calls[1]["url"] and not assistant._resting

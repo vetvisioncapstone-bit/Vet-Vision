@@ -3,7 +3,6 @@ import { Outlet } from 'react-router-dom'
 import SkipLink from './SkipLink'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
-import ChatPanel from './ChatPanel'
 import { useSidebarToggle } from './useSidebarToggle'
 import '../../styles/admin/dashboard.css'
 
@@ -21,7 +20,6 @@ export default function AdminLayout() {
           <Outlet />
         </div>
       </div>
-      <ChatPanel />
     </>
   )
 }

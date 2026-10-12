@@ -300,10 +300,13 @@ textarea.form-input {
     line-height: 1.6;
 }
 
+.modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .detail-edit-btn {
-    position: absolute;
-    top: 14px;
-    right: 14px;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -382,7 +385,7 @@ textarea.form-input {
     flex-shrink: 0;
 }
 
-/* ==================== FILE UPLOAD (waiver / blood test) ==================== */
+/* ==================== FILE UPLOAD (lab results / waivers) ==================== */
 
 .file-upload-row {
     display: flex;
@@ -970,11 +973,15 @@ textarea.form-input {
 .cs-field { display: flex; align-items: baseline; gap: 6px; flex: 1; min-width: 140px; }
 .cs-label { font-weight: 700; font-size: 12.5px; white-space: nowrap; }
 .cs-value { flex: 1; border-bottom: 1px solid #111; font-size: 12.5px; padding-bottom: 1px; min-height: 14px; }
-.cs-log { width: 100%; border-collapse: collapse; border: 1.5px solid #111; }
-.cs-log th { border: 1px solid #111; padding: 6px 8px; font-size: 12.5px; background: #f2f2f2; text-align: left; }
+/* Fixed columns that wrap: the dashboard's table rules (no wrapping, grey headers) would otherwise push long
+   remarks past the paper's edge. */
+.cs-log { width: 100%; border-collapse: collapse; border: 1.5px solid #111; table-layout: fixed; }
+.cs-log th, .cs-log td { white-space: normal; overflow-wrap: anywhere; color: #111; }
+.cs-log th { border: 1px solid #111; padding: 6px 8px; font-size: 12.5px; font-weight: 700; background: #f2f2f2; text-align: left; }
 .cs-log td { border: 1px solid #111; padding: 8px; font-size: 12px; vertical-align: top; }
-.cs-log td:first-child { width: 90px; white-space: nowrap; }
-.cs-log td:last-child { width: 150px; }
+.cs-log th:first-child { width: 96px; }
+.cs-log td:first-child { white-space: nowrap; }
+.cs-log th:last-child { width: 34%; }
 .cs-log tfoot td { font-weight: 700; background: #f7f7f7; }
 .cs-attach-label { font-weight: 700; font-size: 12px; margin: 14px 0 4px; }
 .cs-attach-img { max-width: 100%; max-height: 320px; border: 1px solid #ccc; border-radius: 6px; }
@@ -983,3 +990,48 @@ textarea.form-input {
 @media print {
   .clinic-sheet { max-width: none; padding: 0; border-radius: 0; }
 }
+
+/* ==================== PRESCRIPTION (form + Rx pad print) ==================== */
+
+.rx-btn-symbol { font-size: 16px; font-weight: 700; line-height: 1; }
+.rx-fields { border: 1px solid #dfe3e1; border-radius: 12px; padding: 14px; background: #fff; }
+.rx-fields-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.rx-fields-head p { flex: 1; margin: 0; font-size: 12.5px; color: #646c68; }
+.rx-fields-symbol { font-size: 26px; font-weight: 700; color: #163a26; line-height: 1; }
+.rx-fields .rx-signer { grid-template-columns: 1.4fr 1fr 1fr; }
+@media (max-width: 640px) { .rx-fields .rx-signer { grid-template-columns: 1fr; } }
+.consultation-print-btn.rx { font-size: 14px; font-weight: 700; line-height: 1; }
+.consultation-rx { margin-top: 8px; padding: 8px 10px; border-left: 3px solid #17693a; background: #f4faf6; border-radius: 6px; }
+.consultation-rx-text { margin: 4px 0 0; font-size: 13px; white-space: pre-wrap; }
+
+/* The paper pad: letterhead, patient lines, the Rx symbol over a faint caduceus, logo and signature block. */
+.rx-wrap { max-width: 600px; margin: 0 auto; }
+.rx-sheet { background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; aspect-ratio: 1 / 1.414; display: flex;
+  flex-direction: column; padding: 34px 40px 28px; border-radius: 4px; }
+.rx-head { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+.rx-head h1 { margin: 0 0 8px; font-size: 32px; font-weight: 800; letter-spacing: 0.03em; }
+.rx-head p { margin: 0; font-size: 15px; line-height: 1.35; }
+.rx-info { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; padding: 14px 6px 0; }
+.rx-info > div { display: flex; flex-direction: column; gap: 6px; }
+.rx-pair { display: flex; gap: 10px; }
+.rx-pair .rx-line { flex: 1; }
+.rx-line { display: flex; align-items: baseline; gap: 6px; font-size: 12.5px; }
+.rx-line-label { font-weight: 700; white-space: nowrap; }
+.rx-line-value { flex: 1; min-width: 40px; border-bottom: 1px solid #333; min-height: 15px; padding-bottom: 1px; }
+.rx-body { position: relative; flex: 1; padding: 18px 6px 0; }
+.rx-watermark { position: absolute; left: 50%; top: 52%; width: 62%; transform: translate(-50%, -50%); color: #8fa39a; opacity: 0.22; pointer-events: none; }
+.rx-symbol { position: relative; display: inline-block; font-size: 64px; font-weight: 800; line-height: 1; font-family: Arial, Helvetica, sans-serif; }
+.rx-symbol span { position: absolute; left: 30px; top: 30px; font-size: 54px; }
+.rx-text { position: relative; margin: 26px 0 0 18px; font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+.rx-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+.rx-foot img { width: 96px; height: 96px; object-fit: contain; }
+.rx-sign { flex: 0 1 300px; display: flex; flex-direction: column; gap: 8px; }
+.rx-sign .rx-line-label { width: 92px; text-align: right; }
+@media print {
+  .rx-wrap { max-width: none; }
+  .rx-sheet { aspect-ratio: auto; min-height: 100vh; padding: 10mm 12mm; border-radius: 0; }
+}
+
+/* Laboratory results: several pictures, listed one per line under the upload button. */
+.file-upload-count { font-size: 12.5px; color: #646c68; }
+.form-group > .file-upload-preview { margin-top: 8px; }

@@ -191,3 +191,42 @@ def test_status_filter_for_the_notification_bell(staff_ibaan):
     c.post(f"/api/patients/{a}/consultations/", consult(followUp=True, followUpNote="Vaccination"))
     rows = c.get("/api/patients/?status=Follow-up needed").data
     assert [r["id"] for r in rows] == [a]
+
+
+def test_list_puts_the_most_recently_seen_pets_first(staff_ibaan):
+    c = client_for(staff_ibaan)
+    seen = c.post("/api/patients/", PATIENT).data["id"]
+    unseen = c.post("/api/patients/", {**PATIENT, "ownerEmail": "b@example.com", "petName": "Two"}).data["id"]
+    Pet.objects.filter(pet_id=seen).update(created_at="2020-01-01T00:00:00Z")
+    Pet.objects.filter(pet_id=unseen).update(created_at="2021-01-01T00:00:00Z")
+    c.post(f"/api/patients/{seen}/consultations/", consult())
+    rows = c.get("/api/patients/?page=1&pageSize=10").data["results"]
+    assert [r["id"] for r in rows] == [seen, unseen]  # a visit in 2026 beats a registration in 2021
+    assert rows[0]["lastVisit"] == "2026-09-24" and len(rows[0]["consultations"]) == 1
+
+
+def test_a_consultation_can_carry_a_prescription(staff_ibaan):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    rx = {"diagnosis": "Otitis externa", "rx": "Otomax ear drops\n3 drops twice a day for 7 days",
+          "nextAppointment": "2026-10-01", "veterinarian": "Dr. Reyes", "licenseNo": "0012345", "ptr": "PTR-998"}
+    saved = c.post(f"/api/patients/{pid}/consultations/", consult(prescription=rx)).data["consultations"][0]
+    assert saved["diagnosis"] == "Otitis externa"
+    assert saved["prescription"] == {k: v for k, v in rx.items() if k != "diagnosis"}
+    plain = c.post(f"/api/patients/{pid}/consultations/", consult()).data["consultations"][1]
+    assert plain["prescription"] is None and plain["diagnosis"] == ""
+    bad = c.post(f"/api/patients/{pid}/consultations/", consult(prescription={"diagnosis": "x"}))
+    assert bad.status_code == 400 and "prescription" in bad.data  # the Rx itself is required
+
+
+def test_a_consultation_keeps_several_lab_pictures_and_waivers(staff_ibaan):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    pics = [{"name": f"page{i}.png", "image": f"data:image/png;base64,AAA{i}"} for i in range(3)]
+    waivers = [{"name": "consent.pdf", "image": "data:application/pdf;base64,JVBE"}, pics[0]]
+    r = c.post(f"/api/patients/{pid}/consultations/", consult(labResults=pics, waivers=waivers))
+    assert r.data["consultations"][0]["labResults"] == pics and r.data["consultations"][0]["waivers"] == waivers
+    bad = c.post(f"/api/patients/{pid}/consultations/", consult(labResults=[{"name": "x", "image": "not-a-picture"}]))
+    assert bad.status_code == 400
+    many = c.post(f"/api/patients/{pid}/consultations/", consult(labResults=pics * 4))  # 12 > the limit of 10
+    assert many.status_code == 400

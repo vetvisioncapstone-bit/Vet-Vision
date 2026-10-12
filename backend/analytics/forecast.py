@@ -48,9 +48,8 @@ def mape(pairs):
 
 
 def wape(pairs):
-    """Weighted Absolute Percentage Error, in percent: total absolute error / total actual. Unlike MAPE a slow month
-    with 1 unit does not swamp the score, so it is the fair measure for items that sell few units. None when the
-    actual total is 0."""
+    """Weighted Absolute Percentage Error, in percent: total absolute error / total actual. 
+    It measures the total forecasting error compared with the total actual sales.."""
     total = sum(abs(a) for _, a in pairs)
     return None if not total else sum(abs(f - a) for f, a in pairs) / total * 100
 

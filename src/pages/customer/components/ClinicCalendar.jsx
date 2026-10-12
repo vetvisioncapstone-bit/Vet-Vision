@@ -2,7 +2,7 @@
 // admin's per-date closures). Green = open, amber = half day, red = closed.
 
 import { useMemo, useState } from "react";
-import { MONTH_LABEL_FORMAT, WEEKDAY_LABELS } from "../lib/mockData";
+import { MONTH_LABEL_FORMAT, WEEKDAY_LABELS } from "../lib/calendarLabels";
 import { useClinicCalendar } from "../../../hooks/useCustomerPortal";
 import { getMonthGrid, isSameDay, toDateKey } from "../lib/dateUtils";
 import { ChevronLeftIcon, ChevronRightIcon } from "./icons";

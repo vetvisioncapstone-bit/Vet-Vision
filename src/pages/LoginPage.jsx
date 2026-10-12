@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import LeftSection from '../components/LeftSection'
-import RightSection from '../components/RightSection'
-import SuccessOverlay from '../components/SuccessOverlay'
+import LeftSection from '../components/login/LeftSection'
+import RightSection from '../components/login/RightSection'
+import SuccessOverlay from '../components/login/SuccessOverlay'
 import { useAuth } from '../hooks/useAuth'
 import { homePathFor } from '../utils/homePath'
-import '../styles/LoginPage.css'
+import '../styles/login/LoginPage.css'
 
 function LoginPage() {
   const [showSuccess, setShowSuccess] = useState(false)

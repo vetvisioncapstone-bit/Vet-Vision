@@ -61,7 +61,9 @@ export function AuthProvider({ children }) {
       setUser(data.user)
       return { success: true }
     } catch (err) {
-      return { success: false, message: errorMessage(err, 'Could not create the account. Please try again.') }
+      // `fields`: the server's per-field messages ({ email: [...], password: [...] }) so the form can show each one
+      // next to its field.
+      return { success: false, message: errorMessage(err, 'Could not create the account. Please try again.'), fields: err?.data || null }
     }
   }, [])
 

@@ -32,9 +32,6 @@
     box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
 }
 
-.forecast-search {
-    margin-bottom: 24px;
-}
 
 /* ==================== MONTH STRIP ==================== */
 
@@ -64,7 +61,11 @@
     display: grid;
     grid-template-columns: 1.6fr 1fr;
     gap: 20px;
-    align-items: start;
+    align-items: stretch; /* the order cards fill the chart's height instead of stopping short */
+}
+
+.forecast-grid > * {
+    min-width: 0; /* lets the chart shrink on a phone instead of widening the page */
 }
 
 /* ==================== INSIGHT CARDS ==================== */
@@ -76,6 +77,10 @@
 }
 
 .insight-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     background: #ffffff;
     border: 1px solid #ececec;
     border-radius: 12px;
@@ -115,10 +120,15 @@
     }
 }
 
-.forecast-picker { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+/* Item type and search sit on one line at the same height; the matches drop down under the search box. */
+.forecast-picker { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
 .forecast-picker .search-wrapper { flex: 1; min-width: 220px; }
+.forecast-picker select, .forecast-picker .search-wrapper input { height: 44px; border-radius: 10px; }
 .forecast-picker select { min-width: 220px; }
-.search-results { list-style: none; margin: -16px 0 20px; background: #fff; border: 1px solid #ececec; border-radius: 10px; max-height: 220px; overflow-y: auto; }
-.search-results li button { width: 100%; text-align: left; padding: 10px 14px; background: none; border: none; font: inherit; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; }
-.search-results li button:hover { background: #f4f8f5; }
-.search-results small { color: #7a8580; }
+.search-results { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 20; list-style: none; margin: 0; padding: 4px;
+  background: #fff; border: 1px solid #e3e7e5; border-radius: 10px; box-shadow: 0 10px 28px rgba(20, 40, 30, 0.12); max-height: 280px; overflow-y: auto; }
+.search-results li button { width: 100%; text-align: left; padding: 10px 12px; background: none; border: none; border-radius: 7px; font: inherit; font-size: 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.search-results li button:hover, .search-results li button:focus-visible { background: #f4f8f5; outline: none; }
+.search-results small { color: #6b736f; font-size: 12px; white-space: nowrap; }
+.search-empty { padding: 10px 12px; font-size: 13.5px; color: #6b736f; }
+.forecast-item-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }

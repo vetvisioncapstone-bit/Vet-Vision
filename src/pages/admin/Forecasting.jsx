@@ -50,6 +50,13 @@ export default function Forecasting() {
   const forecastMonth = data?.method?.forecastMonth
   const lag = data?.asOf?.latestDate ? Math.floor((Date.now() - new Date(data.asOf.latestDate)) / 86400000) : 0
   const stale = lag > 35 ? lag : 0
+  // basedOn spans the whole history read (back-test included); the average itself uses only the last windowMonths.
+  const windowFrom = (() => {
+    if (!data?.method) return ''
+    const [y, m] = data.method.basedOn.to.split('-').map(Number)
+    const d = new Date(y, m - data.method.windowMonths, 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })()
   const points = selected
     ? [
         ...selected.recent.map((r) => ({ label: fmtMonth(r.month), actual: r.units })),
@@ -74,12 +81,12 @@ export default function Forecasting() {
       {data?.method && (
         <p className="as-of">
           {data.method.name} of the previous {data.method.windowMonths} complete months
-          ({fmtMonth(data.method.basedOn.from, true)} to {fmtMonth(data.method.basedOn.to, true)}), projecting {fmtMonth(forecastMonth, true)}.
+          ({fmtMonth(windowFrom, true)} to {fmtMonth(data.method.basedOn.to, true)}), projecting {fmtMonth(forecastMonth, true)}.
           Last record {data.asOf.latestDate}.
         </p>
       )}
 
-      {stale && <p className="load-warn" role="status">The latest record is {stale} days old, so the forecast is built on history that may be out of date.</p>}
+      {stale > 0 && <p className="load-warn" role="status">The latest record is {stale} days old, so the forecast is built on history that may be out of date.</p>}
 
       <h2 className="section-title">Overall outlook · {fmtMonth(forecastMonth, true)}</h2>
       <div className="stats-grid">
@@ -106,25 +113,26 @@ export default function Forecasting() {
         </div>
         <div className="search-wrapper forecast-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-          <input type="text" aria-label={`Search ${isProduct ? 'product' : 'service'}`} autoComplete="off" placeholder={`search ${isProduct ? 'product' : 'service'}...`} value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input type="text" aria-label={`Search ${isProduct ? 'product' : 'service'}`} autoComplete="off" placeholder={`Search ${isProduct ? 'product' : 'service'}…`} value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') setSearch('') }} />
+          {/* Drops down under the box, so picking an item does not push the page around. */}
+          {term && (
+            <ul className="search-results">
+              {matches.map((m) => (
+                <li key={m.id}>
+                  <button type="button" onClick={() => { setPickedId(m.id); setSearch('') }}>
+                    <span>{m.name}</span><small>{m.category}</small>
+                  </button>
+                </li>
+              ))}
+              {matches.length === 0 && <li className="search-empty">No {kind} match “{search}”.</li>}
+            </ul>
+          )}
         </div>
       </div>
-      {matches.length > 0 && (
-        <ul className="search-results">
-          {matches.map((m) => (
-            <li key={m.id}>
-              <button type="button" onClick={() => { setPickedId(m.id); setSearch('') }}>
-                <span>{m.name}</span><small>{m.category}</small>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {term && matches.length === 0 && <p className="empty-state">No {kind} match “{search}”.</p>}
 
       {selected ? (
         <>
-          <p className="section-title" style={{ marginBottom: 12 }}>
+          <p className="section-title forecast-item-title">
             {selected.name} <span className={`pill pill-${selected.movement}`}>{MOVEMENT[selected.movement]}</span>
           </p>
           <div className="stats-grid">

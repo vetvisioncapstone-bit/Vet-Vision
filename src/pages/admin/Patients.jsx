@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { usePatient, usePatients } from '../../hooks/usePatients'
 import PatientPrintSheet from './PatientPrintSheet'
+import { PrescriptionFields, newPrescription, rememberSigner } from './Prescription'
 import { useDebounced } from '../../hooks/useDebounced'
 import { getLastVisitDate } from '../../utils/visits'
 import { useServiceCatalog } from '../../hooks/useInventory'
@@ -23,6 +24,83 @@ const EMPTY_PATIENT_FORM = {
 }
 
 // ==================== HELPERS (pure, module-level) ====================
+
+const MAX_ATTACHMENTS = 10 // per list; the server's limit too
+
+const readAsDataUrl = (blob) => new Promise((resolve) => {
+  const reader = new FileReader()
+  reader.onload = (ev) => resolve(ev.target.result)
+  reader.readAsDataURL(blob)
+})
+
+// Phone photos (3-5 MB, ~4000 px) are shrunk before upload: at most 2000 px on the long side, JPEG at 85% quality,
+// which keeps lab printouts and signatures sharp on screen and on A4 paper at a tenth of the size. PDFs, and pictures
+// already smaller than the result, are kept as they are.
+const MAX_SIDE = 2000
+async function readFile(file) {
+  const original = await readAsDataUrl(file)
+  if (!file.type.startsWith('image/')) return { name: file.name, dataUrl: original }
+  try {
+    const img = await createImageBitmap(file, { imageOrientation: 'from-image' })
+    const scale = Math.min(1, MAX_SIDE / Math.max(img.width, img.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(img.width * scale)
+    canvas.height = Math.round(img.height * scale)
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#fff' // transparent areas would turn black in a JPEG
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    const small = canvas.toDataURL('image/jpeg', 0.85)
+    return { name: file.name, dataUrl: small.length < original.length ? small : original }
+  } catch {
+    return { name: file.name, dataUrl: original } // a format the browser cannot draw: upload it unchanged
+  }
+}
+
+// Several files per visit (laboratory results, signed waivers): pick many at once or add more later, remove any one.
+function UploadList({ id, label, accept, noun, items, onChange, onTooMany }) {
+  async function add(e) {
+    const files = [...e.target.files]
+    e.target.value = '' // so the same file can be picked again after removing it
+    const room = MAX_ATTACHMENTS - items.length
+    if (files.length > room) onTooMany(`Up to ${MAX_ATTACHMENTS} ${noun} per consultation.`)
+    onChange([...items, ...(await Promise.all(files.slice(0, Math.max(0, room)).map(readFile)))])
+  }
+  return (
+    <div className="form-group">
+      <label className="form-label" htmlFor={id}>{label}</label>
+      <div className="file-upload-row">
+        <label className="file-upload-btn" htmlFor={id}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+          <span>{items.length ? 'Add more' : 'Upload files'}</span>
+        </label>
+        <input type="file" id={id} accept={accept} multiple hidden onChange={add} />
+        {items.length > 0 && <span className="file-upload-count">{items.length} of {MAX_ATTACHMENTS}</span>}
+      </div>
+      {items.map((file, i) => (
+        <div className="file-upload-preview" key={i}>
+          <svg className="file-upload-preview-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+          <span className="file-upload-name">{file.name}</span>
+          <button type="button" className="file-upload-remove" aria-label={`Remove ${file.name}`} onClick={() => onChange(items.filter((_, j) => j !== i))}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// A saved visit's files, each with its picture (PDFs as a link only).
+function AttachmentLinks({ files, what }) {
+  return (files || []).map((file, i) => (
+    <div className="consultation-attachment" key={i}>
+      {isImageDataUrl(file.image) && <img src={file.image} alt={`${what} ${i + 1}`} />}
+      <a href={file.image} download={file.name || `${what.toLowerCase().replace(/ /g, '-')}-${i + 1}`}>
+        View {what.toLowerCase()}{files.length > 1 ? ` ${i + 1} of ${files.length}` : ''}
+      </a>
+    </div>
+  ))
+}
 
 // Visit count / last visit are derived from consultation history rather than
 // stored separately, so they can never drift out of sync with it.
@@ -69,8 +147,9 @@ export default function Patients() {
   const [consultWeight, setConsultWeight] = useState('')
   const [consultNotes, setConsultNotes] = useState('')
   const [pendingAvailedItems, setPendingAvailedItems] = useState([])
-  const [bloodTest, setBloodTest] = useState({ dataUrl: null, name: '' })
-  const [waiver, setWaiver] = useState({ dataUrl: null, name: '' })
+  const [labResults, setLabResults] = useState([]) // [{ name, dataUrl }]: several pictures per visit
+  const [prescription, setPrescription] = useState(null) // the Rx form's fields while it is open
+  const [waivers, setWaivers] = useState([]) // [{ name, dataUrl }]
   const [consultRemarks, setConsultRemarks] = useState('')
   const [consultFollowUp, setConsultFollowUp] = useState(false)
   const [consultFollowUpNote, setConsultFollowUpNote] = useState('')
@@ -78,8 +157,6 @@ export default function Patients() {
   // ==================== STATE: consultation history modal ====================
   const [historyOpen, setHistoryOpen] = useState(false)
 
-  const bloodTestInputRef = useRef(null)
-  const waiverInputRef = useRef(null)
   const selectAllRef = useRef(null)
   const followUpNoteFieldRef = useRef(null)
   const deepLinkHandledRef = useRef(false)
@@ -264,10 +341,9 @@ export default function Patients() {
     setConsultWeight('')
     setConsultNotes('')
     setPendingAvailedItems([])
-    setBloodTest({ dataUrl: null, name: '' })
-    if (bloodTestInputRef.current) bloodTestInputRef.current.value = ''
-    setWaiver({ dataUrl: null, name: '' })
-    if (waiverInputRef.current) waiverInputRef.current.value = ''
+    setLabResults([])
+    setPrescription(null)
+    setWaivers([])
     setConsultRemarks('')
     setConsultFollowUp(false)
     setConsultFollowUpNote('')
@@ -288,32 +364,6 @@ export default function Patients() {
     if (patient) openEditModal(patient)
   }
 
-
-  function handleBloodTestChange(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => setBloodTest({ dataUrl: ev.target.result, name: file.name })
-    reader.readAsDataURL(file)
-  }
-
-  function handleBloodTestRemove() {
-    setBloodTest({ dataUrl: null, name: '' })
-    if (bloodTestInputRef.current) bloodTestInputRef.current.value = ''
-  }
-
-  function handleWaiverChange(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => setWaiver({ dataUrl: ev.target.result, name: file.name })
-    reader.readAsDataURL(file)
-  }
-
-  function handleWaiverRemove() {
-    setWaiver({ dataUrl: null, name: '' })
-    if (waiverInputRef.current) waiverInputRef.current.value = ''
-  }
 
   function handleFollowUpToggle(checked) {
     setConsultFollowUp(checked)
@@ -345,18 +395,18 @@ export default function Patients() {
       notes: consultNotes.trim(),
       availedItems: toPayload(pendingAvailedItems),
       remarks: consultRemarks.trim(),
-      bloodTestImage: bloodTest.dataUrl,
-      bloodTestName: bloodTest.name,
-      waiverImage: waiver.dataUrl,
-      waiverName: waiver.name,
+      labResults: labResults.map(({ name, dataUrl }) => ({ name, image: dataUrl })),
+      waivers: waivers.map(({ name, dataUrl }) => ({ name, image: dataUrl })),
       followUp,
-      followUpNote
+      followUpNote,
+      prescription: prescription && { ...prescription, nextAppointment: prescription.nextAppointment || null }
     }
 
     setSaving(true)
     try {
       // The server applies the follow-up logic and returns the updated patient.
       const updated = await addConsultation(patient.id, consultationInput)
+      if (prescription) rememberSigner(prescription)
       const oldIds = new Set((patient.consultations || []).map(c => c.id))
       const created = ((updated && updated.consultations) || []).find(c => !oldIds.has(c.id)) || consultationInput
       closePatientDetailModal()
@@ -394,6 +444,10 @@ export default function Patients() {
 
   function printConsultationReceipt(patient, consultation) {
     setPrintJob({ patient, consultations: [consultation], single: true })
+  }
+
+  function printPrescription(patient, consultation) {
+    setPrintJob({ patient, consultations: [consultation], rx: true })
   }
 
   // Every consultation on file as one running log, oldest first.
@@ -711,9 +765,16 @@ export default function Patients() {
                 <h2>{currentPatient.petName}</h2>
                 <p className="detail-owner-sub">{currentPatient.ownerName} {currentPatient.ownerSurname}</p>
               </div>
-              <button className="modal-close" aria-label="Close" onClick={closePatientDetailModal}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-              </button>
+              {/* In the header, next to close, so it never sits on top of the pet's details. */}
+              <div className="modal-header-actions">
+                <button type="button" className="detail-edit-btn" onClick={handleDetailEdit}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" /></svg>
+                  <span>Edit info</span>
+                </button>
+                <button className="modal-close" aria-label="Close" onClick={closePatientDetailModal}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                </button>
+              </div>
             </div>
 
             <div className="modal-body detail-modal-body">
@@ -741,10 +802,6 @@ export default function Patients() {
                   <p className="detail-info-sub">{getVisitCount(currentPatient)} visit(s)</p>
                   <p className="detail-info-sub">Last visit: {formatDate(getLastVisitDate(currentPatient))}</p>
                 </div>
-                <button type="button" className="detail-edit-btn" onClick={handleDetailEdit}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" /></svg>
-                  <span>Edit info</span>
-                </button>
               </div>
 
               <div className="detail-actions-row">
@@ -770,50 +827,29 @@ export default function Patients() {
                 </div>
                 <div className="form-group">
                   <label className="form-label" htmlFor="consultNotes">Treatment / findings <span className="required">*</span></label>
-                  <textarea id="consultNotes" className="form-input" rows="3" placeholder="Diagnosis, prescription, dosage…" required value={consultNotes} onChange={(e) => setConsultNotes(e.target.value)}></textarea>
+                  <textarea id="consultNotes" className="form-input" rows="3" placeholder="Findings and treatment given…" required value={consultNotes} onChange={(e) => setConsultNotes(e.target.value)}></textarea>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Services / products</label>
                   <AvailedItemsPicker branch={currentPatient.branch} items={pendingAvailedItems} onChange={setPendingAvailedItems} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Blood test result</label>
-                  <div className="file-upload-row">
-                    <label className="file-upload-btn" htmlFor="bloodTestInput">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-                      <span>Upload image</span>
-                    </label>
-                    <input type="file" id="bloodTestInput" accept="image/*" hidden ref={bloodTestInputRef} onChange={handleBloodTestChange} />
-                    {bloodTest.dataUrl && (
-                      <div className="file-upload-preview">
-                        <svg className="file-upload-preview-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
-                        <span className="file-upload-name">{bloodTest.name}</span>
-                        <button type="button" className="file-upload-remove" aria-label="Remove blood test result" onClick={handleBloodTestRemove}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  <label className="form-label">Prescription</label>
+                  {prescription
+                    ? <PrescriptionFields value={prescription} onChange={setPrescription} onRemove={() => setPrescription(null)} />
+                    : (
+                      <div className="file-upload-row">
+                        <button type="button" className="file-upload-btn" onClick={() => setPrescription(newPrescription())}>
+                          <span className="rx-btn-symbol" aria-hidden="true">℞</span>
+                          <span>Write prescription</span>
                         </button>
                       </div>
                     )}
-                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Signed waiver</label>
-                  <div className="file-upload-row">
-                    <label className="file-upload-btn" htmlFor="waiverInput">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-                      <span>Upload waiver</span>
-                    </label>
-                    <input type="file" id="waiverInput" accept="image/*,.pdf" hidden ref={waiverInputRef} onChange={handleWaiverChange} />
-                    {waiver.dataUrl && (
-                      <div className="file-upload-preview">
-                        <svg className="file-upload-preview-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
-                        <span className="file-upload-name">{waiver.name}</span>
-                        <button type="button" className="file-upload-remove" aria-label="Remove waiver" onClick={handleWaiverRemove}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <UploadList id="labResultsInput" label="Laboratory Test Results" accept="image/*" noun="laboratory pictures"
+                  items={labResults} onChange={setLabResults} onTooMany={showToast} />
+                <UploadList id="waiversInput" label="Signed waiver" accept="image/*,.pdf" noun="waivers"
+                  items={waivers} onChange={setWaivers} onTooMany={showToast} />
                 <div className="form-group">
                   <label className="form-label" htmlFor="consultRemarks">Remarks</label>
                   <input type="text" id="consultRemarks" className="form-input" placeholder="e.g. Follow-up on 9/15" value={consultRemarks} onChange={(e) => setConsultRemarks(e.target.value)} />
@@ -880,6 +916,9 @@ export default function Patients() {
                             {c.weight && <span className="consultation-weight">{c.weight}</span>}
                           </span>
                           <div className="consultation-item-actions">
+                            {c.prescription && (
+                              <button type="button" className="consultation-print-btn rx" aria-label="Print prescription" title="Print prescription" onClick={() => printPrescription(currentPatient, c)}>℞</button>
+                            )}
                             <button type="button" className="consultation-print-btn" aria-label="Print this consultation" onClick={() => printConsultationReceipt(currentPatient, c)}>
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
                             </button>
@@ -892,18 +931,14 @@ export default function Patients() {
                         {c.services && <p className="consultation-field"><span className="consultation-field-label">Availed:</span> {c.services}</p>}
                         {c.totalPrice ? <p className="consultation-total">Total: {formatPrice(c.totalPrice)}</p> : null}
                         {c.remarks && <p className="consultation-remarks">{c.remarks}</p>}
-                        {c.bloodTestImage && (
-                          <div className="consultation-attachment">
-                            <img src={c.bloodTestImage} alt="Blood test result" />
-                            <a href={c.bloodTestImage} download={c.bloodTestName || 'blood-test-result'}>View full blood test result</a>
+                        {c.prescription && (
+                          <div className="consultation-rx">
+                            <p className="consultation-field-label">℞ Prescription{c.diagnosis ? ` · ${c.diagnosis}` : ''}</p>
+                            <p className="consultation-rx-text">{c.prescription.rx}</p>
                           </div>
                         )}
-                        {c.waiverImage && (
-                          <div className="consultation-attachment">
-                            {isImageDataUrl(c.waiverImage) && <img src={c.waiverImage} alt="Signed waiver" />}
-                            <a href={c.waiverImage} download={c.waiverName || 'signed-waiver'}>View signed waiver</a>
-                          </div>
-                        )}
+                        <AttachmentLinks files={c.labResults} what="Laboratory result" />
+                        <AttachmentLinks files={c.waivers} what="Signed waiver" />
                         {c.followUp && <span className="follow-up-pill">Follow-up needed{c.followUpNote ? `: ${c.followUpNote}` : ''}</span>}
                       </div>
                     ))

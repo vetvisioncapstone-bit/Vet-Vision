@@ -172,8 +172,78 @@
     padding-left: 15px;
 }
 
-.login-card select.form-input {
-    appearance: auto;
+/* The sign-up form is taller than a short laptop screen: the card centres when it fits and otherwise starts at the
+   top and the column scrolls, instead of being cut off at the top. */
+.right-section {
+    align-items: flex-start;
+    overflow-y: auto;
+}
+
+.login-card {
+    margin: auto 0;
+}
+
+#signUpForm .form-group {
+    margin-bottom: 14px;
+}
+
+.select-field {
+    position: relative;
+}
+
+.login-card .select-field select.form-input {
+    appearance: none;
+    padding-right: 36px;
+    cursor: pointer;
+}
+
+.select-field svg {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    transform: translateY(-50%);
+    color: #646c68;
+    pointer-events: none;
+}
+
+.field-error {
+    margin: 6px 0 0;
+    font-size: 12.5px;
+    color: #c62828;
+}
+
+.password-rules {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    font-size: 12.5px;
+    color: #646c68;
+}
+
+.password-rules li::before {
+    content: "\25CB";  /* open circle */
+    margin-right: 5px;
+}
+
+.password-rules li.met {
+    color: #17693a;
+}
+
+.password-rules li.met::before {
+    content: "\2713";  /* check mark */
+}
+
+.password-rules li.rule-note::before {
+    content: none;
+}
+
+.password-rules li.rule-note {
+    flex-basis: 100%;
 }
 
 .form-row {
