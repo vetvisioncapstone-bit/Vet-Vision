@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useInventory } from '../../hooks/useInventory'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useToast } from '../../components/shared/Toast'
@@ -7,6 +7,7 @@ import '../../styles/admin/inventory.css'
 import { formatDate, formatPrice } from '../../utils/format'
 
 import Dialog from '../../components/shared/Dialog'
+import Pagination from '../../components/shared/Pagination'
 import ReceiveStockDialog from '../../components/shared/ReceiveStockDialog'
 import { onActivate } from '../../utils/a11y'
 function getStatus(product) {
@@ -14,6 +15,8 @@ function getStatus(product) {
   if (product.quantity <= product.reorderPoint) return { label: 'Low Stock', cls: 'status-low-stock' }
   return { label: 'Ok', cls: 'status-ok' }
 }
+
+const PAGE_SIZE = 10 // products per page
 
 function compareExpiration(a, b) {
   const ea = a.expiration || ''
@@ -62,6 +65,13 @@ export default function Inventory() {
       })
       .sort(compareExpiration)
   }, [products, searchTerm, activeCategories])
+
+  // A page of the filtered list at a time; a new search or filter starts again at page 1.
+  const [page, setPage] = useState(1)
+  useEffect(() => { setPage(1) }, [searchTerm, activeCategories])
+  const pageCount = Math.max(1, Math.ceil(visibleProducts.length / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const pageProducts = visibleProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   function toggleCategory(cat) {
     setActiveCategories(prev => {
@@ -225,7 +235,7 @@ export default function Inventory() {
                 <tr><td colSpan="7" className="empty-state">No products yet. Click "+ New" to add one.</td></tr>
               ) : visibleProducts.length === 0 ? (
                 <tr><td colSpan="7" className="empty-state">No products match your search or filter.</td></tr>
-              ) : visibleProducts.map(p => {
+              ) : pageProducts.map(p => {
                 const status = getStatus(p)
                 return (
                   <tr className="product-row" key={p.id} tabIndex={0} onKeyDown={onActivate(() => setDetailProduct(p))} onClick={() => setDetailProduct(p)}>
@@ -257,6 +267,7 @@ export default function Inventory() {
             </tbody>
           </table>
         </div>
+        <Pagination page={currentPage} pageSize={PAGE_SIZE} total={visibleProducts.length} onPage={setPage} />
       </div>
 
       <Dialog open={!!modalOpen} onClose={closeModal} label={editingId ? 'Edit product' : 'Add new product'}>

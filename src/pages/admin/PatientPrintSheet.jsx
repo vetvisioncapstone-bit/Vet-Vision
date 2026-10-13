@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { formatDate, formatPrice, isImageDataUrl, todayIso } from '../../utils/format'
 import { RxPad } from './Prescription'
+import '../../styles/admin/reports.css' // the overlay and the print rules; not loaded unless the Reports page was opened
 
 // The clinic's paper chart: Ecovet letterhead, client and pet fields, then a Date | Treatment | Remarks log.
 // It is shown over the page and printed with the browser's own print dialog (see the @media print rules in

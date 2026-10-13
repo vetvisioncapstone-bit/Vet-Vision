@@ -8,9 +8,12 @@ import '../../styles/admin/inventory.css'
 import '../../styles/employee/employee-inventory.css'
 
 import Dialog from '../../components/shared/Dialog'
+import Pagination from '../../components/shared/Pagination'
 import ReceiveStockDialog from '../../components/shared/ReceiveStockDialog'
 // ==================== HELPERS ====================
 // Rows come from the API, already scoped to this employee's branch by the server.
+
+const PAGE_SIZE = 10 // products per page
 
 function getStatus(product) {
   if (product.quantity <= 0) return { label: 'Out of stock', cls: 'status-out-of-stock' }
@@ -57,6 +60,13 @@ export default function Inventory() {
       !searchTerm || p.name.toLowerCase().includes(searchTerm) || p.category.toLowerCase().includes(searchTerm)
     )
   }, [branchProducts, searchTerm])
+
+  // A page of the filtered list at a time; a new search or filter starts again at page 1.
+  const [page, setPage] = useState(1)
+  useEffect(() => { setPage(1) }, [searchTerm])
+  const pageCount = Math.max(1, Math.ceil(visibleProducts.length / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const pageProducts = visibleProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   const statTotalItems = branchProducts.length
   let statLowStock = 0
@@ -214,7 +224,7 @@ export default function Inventory() {
                 <tr><td colSpan="6" className="empty-state">No products for this branch yet. Click "+ New" to add one.</td></tr>
               ) : visibleProducts.length === 0 ? (
                 <tr><td colSpan="6" className="empty-state">No products match your search.</td></tr>
-              ) : visibleProducts.map(p => {
+              ) : pageProducts.map(p => {
                 const status = getStatus(p)
                 const movement = getMovementLabel(p)
                 return (
@@ -244,6 +254,7 @@ export default function Inventory() {
             </tbody>
           </table>
         </div>
+        <Pagination page={currentPage} pageSize={PAGE_SIZE} total={visibleProducts.length} onPage={setPage} />
       </div>
 
       {/* Add / Edit product modal */}

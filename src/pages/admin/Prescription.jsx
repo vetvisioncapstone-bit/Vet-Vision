@@ -5,22 +5,13 @@ import { formatDate } from '../../utils/format'
 // clinic's paper Rx pad (letterhead, patient lines, the Rx symbol, the faint veterinary caduceus and the vet's
 // signature block). Patient name, age, weight and date come from the consultation itself.
 
-export const EMPTY_RX = { diagnosis: '', rx: '', nextAppointment: '', veterinarian: '', licenseNo: '', ptr: '' }
-const SIGNER_KEY = 'vv-rx-signer'
+const EMPTY_RX = { diagnosis: '', rx: '', nextAppointment: '', veterinarian: '', licenseNo: '', ptr: '' }
 
-// The vet's name, licence and PTR are the same on every prescription they write, so this browser remembers them.
+// Every prescription starts blank: the vet's name, License No. and PTR are typed each time, never carried over from
+// whoever used this browser before. (An earlier version remembered them; that copy is removed here.)
 export function newPrescription() {
-  try {
-    return { ...EMPTY_RX, ...JSON.parse(localStorage.getItem(SIGNER_KEY) || '{}') }
-  } catch {
-    return { ...EMPTY_RX }
-  }
-}
-
-export function rememberSigner({ veterinarian, licenseNo, ptr }) {
-  try {
-    localStorage.setItem(SIGNER_KEY, JSON.stringify({ veterinarian, licenseNo, ptr }))
-  } catch { /* private window: nothing to remember */ }
+  try { localStorage.removeItem('vv-rx-signer') } catch { /* storage blocked: nothing was saved */ }
+  return { ...EMPTY_RX }
 }
 
 export function PrescriptionFields({ value, onChange, onRemove }) {
@@ -28,7 +19,7 @@ export function PrescriptionFields({ value, onChange, onRemove }) {
   const input = (key, label, props = {}) => (
     <div className="form-group">
       <label className="form-label" htmlFor={`rx-${key}`}>{label}</label>
-      <input id={`rx-${key}`} className="form-input" value={value[key]} onChange={set(key)} {...props} />
+      <input id={`rx-${key}`} className="form-input" autoComplete="off" value={value[key]} onChange={set(key)} {...props} />
     </div>
   )
   return (

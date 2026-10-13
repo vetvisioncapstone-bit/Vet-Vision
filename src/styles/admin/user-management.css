@@ -3,8 +3,9 @@
 .user-toolbar {
     display: flex;
     align-items: center;
-    gap: 14px;
-    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    margin-bottom: 20px;
 }
 
 .search-wrapper {
@@ -13,6 +14,28 @@
     align-items: center;
     flex: 1;
 }
+
+/* A readable width instead of the whole row: long enough for a full name or email. Scoped to this page, because
+   other pages use .search-wrapper too and page styles stay loaded after a visit. */
+.user-toolbar .search-wrapper {
+    flex: 1 1 320px;
+    max-width: 680px;
+}
+
+.user-toolbar .new-btn {
+    height: 44px;
+    margin-left: auto; /* pushed to the right end of the row */
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.user-toolbar .search-wrapper input {
+    width: 100%; /* the Inventory sheet sets these inputs to 200px, and page sheets stay loaded after a visit */
+    height: 44px;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
 
 .search-wrapper svg {
     position: absolute;

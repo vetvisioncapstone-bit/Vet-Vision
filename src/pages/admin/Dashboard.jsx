@@ -18,8 +18,12 @@ export default function Dashboard() {
   // Keep the month list while another month loads, so the picker does not empty and jump back to "Latest".
   const knownMonths = useRef([])
   if (data?.months) knownMonths.current = data.months
-  // [['2026', ['2026-06', ...]], ['2025', [...]]], newest first; the newest month itself is the 'Latest' choice.
-  const years = [...Map.groupBy(knownMonths.current.slice(1), (m) => m.slice(0, 4))]
+  // Year and month are picked separately: the years that have records, then that year's months with records.
+  // The newest month is the default view ('' in state), so choosing it goes back to "latest".
+  const latest = knownMonths.current[0] || ''
+  const shown = month || latest
+  const monthsByYear = Map.groupBy(knownMonths.current, (m) => m.slice(0, 4)) // newest first
+  const go = (m) => setMonth(m === latest ? '' : m)
 
   const asOf = data?.asOf?.month ? fmtMonth(data.asOf.month, true) : null
   const partial = Boolean(data?.asOf?.partial)
@@ -35,14 +39,20 @@ export default function Dashboard() {
         <h1>Overview</h1>
         <div className="dashboard-filters">
         <div className="branch-filter">
+          <label htmlFor="yearSelect">Year:</label>
+          <div className="select-wrapper">
+            <select id="yearSelect" value={shown.slice(0, 4)} onChange={(e) => go(monthsByYear.get(e.target.value)[0])}>
+              {[...monthsByYear.keys()].map((y) => <option key={y}>{y}</option>)}
+            </select>
+            <svg className="select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+          </div>
+        </div>
+        <div className="branch-filter">
           <label htmlFor="monthSelect">Month:</label>
           <div className="select-wrapper">
-            <select id="monthSelect" value={month} onChange={(e) => setMonth(e.target.value)}>
-              <option value="">Latest{knownMonths.current[0] ? ` (${fmtMonth(knownMonths.current[0], true)})` : ''}</option>
-              {years.map(([year, months]) => (
-                <optgroup key={year} label={year}>
-                  {months.map((m) => <option key={m} value={m}>{fmtMonth(m, true)}</option>)}
-                </optgroup>
+            <select id="monthSelect" value={shown} onChange={(e) => go(e.target.value)}>
+              {[...(monthsByYear.get(shown.slice(0, 4)) || [])].reverse().map((m) => ( // January first
+                <option key={m} value={m}>{new Date(`${m}-01T00:00`).toLocaleDateString('en-US', { month: 'long' })}{m === latest ? ' (latest)' : ''}</option>
               ))}
             </select>
             <svg className="select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>

@@ -72,11 +72,9 @@ export default function UserManagement() {
   const passwordRequired = !isEditing || editingAccount?.hasLogin === false
 
   const visibleAccounts = useMemo(() => {
-    if (!searchTerm) return accounts
-    return accounts.filter(a =>
-      a.name.toLowerCase().includes(searchTerm) ||
-      a.email.toLowerCase().includes(searchTerm)
-    )
+    const term = searchTerm.trim().toLowerCase()
+    if (!term) return accounts
+    return accounts.filter(a => a.name.toLowerCase().includes(term) || a.email.toLowerCase().includes(term))
   }, [accounts, searchTerm])
 
   const passwordRules = useMemo(() => ({
@@ -247,6 +245,7 @@ export default function UserManagement() {
 
   return (
     <main id="main-content" tabIndex={-1} className="content">
+      {/* Search on the left, the page's main action on the right of the same row, both 44px tall. */}
       <div className="content-header">
         <h1>User management</h1>
       </div>
@@ -255,15 +254,15 @@ export default function UserManagement() {
         <div className="search-wrapper">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
           <input
-            type="text"
-            aria-label="Search accounts" autoComplete="off" placeholder="search account"
+            type="search"
+            aria-label="Search accounts" autoComplete="off" placeholder="Search by name or email"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value.trim().toLowerCase())}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <button className="new-btn" onClick={openAccountModal}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          <span>New</span>
+          <span>New account</span>
         </button>
       </div>
 

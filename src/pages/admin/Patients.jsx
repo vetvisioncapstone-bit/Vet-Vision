@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { usePatient, usePatients } from '../../hooks/usePatients'
 import PatientPrintSheet from './PatientPrintSheet'
-import { PrescriptionFields, newPrescription, rememberSigner } from './Prescription'
+import { PrescriptionFields, newPrescription } from './Prescription'
 import { useDebounced } from '../../hooks/useDebounced'
 import { getLastVisitDate } from '../../utils/visits'
 import { useServiceCatalog } from '../../hooks/useInventory'
@@ -13,6 +13,7 @@ import '../../styles/admin/patients.css'
 import { formatDate, todayIso, formatPrice, dash, getStatusClass, isImageDataUrl } from '../../utils/format'
 
 import Dialog from '../../components/shared/Dialog'
+import Pagination from '../../components/shared/Pagination'
 import { onActivate } from '../../utils/a11y'
 // ==================== CONSTANTS ====================
 const PAGE_SIZE = 50
@@ -175,8 +176,6 @@ export default function Patients() {
   const totalPages = serverTotalPages
   const currentPage = Math.min(page, totalPages)
   const pagePatients = patients
-  const total_from = totalPatients === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
-  const total_to = Math.min(currentPage * PAGE_SIZE, totalPatients)
   const filtersActive = Boolean(searchTerm) || selectedBranch !== 'All Branches' || activeStatuses.size > 0 || Boolean(regYear) || Boolean(visitYear)
 
   useEffect(() => { setPage(1) }, [searchTerm, selectedBranch, activeStatuses, regYear, visitYear])
@@ -406,7 +405,6 @@ export default function Patients() {
     try {
       // The server applies the follow-up logic and returns the updated patient.
       const updated = await addConsultation(patient.id, consultationInput)
-      if (prescription) rememberSigner(prescription)
       const oldIds = new Set((patient.consultations || []).map(c => c.id))
       const created = ((updated && updated.consultations) || []).find(c => !oldIds.has(c.id)) || consultationInput
       closePatientDetailModal()
@@ -621,18 +619,7 @@ export default function Patients() {
           </table>
         </div>
 
-        <div className="table-footer">
-          <p className="table-footer-count">Showing {total_from}-{total_to} of {totalPatients} entries</p>
-          <div className="pagination">
-            <button className="page-btn" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} aria-label="Previous page">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-            </button>
-            <button className="page-btn active" disabled>{currentPage} / {totalPages}</button>
-            <button className="page-btn" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)} aria-label="Next page">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-            </button>
-          </div>
-        </div>
+        <Pagination page={currentPage} pageSize={PAGE_SIZE} total={totalPatients} onPage={setPage} />
       </div>
 
       {/* New/Edit patient modal */}

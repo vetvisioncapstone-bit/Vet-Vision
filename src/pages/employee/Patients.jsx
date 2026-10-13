@@ -12,6 +12,7 @@ import '../../styles/employee/employee-patients.css'
 import { formatDate, todayIso, dash, getStatusClass } from '../../utils/format'
 
 import Dialog from '../../components/shared/Dialog'
+import Pagination from '../../components/shared/Pagination'
 import AvailedItemsPicker, { toPayload } from '../../components/shared/AvailedItemsPicker'
 import { onActivate } from '../../utils/a11y'
 // ==================== HELPERS ====================
@@ -284,20 +285,7 @@ export default function Patients() {
             </tbody>
           </table>
         </div>
-        {totalPages > 1 && (
-          <div className="table-footer">
-            <p className="table-footer-count">Showing {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, totalPatients)} of {totalPatients} entries</p>
-            <div className="pagination">
-              <button className="page-btn" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} aria-label="Previous page">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-              </button>
-              <button className="page-btn active" disabled>{currentPage} / {totalPages}</button>
-              <button className="page-btn" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)} aria-label="Next page">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-              </button>
-            </div>
-          </div>
-        )}
+        <Pagination page={currentPage} pageSize={PAGE_SIZE} total={totalPatients} onPage={setPage} />
       </div>
 
       {/* Add / Edit patient modal */}

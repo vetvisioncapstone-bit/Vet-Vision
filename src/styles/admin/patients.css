@@ -39,8 +39,9 @@
     transform: translateY(0) scale(1);
 }
 
-.patient-modal {
-    max-width: 760px;
+/* The double class beats the 420px .modal that several page sheets define (they stay loaded after a visit). */
+.modal.patient-modal {
+    max-width: 920px;
 }
 
 .modal-header {
@@ -150,7 +151,7 @@ select.form-input {
 
 .form-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); /* fields shrink with the window, never spill out */
     gap: 14px;
 }
 
@@ -158,7 +159,8 @@ select.form-input {
 
 .patient-form-panel {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    /* Owner and Pet side by side when there is room, stacked when there is not (phones, narrow windows). */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
     gap: 20px;
     background: #f4f6f5;
     border-radius: 16px;
@@ -166,6 +168,7 @@ select.form-input {
 }
 
 .patient-form-col {
+    min-width: 0;
     background: #ffffff;
     border-radius: 12px;
     padding: 18px;
@@ -239,9 +242,13 @@ select.form-input {
     background: #f0f4f1;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 480px) {
     .patient-form-panel {
-        grid-template-columns: 1fr;
+        padding: 12px;
+    }
+
+    .patient-form-panel .form-row {
+        grid-template-columns: minmax(0, 1fr); /* one field per line on a phone */
     }
 }
 
@@ -253,8 +260,10 @@ textarea.form-input {
 
 /* ==================== PATIENT DETAIL MODAL ==================== */
 
-.patient-detail-modal {
-    max-width: 640px;
+/* Wide enough for the consultation form's fields side by side; .modal (420px) is defined in several page sheets,
+   so the double class wins whatever order they load in. */
+.modal.patient-detail-modal {
+    max-width: 860px;
 }
 
 .detail-owner-sub {
@@ -891,68 +900,6 @@ textarea.form-input {
 .status-inactive {
     background: #eef0ef;
     color: #6b736f;
-}
-
-/* ==================== TABLE FOOTER / PAGINATION ==================== */
-
-.table-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid #f2f2f2;
-}
-
-.table-footer-count {
-    font-size: 13px;
-    color: #646c68;
-}
-
-.pagination {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.page-btn {
-    min-width: 30px;
-    height: 30px;
-    padding: 0 6px;
-    border-radius: 7px;
-    border: 1px solid #dfe3e1;
-    background: #ffffff;
-    color: #1a1a1a;
-    font-size: 13px;
-    font-family: inherit;
-    font-weight: 500;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s ease;
-}
-
-.page-btn svg {
-    width: 14px;
-    height: 14px;
-}
-
-.page-btn:hover:not(:disabled) {
-    background: #f0f4f1;
-}
-
-.page-btn.active {
-    background: #163a26;
-    border-color: #163a26;
-    color: #ffffff;
-}
-
-.page-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
 }
 
 .filter-year { width: 100%; margin: 4px 0 12px; padding: 8px 10px; border: 1px solid #dfe3e1; border-radius: 8px; font: inherit; background: #fff; }
