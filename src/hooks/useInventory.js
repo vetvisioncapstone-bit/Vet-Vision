@@ -11,7 +11,9 @@ export function useServiceCatalog() {
   return {
     ...res,
     create: async (input) => { const row = await api.post('/services/', input); await refresh(); return row },
-    update: async (id, input) => { const row = await api.put(`/services/${id}/`, input); await refresh(); return row }
+    update: async (id, input) => { const row = await api.put(`/services/${id}/`, input); await refresh(); return row },
+    // Resolves to { retired: true } when past visits used the service (hidden, history kept), else nothing.
+    remove: async (id) => { const out = await api.del(`/services/${id}/`); await refresh(); return out }
   }
 }
 

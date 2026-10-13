@@ -3,6 +3,7 @@ import { useInventory, useServiceCatalog } from '../../hooks/useInventory'
 import { useToast } from '../../components/shared/Toast'
 import { errorMessage } from '../../api/client'
 import Dialog from '../../components/shared/Dialog'
+import { useConfirm } from '../../components/shared/ConfirmDialog'
 import { formatPrice } from '../../utils/format'
 import '../../styles/admin/inventory.css'
 import '../../styles/admin/services.css'
@@ -17,7 +18,8 @@ const money = (v) => (v === null || v === undefined ? '—' : formatPrice(v))
 const numOrNull = (v) => (v === '' || v === null || v === undefined ? null : Number(v))
 
 export default function Services() {
-  const { data, loading, create, update } = useServiceCatalog()
+  const { data, loading, create, update, remove } = useServiceCatalog()
+  const [ask, confirmBox] = useConfirm() // styled "are you sure?" box for deletes
   const { items: stock } = useInventory()
   const showToast = useToast()
   const [search, setSearch] = useState('')
@@ -28,6 +30,27 @@ export default function Services() {
   const [saving, setSaving] = useState(false)
 
   const services = data || []
+
+  async function handleDelete(s) {
+    const ok = await ask({
+      title: 'Delete this service?',
+      message: (
+        <>
+          <p><strong>{s.name}</strong> ({s.category}) will no longer be offered on new visits.</p>
+          <p>If past visits used it, it is only hidden: their records and the reports keep it.</p>
+        </>
+      )
+    })
+    if (!ok) return
+    try {
+      const out = await remove(s.id)
+      showToast(out?.retired
+        ? `"${s.name}" was removed from the list. Past visits still show it, so it stays in the records.`
+        : `"${s.name}" was deleted.`)
+    } catch (err) {
+      showToast(errorMessage(err))
+    }
+  }
   const categories = useMemo(() => [...new Set(services.map((s) => s.category))].sort(), [services])
   // Products are shared by both branches; the inventory list has one row per branch, so keep one per product.
   const products = useMemo(() => {
@@ -133,9 +156,14 @@ export default function Services() {
                   <td>{money(s.prices['San Jose'])}</td>
                   <td>{s.supplies?.length ? s.supplies.map((u) => `${u.name} ×${u.quantity}`).join(', ') : '—'}</td>
                   <td>
-                    <button type="button" className="row-action-btn edit" aria-label={`Edit ${s.name}`} onClick={() => openEdit(s)}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" /></svg>
-                    </button>
+                    <div className="row-actions">
+                      <button type="button" className="row-action-btn edit" aria-label={`Edit ${s.name}`} onClick={() => openEdit(s)}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" /></svg>
+                      </button>
+                      <button type="button" className="row-action-btn delete" aria-label={`Delete ${s.name}`} onClick={() => handleDelete(s)}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -211,6 +239,7 @@ export default function Services() {
           </form>
         </div>
       </Dialog>
+      {confirmBox}
     </main>
   )
 }

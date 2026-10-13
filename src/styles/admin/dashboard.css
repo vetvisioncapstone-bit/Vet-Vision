@@ -1178,7 +1178,7 @@ tbody tr:hover .status-pill {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.25s ease, transform 0.25s ease;
-    z-index: 50;
+    z-index: 300; /* above open windows (100) and the print sheet (200), so their messages are seen */
     display: flex;
     align-items: center;
     gap: 14px;

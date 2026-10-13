@@ -356,7 +356,7 @@ def _bill_services(request, pet, branch, items, on, weight):
     """The visit's services become a service transaction, exactly like the clinic's own records, so they count
     in revenue, service demand, forecasts and reports. Prices are as entered (fees vary per case); the cost comes
     from the catalog. The service trigger deducts any supplies listed in service_product_usage."""
-    catalog = {s.service_id: s for s in Service.objects.filter(pk__in=[i["serviceId"] for i in items])}
+    catalog = {s.service_id: s for s in Service.objects.filter(pk__in=[i["serviceId"] for i in items], is_active=True)}
     missing = sorted({i["serviceId"] for i in items} - set(catalog))
     if missing:
         raise serializers.ValidationError({"availedItems": f"Unknown service: {', '.join(missing)}."})
@@ -519,7 +519,7 @@ def service_row(s, admin):
 
 
 def _services():
-    return Service.objects.order_by("category", "service_name").prefetch_related(
+    return Service.objects.filter(is_active=True).order_by("category", "service_name").prefetch_related(
         Prefetch("servicebranchprice_set", queryset=ServiceBranchPrice.objects.select_related("branch"), to_attr="prices_"),
         Prefetch("serviceproductusage_set", queryset=ServiceProductUsage.objects.select_related("product"),
                  to_attr="supplies_"),
@@ -529,7 +529,7 @@ def _services():
 def _save_service(service, d):
     """Name/category, then each branch price given, then the supply list (replaced as a whole when sent)."""
     name, category = d["name"].strip(), d["category"].strip().upper()
-    clash = Service.objects.filter(service_name__iexact=name).exclude(pk=service.pk if service.pk else None)
+    clash = Service.objects.filter(service_name__iexact=name, is_active=True).exclude(pk=service.pk if service.pk else None)
     if clash.exists():
         raise serializers.ValidationError({"name": "A service with this name already exists."})
     service.service_name, service.category = name, category
@@ -571,8 +571,8 @@ class ServiceCatalog(APIView):
 
 
 class ServiceDetailView(APIView):
-    """The admin edits a service: name, category, branch prices and costs, supplies. Services are never deleted
-    here: past visits point at them."""
+    """The admin edits or deletes a service. A service that past visits used cannot really be deleted (the sales
+    history points at it), so it is retired instead: hidden from the catalog and pickers, kept for the records."""
 
     permission_classes = [IsAdmin]
 
@@ -586,6 +586,20 @@ class ServiceDetailView(APIView):
         _save_service(service, s.validated_data)
         record(request, "service.update", target=service.service_id)
         return Response(service_row(_services().get(pk=service.pk), True))
+
+    @transaction.atomic
+    def delete(self, request, pk):
+        service = Service.objects.filter(pk=pk, is_active=True).first()
+        if service is None:
+            raise NotFound()
+        if ServiceDetail.objects.filter(service=service).exists():
+            service.is_active = False
+            service.save(update_fields=["is_active"])
+            record(request, "service.retire", target=service.service_id)
+            return Response({"retired": True})
+        service.delete()  # its branch prices and supply list go with it
+        record(request, "service.delete", target=service.service_id)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------- staff accounts (admin only) ----------------

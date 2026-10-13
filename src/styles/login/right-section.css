@@ -39,21 +39,22 @@
 }
 
 /* ==================== FORM STYLES ==================== */
+/* Scoped to .login-card: the app's pages use the same class names for their own forms. */
 
-.form-group {
+.login-card .form-group {
     margin-bottom: 20px;
     animation: slideInUp 0.6s ease-out backwards;
 }
 
-.form-group:nth-child(1) {
+.login-card .form-group:nth-child(1) {
     animation-delay: 0.5s;
 }
 
-.form-group:nth-child(2) {
+.login-card .form-group:nth-child(2) {
     animation-delay: 0.6s;
 }
 
-.form-label {
+.login-card .form-label {
     display: block;
     margin-bottom: 8px;
     color: #333;
@@ -62,7 +63,7 @@
     transition: color 0.3s ease;
 }
 
-.input-wrapper {
+.login-card .input-wrapper {
     position: relative;
     display: flex;
     align-items: center;
@@ -78,7 +79,7 @@
     background: #fafafa;
 }
 
-.form-input:focus {
+.login-card .form-input:focus {
     outline: none;
     border-color: #4caf50;
     background: #fff;
@@ -86,13 +87,13 @@
     animation: glow 1s ease-in-out infinite;
 }
 
-.form-input::placeholder {
+.login-card .form-input::placeholder {
     color: #6b736f;
     transition: color 0.3s ease;
 }
 
 
-.input-icon {
+.login-card .input-icon {
     position: absolute;
     left: 14px;
     display: inline-flex;
@@ -102,12 +103,12 @@
     transition: color 0.3s ease, opacity 0.3s ease;
 }
 
-.input-icon svg {
+.login-card .input-icon svg {
     width: 17px;
     height: 17px;
 }
 
-.input-wrapper:focus-within .input-icon {
+.login-card .input-wrapper:focus-within .input-icon {
     color: #2d7a4d;
     opacity: 1;
     transform: scale(1.1);
@@ -187,7 +188,7 @@
     margin-bottom: 14px;
 }
 
-.select-field {
+.login-card .select-field {
     position: relative;
 }
 
@@ -197,7 +198,7 @@
     cursor: pointer;
 }
 
-.select-field svg {
+.login-card .select-field svg {
     position: absolute;
     right: 12px;
     top: 50%;
@@ -208,13 +209,13 @@
     pointer-events: none;
 }
 
-.field-error {
+.login-card .field-error {
     margin: 6px 0 0;
     font-size: 12.5px;
     color: #c62828;
 }
 
-.password-rules {
+.login-card .password-rules {
     margin: 8px 0 0;
     padding: 0;
     list-style: none;
@@ -225,28 +226,28 @@
     color: #646c68;
 }
 
-.password-rules li::before {
+.login-card .password-rules li::before {
     content: "\25CB";  /* open circle */
     margin-right: 5px;
 }
 
-.password-rules li.met {
+.login-card .password-rules li.met {
     color: #17693a;
 }
 
-.password-rules li.met::before {
+.login-card .password-rules li.met::before {
     content: "\2713";  /* check mark */
 }
 
-.password-rules li.rule-note::before {
+.login-card .password-rules li.rule-note::before {
     content: none;
 }
 
-.password-rules li.rule-note {
+.login-card .password-rules li.rule-note {
     flex-basis: 100%;
 }
 
-.form-row {
+.login-card .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
@@ -274,7 +275,8 @@
 }
 
 @media (max-width: 480px) {
-    .form-row {
+    .login-card .form-row {
         grid-template-columns: 1fr;
+        row-gap: 0; /* stacked fields keep the same spacing as the single ones */
     }
 }

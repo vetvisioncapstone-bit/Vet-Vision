@@ -10,6 +10,7 @@ import '../../styles/employee/employee-inventory.css'
 import Dialog from '../../components/shared/Dialog'
 import Pagination from '../../components/shared/Pagination'
 import ReceiveStockDialog from '../../components/shared/ReceiveStockDialog'
+import { useConfirm } from '../../components/shared/ConfirmDialog'
 // ==================== HELPERS ====================
 // Rows come from the API, already scoped to this employee's branch by the server.
 
@@ -34,6 +35,7 @@ const EMPTY_FORM = {
 }
 
 export default function Inventory() {
+  const [ask, confirmBox] = useConfirm() // styled "are you sure?" box for deletes
   const { items: products, loading, create, update } = useInventory()
   const [receiving, setReceiving] = useState(null) // product whose delivery is being entered
   const [saving, setSaving] = useState(false)
@@ -142,7 +144,7 @@ export default function Inventory() {
   }
 
   async function handleDeleteRequest(product) {
-    if (!confirm(`Send a request to the admin to delete "${product.name}"?`)) return
+    if (!(await ask({ title: 'Ask to delete this product?', message: <p>The admin gets a request to delete <strong>{product.name}</strong>. Nothing is deleted until they approve.</p>, confirmLabel: 'Send request' }))) return
     try {
       await raise({ type: 'inventory-product', targetId: product.id, label: product.name })
       showToast(`Delete request for "${product.name}" sent to the admin.`)
@@ -331,6 +333,7 @@ export default function Inventory() {
         </div>
       </Dialog>
       <ReceiveStockDialog product={receiving} onClose={() => setReceiving(null)} />
+      {confirmBox}
     </main>
   )
 }

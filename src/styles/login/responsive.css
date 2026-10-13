@@ -37,6 +37,13 @@
     }
 }
 
+@media (max-width: 480px) {
+    /* The Cloudflare check is a fixed 300px box; 20px sides leave it room on a 360-390px phone. */
+    .login-card {
+        padding: 28px 20px;
+    }
+}
+
 /* ==================== SCROLLBAR STYLING ==================== */
 
 ::-webkit-scrollbar {

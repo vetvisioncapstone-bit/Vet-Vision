@@ -230,3 +230,21 @@ def test_a_consultation_keeps_several_lab_pictures_and_waivers(staff_ibaan):
     assert bad.status_code == 400
     many = c.post(f"/api/patients/{pid}/consultations/", consult(labResults=pics * 4))  # 12 > the limit of 10
     assert many.status_code == 400
+
+
+def test_deleting_a_service_removes_it_or_retires_it_when_visits_used_it(staff_ibaan, admin, catalog):
+    c, boss = client_for(staff_ibaan), client_for(admin)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    visit(c, pid, [service(catalog["Vaccination"], 350)])
+    assert c.delete("/api/services/SRV-0002/").status_code == 403  # staff never delete services
+
+    assert boss.delete("/api/services/SRV-0002/").status_code == 204  # never used: gone for good
+    assert not Service.objects.filter(pk="SRV-0002").exists()
+
+    r = boss.delete("/api/services/SRV-0001/")  # used on a visit: hidden, history kept
+    assert r.status_code == 200 and r.data == {"retired": True}
+    assert Service.objects.get(pk="SRV-0001").is_active is False
+    assert [s["id"] for s in boss.get("/api/services/").data] == []
+    assert ServiceTransaction.objects.get().details.get().service_id == "SRV-0001"
+    assert visit(c, pid, [service(catalog["Vaccination"], 350)]).status_code == 400  # cannot be billed any more
+    assert boss.delete("/api/services/SRV-0001/").status_code == 404

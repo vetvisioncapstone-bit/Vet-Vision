@@ -6,6 +6,7 @@ import '../../styles/admin/user-management.css'
 
 import Dialog from '../../components/shared/Dialog'
 import { onActivate } from '../../utils/a11y'
+import { useConfirm } from '../../components/shared/ConfirmDialog'
 const EMPTY_FORM = {
   name: '',
   address: '',
@@ -49,6 +50,7 @@ function isValidStaffEmail(email) {
 }
 
 export default function UserManagement() {
+  const [ask, confirmBox] = useConfirm() // styled "are you sure?" box for deletes
   const { items: accounts, loading, create, update, remove } = useStaffAccounts()
   const [submitting, setSubmitting] = useState(false)
   const showToast = useToast()
@@ -230,7 +232,7 @@ export default function UserManagement() {
   }
 
   async function handleDelete(account) {
-    if (!confirm(`Remove "${account.name}"'s account?`)) return
+    if (!(await ask({ title: 'Remove this account?', message: <p><strong>{account.name}</strong> will no longer be able to sign in.</p>, confirmLabel: 'Remove' }))) return
     try {
       await remove(account.id)
       showToast(`"${account.name}" was removed.`)
@@ -537,6 +539,7 @@ export default function UserManagement() {
           </form>
         </div>
       </Dialog>
+      {confirmBox}
     </main>
   )
 }

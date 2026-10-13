@@ -15,6 +15,7 @@ import { formatDate, todayIso, formatPrice, dash, getStatusClass, isImageDataUrl
 import Dialog from '../../components/shared/Dialog'
 import Pagination from '../../components/shared/Pagination'
 import { onActivate } from '../../utils/a11y'
+import { useConfirm } from '../../components/shared/ConfirmDialog'
 // ==================== CONSTANTS ====================
 const PAGE_SIZE = 50
 
@@ -110,6 +111,7 @@ function getVisitCount(patient) {
 }
 
 export default function Patients() {
+  const [ask, confirmBox] = useConfirm() // styled "are you sure?" box for deletes
   const { data: serviceCatalog } = useServiceCatalog()
   const showToast = useToast()
   const [saving, setSaving] = useState(false)
@@ -148,6 +150,7 @@ export default function Patients() {
   const [consultWeight, setConsultWeight] = useState('')
   const [consultNotes, setConsultNotes] = useState('')
   const [pendingAvailedItems, setPendingAvailedItems] = useState([])
+  const [pickerKey, setPickerKey] = useState(0)
   const [labResults, setLabResults] = useState([]) // [{ name, dataUrl }]: several pictures per visit
   const [prescription, setPrescription] = useState(null) // the Rx form's fields while it is open
   const [waivers, setWaivers] = useState([]) // [{ name, dataUrl }]
@@ -301,7 +304,7 @@ export default function Patients() {
   // ==================== ROW ACTIONS ====================
 
   async function handleDeletePatient(patient) {
-    if (!confirm(`Delete "${patient.petName}"'s record?`)) return
+    if (!(await ask({ title: 'Delete this patient record?', message: <p><strong>{patient.petName}</strong>'s record will be deleted.</p> }))) return
     try {
       await remove(patient.id)
       setSelectedPatientIds(prev => {
@@ -336,6 +339,7 @@ export default function Patients() {
   // ==================== PATIENT DETAIL MODAL / CONSULTATION FORM ====================
 
   function resetConsultationForm() {
+    setPickerKey((k) => k + 1) // a fresh item picker: its half-chosen type, item and price go too
     setConsultDate(todayIso())
     setConsultWeight('')
     setConsultNotes('')
@@ -428,7 +432,7 @@ export default function Patients() {
 
   async function handleDeleteConsultation(id) {
     if (!currentPatient) return
-    if (!confirm('Delete this consultation entry?')) return
+    if (!(await ask({ title: 'Delete this consultation?', message: 'Its billed services and products are taken off the sales records, and the products go back on the shelf.' }))) return
     try {
       await removeConsultation(id)
       showToast('Consultation entry deleted.')
@@ -818,7 +822,7 @@ export default function Patients() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Services / products</label>
-                  <AvailedItemsPicker branch={currentPatient.branch} items={pendingAvailedItems} onChange={setPendingAvailedItems} />
+                  <AvailedItemsPicker key={pickerKey} branch={currentPatient.branch} items={pendingAvailedItems} onChange={setPendingAvailedItems} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Prescription</label>
@@ -937,6 +941,7 @@ export default function Patients() {
       </Dialog>
 
       {printJob && <PatientPrintSheet job={printJob} onClose={() => setPrintJob(null)} />}
+      {confirmBox}
     </main>
   )
 }

@@ -5,6 +5,7 @@ import { errorMessage } from '../../api/client'
 import { useToast } from '../../components/shared/Toast'
 import { getInitialsFromName } from '../../utils/initials'
 import '../../styles/admin/events.css'
+import { useConfirm } from '../../components/shared/ConfirmDialog'
 
 function toIsoDate(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -29,6 +30,7 @@ function Avatar({ name, photo }) {
 }
 
 export default function Events() {
+  const [ask, confirmBox] = useConfirm() // styled "are you sure?" box for deletes
   const { user } = useAuth()
   const profile = { name: user?.name || '', photo: user?.photo || null }
   const showToast = useToast()
@@ -94,7 +96,7 @@ export default function Events() {
 
   async function handleDeletePost(id) {
     if (busy) return
-    if (!confirm('Delete this announcement?')) return
+    if (!(await ask({ title: 'Delete this announcement?', message: 'It will be removed from the staff feed and the customer portal.' }))) return
     setBusy(true)
     try {
       await removePost(id)
@@ -310,6 +312,7 @@ export default function Events() {
           </div>
         </div>
       </div>
+      {confirmBox}
     </main>
   )
 }

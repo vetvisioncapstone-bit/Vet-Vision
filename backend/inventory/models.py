@@ -20,6 +20,9 @@ class Service(models.Model):
     service_name = models.CharField(max_length=120)
     category = models.CharField(max_length=60)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
+    # False once the admin deletes a service that past visits already used: it leaves the catalog and the pickers
+    # but stays in the database, so the sales history and reports that point at it keep working.
+    is_active = models.BooleanField(default=True, db_default=True)
 
     class Meta:
         db_table = "service"

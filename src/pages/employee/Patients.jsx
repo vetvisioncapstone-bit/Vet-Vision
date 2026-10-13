@@ -15,6 +15,7 @@ import Dialog from '../../components/shared/Dialog'
 import Pagination from '../../components/shared/Pagination'
 import AvailedItemsPicker, { toPayload } from '../../components/shared/AvailedItemsPicker'
 import { onActivate } from '../../utils/a11y'
+import { useConfirm } from '../../components/shared/ConfirmDialog'
 // ==================== HELPERS ====================
 // Ported from employee-patients.js - uses the same API-backed patients as the
 // admin Patients page; the server scopes them to this employee's own branch. The
@@ -32,6 +33,7 @@ const EMPTY_PATIENT_FORM = {
 const EMPTY_CONSULT_FORM = { date: '', weight: '', notes: '', remarks: '', availedItems: [] }
 
 export default function Patients() {
+  const [ask, confirmBox] = useConfirm() // styled "are you sure?" box for deletes
   const showToast = useToast()
   const { branch } = useEmployeeContext()
   const { raise } = useApprovalRequests()
@@ -61,6 +63,9 @@ export default function Patients() {
 
   const [detailPatientId, setDetailPatientId] = useState(null)
   const [consultForm, setConsultForm] = useState(EMPTY_CONSULT_FORM)
+  const [pickerKey, setPickerKey] = useState(0)
+  // Empty form and a fresh item picker (its half-chosen type, item and price go too).
+  const clearConsultation = () => { setConsultForm({ ...EMPTY_CONSULT_FORM, date: todayIso() }); setPickerKey((k) => k + 1) }
 
   const branchPatients = patients
   const visiblePatients = patients
@@ -111,7 +116,7 @@ export default function Patients() {
 
   function openDetailModal(patient) {
     setDetailPatientId(patient.id)
-    setConsultForm({ ...EMPTY_CONSULT_FORM, date: todayIso() })
+    clearConsultation()
   }
 
   function closeDetailModal() {
@@ -158,7 +163,7 @@ export default function Patients() {
   }
 
   async function handleDeleteRequest(patient) {
-    if (!confirm(`Send a request to the admin to delete "${patient.petName}"'s record?`)) return
+    if (!(await ask({ title: 'Ask to delete this record?', message: <p>The admin gets a request to delete <strong>{patient.petName}</strong>'s record. Nothing is deleted until they approve.</p>, confirmLabel: 'Send request' }))) return
     try {
       await raise({
         type: 'patient',
@@ -185,7 +190,7 @@ export default function Patients() {
         remarks: consultForm.remarks.trim(),
         availedItems: toPayload(consultForm.availedItems)
       })
-      setConsultForm({ ...EMPTY_CONSULT_FORM, date: todayIso() })
+      clearConsultation()
       showToast('Consultation logged.')
     } catch (err) {
       showToast(errorMessage(err))
@@ -432,10 +437,11 @@ export default function Patients() {
                 </div>
                 <div className="form-group">
                   <span className="form-label">Services / products</span>
-                  <AvailedItemsPicker branch={detailPatient.branch} items={consultForm.availedItems}
+                  <AvailedItemsPicker key={pickerKey} branch={detailPatient.branch} items={consultForm.availedItems}
                     onChange={(availedItems) => setConsultForm(f => ({ ...f, availedItems }))} />
                 </div>
                 <div className="consultation-form-actions">
+                  <button type="button" className="patient-cancel-btn" onClick={() => { clearConsultation(); showToast('Consultation entry cleared.') }}>Cancel</button>
                   <button type="submit" className="patient-save-btn" disabled={saving}>Save consultation</button>
                 </div>
               </form>
@@ -461,6 +467,7 @@ export default function Patients() {
           </div>
         )}
       </Dialog>
+      {confirmBox}
     </main>
   )
 }

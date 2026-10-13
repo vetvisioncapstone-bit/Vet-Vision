@@ -10,6 +10,7 @@ import Dialog from '../../components/shared/Dialog'
 import Pagination from '../../components/shared/Pagination'
 import ReceiveStockDialog from '../../components/shared/ReceiveStockDialog'
 import { onActivate } from '../../utils/a11y'
+import { useConfirm } from '../../components/shared/ConfirmDialog'
 function getStatus(product) {
   if (product.quantity <= 0) return { label: 'Out of stock', cls: 'status-out-of-stock' }
   if (product.quantity <= product.reorderPoint) return { label: 'Low Stock', cls: 'status-low-stock' }
@@ -33,6 +34,7 @@ const EMPTY_FORM = {
 }
 
 export default function Inventory() {
+  const [ask, confirmBox] = useConfirm() // styled "are you sure?" box for deletes
   const { items: products, loading, create, update, remove } = useInventory()
   const movement = useAnalytics('inventory')
   const lowStockCount = useMemo(() => products.filter((p) => p.quantity <= p.reorderPoint).length, [products])
@@ -151,7 +153,7 @@ export default function Inventory() {
   }
 
   async function handleDelete(product) {
-    if (!confirm(`Delete "${product.name}" from inventory?`)) return
+    if (!(await ask({ title: 'Delete this product?', message: <p><strong>{product.name}</strong> ({product.branch || 'all branches'}) will be removed from inventory.</p> }))) return
     try {
       await remove(product.id)
       showToast(`"${product.name}" was deleted.`)
@@ -394,6 +396,7 @@ export default function Inventory() {
       </Dialog>
 
       <ReceiveStockDialog product={receiving} onClose={() => setReceiving(null)} />
+      {confirmBox}
     </main>
   )
 }
