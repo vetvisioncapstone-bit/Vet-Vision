@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { LineChart } from '../../components/shared/charts'
 import { fmtMoney, fmtMonth, fmtNum, useAnalytics } from '../../hooks/useAnalytics'
 import '../../styles/admin/forecasting.css'
@@ -21,11 +21,90 @@ function PaceLine({ o, money }) {
   )
 }
 
-function accuracyText(a) {
-  if (!a || a.mae === null) return 'Not enough history to measure accuracy yet.'
-  const mape = a.mape === null ? 'n/a' : `${fmtNum(a.mape)}%`
-  const wape = a.wape === null || a.wape === undefined ? '' : `, WAPE ${fmtNum(a.wape)}%`
-  return `Back-tested on ${a.months} past months: MAE ${fmtNum(a.mae)}, MAPE ${mape}${wape}.`
+const pct = (n) => `${n > 0 ? '+' : ''}${fmtNum(n)}%`
+
+// What the six-month average cannot see: last year's same month (a seasonal swing) and the recent trend. The forecast
+// stays the Moving Average; this only tells the owner when to lean above or below it.
+function SeasonalNote({ s, month, show, item }) {
+  if (!s) return null
+  const swing = s.seasonalChange !== null && (!item || (s.lastYear >= 5 && Math.abs(s.seasonalChange) >= 20))
+  const trend = s.trendChange !== null && (!item || Math.abs(s.trendChange) >= 20)
+  if (!swing && !trend) return item ? <p className="accuracy-note">Seasonal check: last year and the recent months give no reason to expect a different figure.</p> : null
+  const lastYear = fmtMonth(month, false)
+  if (!item) {
+    return (
+      <p className="stat-sub">
+        {swing && <>Last {lastYear}: {pct(s.seasonalChange)} vs the 6 months before</>}{swing && trend && ' · '}
+        {trend && <>last 3 months: <span className={s.trendChange >= 0 ? 'trend-up' : 'trend-down'}>{pct(s.trendChange)}</span></>}
+      </p>
+    )
+  }
+  return (
+    <div className="seasonal-note" role="note">
+      <p className="insight-title">Seasonal check</p>
+      {swing && (
+        <p>Last {lastYear} had {fmtNum(s.lastYear)}, {pct(s.seasonalChange)} against the 6 months before it.
+          If this year repeats that, expect about <strong>{show(s.ifLikeLastYear)}</strong> instead of the average's figure.</p>
+      )}
+      {trend && (
+        <p>{s.trendChange > 0 ? 'Rising' : 'Falling'}: the last 3 months are {pct(s.trendChange)} on the 3 before, so the six-month
+          average may come out {s.trendChange > 0 ? 'low' : 'high'}.</p>
+      )}
+    </div>
+  )
+}
+
+// Days the shelf was empty hide demand: customers who wanted the item then could not buy it, so those months'
+// sales, and the average built on them, come out low. The forecast stays the Moving Average; this shows the gap.
+function StockOutNote({ s }) {
+  if (!s) return null
+  const lost = s.lostUnits < 1 ? 'less than 1 unit' : `about ${fmtNum(Math.round(s.lostUnits))} units`
+  return (
+    <div className="seasonal-note" role="note">
+      <p className="insight-title">Stock-outs</p>
+      <p>Out of stock for {s.daysOut} day{s.daysOut === 1 ? '' : 's'} in the last 6 months (most in {fmtMonth(s.worstMonth, true)}: {s.worstDays} day{s.worstDays === 1 ? '' : 's'}).
+        Sales probably lost then: {lost}. With those added back, the average gives <strong>{fmtNum(s.adjustedForecast)}</strong>.</p>
+    </div>
+  )
+}
+
+// How far off the forecast usually was when tested on past months, in plain words: MAPE is the usual miss in
+// percent, MAE the usual miss in units or pesos (the two measures the study uses).
+const RELIABILITY = [
+  [10, 'Very reliable', 'rel-very'],
+  [20, 'Reliable', 'rel-good'],
+  [50, 'Rough guide', 'rel-rough'],
+  [Infinity, 'Use your judgment', 'rel-judge']
+]
+const offBy = (a) => a.mape
+const reliability = (a) => (a && offBy(a) !== null && offBy(a) !== undefined ? RELIABILITY.find(([max]) => offBy(a) < max) : null)
+
+function Accuracy({ a, money, unit = 'units', block }) {
+  const rel = reliability(a)
+  if (!a || a.mae === null || !rel) return <p className={block ? 'accuracy-note' : 'stat-sub'}>Not enough history yet to test this forecast.</p>
+  const miss = money ? fmtMoney(a.mae) : `about ${fmtNum(Math.round(a.mae))} ${unit}`
+  return (
+    <p className={block ? 'accuracy-note' : 'stat-sub'}>
+      <span className={`rel-tag ${rel[2]}`}>{rel[1]}</span>{' '}
+      Usually within {miss} of the actual ({fmtNum(offBy(a))}% off), tested on the past {a.months} months.
+      <span className="metric-raw"> MAE {fmtNum(a.mae)} · MAPE {a.mape === null ? 'n/a' : `${fmtNum(a.mape)}%`}</span>
+    </p>
+  )
+}
+
+function MetricHelp() {
+  return (
+    <details className="metric-help">
+      <summary>What do these accuracy figures mean?</summary>
+      <p>Each forecast was tested on the past 12 months: the system forecast every one of those months from the 6 before it and compared that guess with what actually sold.</p>
+      <ul>
+        <li><strong>MAE</strong> (Mean Absolute Error): the usual size of a miss, in units or pesos. “Within about 12 units” means the guess is normally 12 above or below.</li>
+        <li><strong>MAPE</strong> (Mean Absolute Percentage Error): the usual miss as a percentage of what sold. Slow items inflate it (1 sold against 3 forecast is 200% off), and months with no sales are skipped.</li>
+      </ul>
+      <p><span className="rel-tag rel-very">Very reliable</span> under 10% off · <span className="rel-tag rel-good">Reliable</span> 10–20% ·{' '}
+        <span className="rel-tag rel-rough">Rough guide</span> 20–50% · <span className="rel-tag rel-judge">Use your judgment</span> over 50%. Lower is better.</p>
+    </details>
+  )
 }
 
 export default function Forecasting() {
@@ -38,10 +117,34 @@ export default function Forecasting() {
   const list = data?.[kind] || []
   const isProduct = kind === 'products'
   const term = search.trim().toLowerCase()
+  // The item box is a search and a dropdown in one: focusing it lists every product (or service) by category, and
+  // typing narrows the list. Arrow keys move through it, Enter picks, Escape closes.
+  const [listOpen, setListOpen] = useState(false)
+  const [active, setActive] = useState(0)
   const matches = useMemo(
-    () => (term ? list.filter((p) => p.name.toLowerCase().includes(term)).slice(0, 8) : []),
+    () => list.filter((p) => !term || p.name.toLowerCase().includes(term) || p.category.toLowerCase().includes(term))
+      .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)),
     [list, term]
   )
+  useEffect(() => { // keep the highlighted item in view while arrowing through a long list
+    if (listOpen && matches[active]) document.getElementById(`fc-item-${matches[active].id}`)?.scrollIntoView({ block: 'nearest' })
+  }, [active, listOpen, matches])
+  function pick(item) {
+    setPickedId(item.id)
+    setSearch('')
+    setListOpen(false)
+  }
+  function onSearchKey(e) {
+    if (e.key === 'Escape') { setListOpen(false); setSearch(''); return }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      setListOpen(true)
+      setActive((i) => Math.max(0, Math.min(matches.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1))))
+    } else if (e.key === 'Enter' && listOpen && matches[active]) {
+      e.preventDefault()
+      pick(matches[active])
+    }
+  }
   const selected = useMemo(() => {
     if (!list.length) return null
     return list.find((p) => p.id === pickedId) || [...list].sort((a, b) => b.avgPerMonth - a.avgPerMonth)[0]
@@ -96,11 +199,13 @@ export default function Forecasting() {
             <p className="stat-value">{o.label.includes('PHP') ? fmtMoney(o.forecast) : fmtNum(o.forecast)}</p>
             <p className="stat-sub">Predicted for {fmtMonth(forecastMonth)}</p>
             {o.inProgress && <PaceLine o={o} money={o.label.includes('PHP')} />}
-            <p className="stat-sub">{accuracyText(o.accuracy)}</p>
+            <SeasonalNote s={o.seasonal} month={forecastMonth} />
+            <Accuracy a={o.accuracy} money={o.label.includes('PHP')} unit="visits" />
           </div>
         ))}
         {loading && <div className="skeleton" style={{ height: 110 }} />}
       </div>
+      <MetricHelp />
 
       <h2 className="section-title">By item</h2>
       <div className="forecast-picker">
@@ -113,16 +218,33 @@ export default function Forecasting() {
         </div>
         <div className="search-wrapper forecast-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-          <input type="text" aria-label={`Search ${isProduct ? 'product' : 'service'}`} autoComplete="off" placeholder={`Search ${isProduct ? 'product' : 'service'}…`} value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') setSearch('') }} />
+          <input type="text" role="combobox" aria-expanded={listOpen} aria-controls="forecast-items" aria-autocomplete="list"
+            aria-activedescendant={listOpen && matches[active] ? `fc-item-${matches[active].id}` : undefined}
+            aria-label={`Search or pick a ${isProduct ? 'product' : 'service'}`} autoComplete="off"
+            placeholder={selected ? `${selected.name} · search or pick another ${isProduct ? 'product' : 'service'}…` : `Search or pick a ${isProduct ? 'product' : 'service'}…`}
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setListOpen(true); setActive(0) }}
+            onFocus={() => { setListOpen(true); setActive(0) }}
+            onBlur={() => setListOpen(false)}
+            onKeyDown={onSearchKey} />
+          <button type="button" className="forecast-search-toggle" tabIndex={-1} aria-label={listOpen ? 'Close the list' : 'Show all'}
+            onMouseDown={(e) => { e.preventDefault(); setListOpen((o) => !o) }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+          </button>
           {/* Drops down under the box, so picking an item does not push the page around. */}
-          {term && (
-            <ul className="search-results">
-              {matches.map((m) => (
-                <li key={m.id}>
-                  <button type="button" onClick={() => { setPickedId(m.id); setSearch('') }}>
-                    <span>{m.name}</span><small>{m.category}</small>
-                  </button>
-                </li>
+          {listOpen && (
+            <ul className="search-results" id="forecast-items" role="listbox">
+              {matches.map((m, i) => (
+                <React.Fragment key={m.id}>
+                  {(i === 0 || matches[i - 1].category !== m.category) && <li className="search-group" role="presentation">{m.category}</li>}
+                  <li id={`fc-item-${m.id}`} role="option" aria-selected={i === active}>
+                    {/* mousedown, not click: picking must happen before the box loses focus and closes the list */}
+                    <button type="button" tabIndex={-1} className={`${i === active ? 'is-active' : ''}${selected?.id === m.id ? ' is-current' : ''}`}
+                      onMouseDown={(e) => { e.preventDefault(); pick(m) }} onMouseEnter={() => setActive(i)}>
+                      <span>{m.name}</span><small>{fmtNum(m.forecast)} next month</small>
+                    </button>
+                  </li>
+                </React.Fragment>
               ))}
               {matches.length === 0 && <li className="search-empty">No {kind} match “{search}”.</li>}
             </ul>
@@ -151,6 +273,9 @@ export default function Forecasting() {
             </div>
           </div>
 
+          <SeasonalNote s={selected.seasonal} month={forecastMonth} show={fmtNum} item />
+          {isProduct && <StockOutNote s={selected.stockOuts} />}
+
           {selected.avgPerMonth < 5 && <p className="accuracy-note">Low volume: under 5 {isProduct ? 'units sold' : 'visits'} a month, so one sale moves this forecast a lot. Treat it as a rough guide.</p>}
 
           <h2 className="section-title">Monthly {isProduct ? 'sales' : 'demand'} — last {selected.recent.length} months + prediction</h2>
@@ -173,7 +298,8 @@ export default function Forecasting() {
             <div className="chart-card">
               <h2>{isProduct ? 'Sales' : 'Demand'} trend</h2>
               <LineChart points={points} format={fmtNum} />
-              <p className="accuracy-note">{accuracyText(selected.accuracy)} The dashed line and hollow dot are the forecast. Lower error is better; MAPE skips months with zero actual sales.</p>
+              <Accuracy a={selected.accuracy} unit={isProduct ? 'units' : 'visits'} block />
+              <p className="accuracy-note">The dashed line and hollow dot are the forecast.</p>
             </div>
 
             <div className="insight-col">
@@ -183,14 +309,18 @@ export default function Forecasting() {
                     <div className="insight-body">
                       <p className="insight-title">You need to order</p>
                       <p className="insight-value">{fmtNum(selected.toOrder)} units</p>
-                      <p className="insight-desc">Predicted need ({fmtNum(selected.forecast)}) minus stock on hand ({fmtNum(selected.stock)}), rounded up.</p>
+                      <p className="insight-desc">
+                        Predicted need ({fmtNum(selected.forecast)}) + safety stock ({fmtNum(selected.safetyStock)}) − stock on hand ({fmtNum(selected.stock)}), rounded up.
+                        The safety stock is the item's reorder point: it covers the supplier's delivery time and a busier-than-usual month.
+                        {branch === 'All Branches' && ' Worked out for each branch, then added up, so one branch’s extra stock does not hide the other’s shortage.'}
+                      </p>
                     </div>
                   </div>
                   <div className="insight-card">
                     <div className="insight-body">
                       <p className="insight-title">Stock after ordering</p>
                       <p className="insight-value">{fmtNum(selected.stockAfterOrder)} units</p>
-                      <p className="insight-desc">Enough to cover next month's predicted sales.</p>
+                      <p className="insight-desc">Covers next month's predicted sales with the safety stock left over.</p>
                     </div>
                   </div>
                 </>
@@ -215,21 +345,22 @@ export default function Forecasting() {
           <h2>Forecast accuracy across all items</h2>
           <div className="table-scroll">
             <table>
-              <thead><tr><th>Group</th><th>Items scored</th><th>Average MAE</th><th>Average MAPE</th><th>WAPE (all items)</th></tr></thead>
+              <thead><tr><th>Group</th><th>Items tested</th><th>Usually off by (MAE)</th><th>Average % off (MAPE)</th><th>Reliability</th></tr></thead>
               <tbody>
                 {['products', 'services'].map((g) => (
                   <tr key={g}>
                     <td>{g === 'products' ? 'Products (units)' : 'Services (units)'}</td>
                     <td>{fmtNum(data.accuracy[g].count)}</td>
-                    <td>{fmtNum(data.accuracy[g].mae)}</td>
+                    <td>{fmtNum(data.accuracy[g].mae)} units</td>
                     <td>{data.accuracy[g].mape === null ? '—' : `${fmtNum(data.accuracy[g].mape)}%`}</td>
-                    <td>{data.accuracy[g].wape === null ? '—' : `${fmtNum(data.accuracy[g].wape)}%`}</td>
+                    <td>{reliability(data.accuracy[g]) ? <span className={`rel-tag ${reliability(data.accuracy[g])[2]}`}>{reliability(data.accuracy[g])[1]}</span> : '—'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="accuracy-note">Item-level demand is lumpy (most items sell only a few units a month), so MAPE is inflated by tiny slow months. WAPE (total error divided by total units sold) weighs every item by its volume and is the fairer score here.</p>
+          <p className="accuracy-note">Most items sell only a few units a month, so a miss of one or two looks large in percent. That is why single items read as a rough guide while the totals above are reliable: use item forecasts as a starting point and your experience for the final order.</p>
+          <MetricHelp />
         </div>
       )}
     </main>

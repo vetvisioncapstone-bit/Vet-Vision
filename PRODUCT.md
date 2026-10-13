@@ -24,7 +24,7 @@ One system for the clinic's clinical records, point of sale, inventory and deman
 
 - One login page at `/` serves admin, staff and customers; each role lands in its own portal.
 - Data comes from a PostgreSQL database seeded from the clinic's legacy schema; recent volume was reshaped to about 13 to 20 transactions per day with closures (Sundays, Philippine holidays) and half days. Treat the data as sample data.
-- Forecast: Moving Average of the previous 6 complete months, with MAE, MAPE and WAPE; products and services are ranked fast, moderate or slow by tercile.
+- Forecast: Moving Average of the previous 6 complete months, with MAE and MAPE; products and services are ranked fast, moderate or slow by tercile.
 - Stack in place: React 18 + Vite frontend, Django + DRF + PostgreSQL backend, JWT auth.
 
 ## Capabilities and Constraints

@@ -132,3 +132,31 @@
 .search-results small { color: #6b736f; font-size: 12px; white-space: nowrap; }
 .search-empty { padding: 10px 12px; font-size: 13.5px; color: #6b736f; }
 .forecast-item-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+
+/* Seasonal / trend context next to an item's forecast (the forecast itself stays the Moving Average). */
+.seasonal-note { background: #fff8eb; border: 1px solid #f4dcae; border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; font-size: 13px; line-height: 1.55; color: #4a3a12; }
+.seasonal-note .insight-title { color: #8a5300; margin-bottom: 4px; }
+.seasonal-note p + p { margin-top: 4px; }
+
+/* The item box doubles as a dropdown: a chevron on the right, category headings, the highlighted and current item. */
+.forecast-picker .forecast-search input { padding-right: 40px; }
+.forecast-search-toggle { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border: none; background: none; border-radius: 8px; color: #646c68; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.forecast-search-toggle:hover { background: #f0f4f1; }
+.forecast-search-toggle svg { position: static; width: 16px; height: 16px; }
+.search-results .search-group { padding: 8px 12px 4px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; color: #6b736f; text-transform: uppercase; }
+.search-results li button.is-active { background: #f4f8f5; }
+.search-results li button.is-current span { font-weight: 700; color: #17693a; }
+
+/* Accuracy in plain words: a reliability tag, the sentence, then the raw figures small for the record. */
+.rel-tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.rel-very { background: #e4f4ea; color: #17693a; }
+.rel-good { background: #eaf3e6; color: #3d6b1f; }
+.rel-rough { background: #fff3dc; color: #8a5300; }
+.rel-judge { background: #fdecea; color: #b3261e; }
+.metric-raw { display: block; margin-top: 2px; font-size: 11.5px; color: #8a928e; }
+.metric-help { margin: -8px 0 24px; font-size: 13px; color: #4a524e; }
+.metric-help summary { cursor: pointer; color: #17693a; font-weight: 600; width: fit-content; }
+.metric-help p, .metric-help ul { margin-top: 8px; line-height: 1.55; }
+.metric-help ul { padding-left: 18px; }
+.metric-help li + li { margin-top: 4px; }
+.table-card .metric-help { margin: 12px 0 0; }

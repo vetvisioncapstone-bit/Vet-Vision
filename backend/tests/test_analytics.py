@@ -215,9 +215,18 @@ def test_forecast_order_suggestion(admin, history, stocked):
     inv.quantity_on_hand = 20
     inv.save()
     prod = next(p for p in get(admin, "forecast/?branch=Ibaan").data["products"] if p["id"] == history.product_id)
-    assert prod["stock"] == 20
-    assert prod["toOrder"] == 36  # ceil(55.17 - 20)
-    assert prod["stockAfterOrder"] == 56
+    assert prod["stock"] == 20 and prod["safetyStock"] == 3  # Ibaan's reorder point is the buffer
+    assert prod["toOrder"] == 39  # ceil(55.17 forecast + 3 safety - 20 on hand)
+    assert prod["stockAfterOrder"] == 59
+
+
+def test_order_advice_is_per_branch_so_one_branch_cannot_hide_the_other(admin, history, stocked, branches):
+    ibaan, sanjose = stocked
+    ibaan.quantity_on_hand, sanjose.quantity_on_hand, sanjose.reorder_point = 0, 500, 0
+    ibaan.save(), sanjose.save()
+    prod = next(p for p in get(admin, "forecast/").data["products"] if p["id"] == history.product_id)
+    # Every sale was at Ibaan: Ibaan needs ceil(55.17 + 3 - 0) = 59; San Jose's 500 do not cancel that out.
+    assert prod["stock"] == 500 and prod["toOrder"] == 59
 
 
 def test_inventory_movement_uses_tercile_rule_per_category(admin, branches, history):
@@ -269,8 +278,34 @@ def test_empty_database_returns_empty_flag(admin):
         assert r.status_code == 200 and r.data["empty"] is True, path
 
 
-def test_wape_weighs_by_volume_and_mape_does_not():
-    pairs = [(10, 1), (100, 100)]  # a slow month of 1 unit badly missed, a big month nailed
-    assert fc.wape(pairs) == pytest.approx(9 / 101 * 100)
-    assert fc.mape(pairs) > 400
-    assert fc.wape([(5, 0)]) is None
+def test_seasonal_check_reports_last_years_swing_and_the_trend():
+    from analytics import forecast as fc
+    s = fc.seasonal_check(30, 45, [30] * 6, [20, 20, 20, 30, 30, 30])
+    assert s["seasonalChange"] == 50.0 and s["ifLikeLastYear"] == 45  # last year's month was 50% above its run-up
+    assert s["trendChange"] == 50.0  # latest 3 months vs the 3 before
+    assert fc.seasonal_check(10, 3, [0] * 6, [1] * 6)["seasonalChange"] is None  # nothing to compare with
+
+
+def test_forecast_rows_carry_the_seasonal_check(admin, history):
+    r = get(admin, "forecast/").data
+    prod = next(p for p in r["products"] if p["id"] == history.product_id)
+    assert "seasonal" in prod and "seasonal" in r["overall"]["revenue"]
+
+
+def test_lost_demand_estimate():
+    from analytics import forecast as fc
+    assert fc.lost_demand(20, 20, 0, 10) == 10  # 1 a day while stocked, 10 empty days, nothing sold then
+    assert fc.lost_demand(20, 20, 4, 10) == 6  # emergency sales on empty days count as sold
+    assert fc.lost_demand(20, 20, 0, 0) == 0 and fc.lost_demand(0, 0, 0, 30) is None
+
+
+def test_stockout_days_are_rebuilt_from_the_stock_ledger(branches, stocked):
+    from analytics.views import _stockouts
+    from inventory.models import InventoryTransaction
+    ibaan, product = branches[0], stocked[0].product
+    for i, (day, kind, q) in enumerate([(date(2026, 6, 1), "opening", 10), (date(2026, 6, 21), "adjustment", -10),
+                                        (date(2026, 6, 26), "restock", 10)], start=1):
+        InventoryTransaction.objects.create(txn_id=f"ITX-T{i:07d}", product=product, branch=ibaan, txn_date=day,
+                                            txn_type=kind, quantity_change=q)
+    june = _stockouts([date(2026, 6, 1)], "", [])[product.product_id][date(2026, 6, 1)]
+    assert june["daysOut"] == 5  # closed at zero on the 21st to the 25th; the delivery came on the 26th

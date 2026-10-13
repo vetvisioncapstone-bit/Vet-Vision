@@ -150,7 +150,7 @@ if it is not on the PATH).
 | `reshape_transactions [--dry-run]` | Thins history to 13-20 transactions a day with closed Sundays/holidays and half days |
 | `seed_stock [--dry-run]` | Realistic stock, reorder points and an inventory movement history (feeds the stock-out KPI); refuses to run if movements already exist |
 | `seed_medical_records`, `fill_customer_fields`, `adopt_existing_db` | See above |
-| `forecast_report [--out file]` | Forecast accuracy (MAE / MAPE / WAPE) per branch as Markdown for the thesis |
+| `forecast_report [--out file]` | Forecast accuracy (MAE / MAPE) per branch as Markdown for the thesis |
 | `python qa/load_test.py ...` | Response-time and concurrent-user check against a running server |
 
 ## Deploying (Supabase + Render + a static host)

@@ -579,6 +579,78 @@ def _demand_rows(sql_source, id_col, months, bsql, bparams):
     return data
 
 
+def _order_advice(months, bsql, bparams):
+    """product_id -> {stock, safety, need}, worked out branch by branch and then added up: each branch orders for
+    its own shelf, so one branch's surplus never hides the other's shortage.
+
+    need = forecast + safety stock - stock on hand, rounded up (never below 0). The safety stock is the item's
+    reorder point at that branch (about ten days of its demand, see seed_stock): it covers the supplier's 3-8 day
+    delivery time and a busier-than-average month. Without it, stock after ordering equals the forecast exactly
+    and an average under-forecasts about half the time."""
+    demand = {}
+    for r in rows(
+        "SELECT product_id AS id, branch_id, month, sum(quantity) AS units FROM v_sale_lines "
+        "WHERE month BETWEEN %s AND %s" + bsql + " GROUP BY 1, 2, 3",
+        (months[0], months[-1], *bparams),
+    ):
+        demand.setdefault((r["id"], r["branch_id"]), {})[r["month"]] = float(r["units"] or 0)
+    shelves = {(r["product_id"], r["branch_id"]): (float(r["quantity_on_hand"] or 0), float(r["reorder_point"] or 0))
+               for r in rows("SELECT product_id, branch_id, quantity_on_hand, reorder_point FROM inventory WHERE TRUE"
+                             + bsql, bparams)}
+    advice = {}
+    for key in demand.keys() | shelves.keys():
+        stock, safety = shelves.get(key, (0.0, 0.0))
+        forecast = fc.moving_average(_series(demand.get(key, {}), months)) or 0.0
+        a = advice.setdefault(key[0], {"stock": 0.0, "safety": 0.0, "need": 0})
+        a["stock"] += stock
+        a["safety"] += safety
+        a["need"] += max(0, math.ceil(forecast + safety - stock))
+    return advice
+
+
+def _stockouts(months, bsql, bparams):
+    """product_id -> {month: {"daysOut", "lost"}}: days a branch's shelf closed at zero, and the units it probably
+    could not sell then (fc.lost_demand), added up over the branches in scope. Rebuilt day by day from the stock
+    ledger (inventory_transaction), which records every opening count, sale, delivery and adjustment.
+    ponytail: a Python day loop over every product and branch (about 400k steps, under a second); move it to SQL
+    with generate_series if the catalog grows tenfold."""
+    start, end = months[0], add_months(months[-1], 1) - timedelta(days=1)
+    wanted = set(months)
+    moves, sold = {}, {}
+    for r in rows("SELECT product_id, branch_id, txn_date, sum(quantity_change) AS q FROM inventory_transaction "
+                  "WHERE txn_date <= %s" + bsql + " GROUP BY 1, 2, 3", (end, *bparams)):
+        moves.setdefault((r["product_id"], r["branch_id"]), {})[r["txn_date"]] = float(r["q"] or 0)
+    for r in rows("SELECT product_id, branch_id, sale_date, sum(quantity) AS q FROM v_sale_lines "
+                  "WHERE sale_date BETWEEN %s AND %s" + bsql + " GROUP BY 1, 2, 3", (start, end, *bparams)):
+        sold[(r["product_id"], r["branch_id"], r["sale_date"])] = float(r["q"] or 0)
+
+    out = {}
+    for (pid, branch), by_day in moves.items():
+        first = min(by_day)
+        balance = sum(q for d, q in by_day.items() if d < start)
+        tally = {}  # month -> [days in, sold in, days out, sold out]
+        day = start
+        while day <= end:
+            balance += by_day.get(day, 0.0)
+            m = day.replace(day=1)
+            if day >= first and m in wanted:
+                t = tally.setdefault(m, [0, 0.0, 0, 0.0])
+                units = sold.get((pid, branch, day), 0.0)
+                if balance <= 0:
+                    t[2] += 1
+                    t[3] += units
+                else:
+                    t[0] += 1
+                    t[1] += units
+            day += timedelta(days=1)
+        for m, (din, sin, dout, sout) in tally.items():
+            if dout:
+                o = out.setdefault(pid, {}).setdefault(m, {"daysOut": 0, "lost": 0.0})
+                o["daysOut"] += dout
+                o["lost"] += fc.lost_demand(sin, din, sout, dout) or 0.0
+    return out
+
+
 class Forecast(APIView):
     """Moving Average forecasts (previous six months -> next month) with MAE / MAPE from back-testing."""
 
@@ -590,7 +662,8 @@ class Forecast(APIView):
         stamp = rows(
             "SELECT (SELECT max(sale_date) FROM sale) AS a, (SELECT count(*) FROM sale) AS b, "
             "(SELECT max(txn_date) FROM service_transaction) AS c, (SELECT count(*) FROM service_transaction) AS d, "
-            "(SELECT sum(quantity_on_hand) FROM inventory) AS e"
+            "(SELECT sum(quantity_on_hand) FROM inventory) AS e, (SELECT sum(reorder_point) FROM inventory) AS f, "
+            "(SELECT count(*) FROM service WHERE is_active) AS g"
         )[0]
         raw = f"{request.query_params.get('branch', '')}|{'|'.join(str(v) for v in stamp.values())}"
         key = "forecast:" + hashlib.md5(raw.encode()).hexdigest()  # cache keys must not contain spaces
@@ -614,32 +687,55 @@ class Forecast(APIView):
         # Forecast the month that is running now, or the next one when the latest month is already complete.
         next_month = add_months(win.cur, 1) if win.complete else win.cur
         recent = months[-fc.WINDOW:]  # fewer than six when the data is younger than that
+        last_year = add_months(next_month, -12)
+        last_year_before = [add_months(last_year, -i) for i in range(fc.WINDOW, 0, -1)]
 
-        pooled = {}  # group -> [total absolute error, total actual] over every item-month back-tested
+        def seasonal(by_month, predicted):
+            """Last year's same month against the six months before it, and the recent trend (see fc.seasonal_check).
+            Only when last year is in the history read; month keys missing from by_month had no sales (0)."""
+            if last_year_before[0] < months[0]:
+                return None
+            return fc.seasonal_check(predicted or 0, by_month.get(last_year, 0.0),
+                                     [by_month.get(m, 0.0) for m in last_year_before],
+                                     [by_month.get(m, 0.0) for m in recent])
 
-        def build(meta, demand, group, stock=None):
+
+        def stock_note(pid, series):
+            """Days the item ran out in the last six months, the sales probably lost then, and what the Moving
+            Average would give with those sales added back. None when it never ran out in that time."""
+            hit = {m: v for m, v in shortages.get(pid, {}).items() if m in recent}
+            if not hit:
+                return None
+            lost = [hit.get(m, {}).get("lost", 0.0) for m in months]
+            worst = max(hit, key=lambda m: hit[m]["daysOut"])
+            return {
+                "daysOut": sum(v["daysOut"] for v in hit.values()),
+                "lostUnits": num(sum(v["lost"] for v in hit.values())),
+                "worstMonth": month_key(worst), "worstDays": hit[worst]["daysOut"],
+                "adjustedForecast": num(fc.moving_average([a + b for a, b in zip(series, lost)])),
+            }
+
+        def build(meta, demand, group, advice=None):
             out = []
             for pid, info in meta.items():
                 series = _series(demand.get(pid, {}), months)
-                if not any(series) and not (stock or {}).get(pid):
+                order = None if advice is None else advice.get(pid, {"stock": 0.0, "safety": 0.0, "need": 0})
+                if not any(series) and not (order and order["stock"]):
                     continue
                 predicted = fc.moving_average(series)
-                acc = pooled.setdefault(group, [0.0, 0.0])
                 pairs = fc.backtest(series)
-                for f, a in pairs:
-                    acc[0] += abs(f - a)
-                    acc[1] += a
-                s = None if stock is None else float(stock.get(pid, 0))
-                need = None if s is None else max(0, math.ceil(predicted - s))
                 out.append({
                     "id": pid, "name": info["name"], "category": info["category"],
                     "recent": [{"month": month_key(m), "units": num(v)} for m, v in zip(recent, series[-fc.WINDOW:])],
                     "avgPerMonth": num(sum(series[-fc.WINDOW:]) / len(series[-fc.WINDOW:])),
                     "forecast": num(predicted),
-                    "stock": None if s is None else num(s),
-                    "toOrder": need,
-                    "stockAfterOrder": None if s is None else num(s + need),
+                    "stock": None if order is None else num(order["stock"]),
+                    "safetyStock": None if order is None else num(order["safety"]),
+                    "toOrder": None if order is None else order["need"],
+                    "stockAfterOrder": None if order is None else num(order["stock"] + order["need"]),
                     "accuracy": fc.accuracy(series, pairs=pairs),
+                    "seasonal": seasonal(demand.get(pid, {}), predicted),
+                    "stockOuts": stock_note(pid, series) if group == "products" else None,
                     "avg_units": sum(series[-fc.WINDOW:]) / len(series[-fc.WINDOW:]),
                 })
             return out
@@ -656,12 +752,12 @@ class Forecast(APIView):
 
         products_meta = {r["product_id"]: {"name": r["product_name"], "category": r["category"]}
                          for r in rows("SELECT product_id, product_name, category FROM product")}
-        stock = {r["product_id"]: r["qty"] for r in rows(
-            "SELECT product_id, sum(quantity_on_hand) AS qty FROM inventory WHERE TRUE" + bsql + " GROUP BY product_id", bparams)}
-        products = with_movement(build(products_meta, _demand_rows("v_sale_lines", "product_id", months, bsql, bparams), "products", stock))
+        advice = _order_advice(months, bsql, bparams)
+        shortages = _stockouts(months, bsql, bparams)
+        products = with_movement(build(products_meta, _demand_rows("v_sale_lines", "product_id", months, bsql, bparams), "products", advice))
 
         services_meta = {r["service_id"]: {"name": r["service_name"], "category": r["category"]}
-                         for r in rows("SELECT service_id, service_name, category FROM service")}
+                         for r in rows("SELECT service_id, service_name, category FROM service WHERE is_active")}  # not deleted ones
         services = with_movement(build(services_meta, _demand_rows("v_service_lines", "service_id", months, bsql, bparams), "services"))
 
         kpi = kpi_rows(months[0], month, bsql, bparams)
@@ -679,6 +775,7 @@ class Forecast(APIView):
                 "history": [{"month": month_key(m), "actual": num(v)} for m, v in zip(months[-12:], series[-12:])],
                 "forecast": num(predicted), "forecastMonth": month_key(next_month),
                 "accuracy": fc.accuracy(series),
+                "seasonal": seasonal(by_month, predicted),
             }
             if so_far is not None:  # the forecast month is running: how far along is it?
                 out["inProgress"] = {
@@ -702,10 +799,6 @@ class Forecast(APIView):
             vals = [i["accuracy"][key] for i in items if i["accuracy"][key] is not None]
             return num(sum(vals) / len(vals)) if vals else None
 
-        def pooled_wape(group):
-            err, actual = pooled.get(group, (0, 0))
-            return num(err / actual * 100) if actual else None
-
         return Response({
             "asOf": as_of(win),
             "method": {"name": "Moving Average", "windowMonths": fc.WINDOW, "backtestMonths": fc.BACKTEST_MONTHS,
@@ -715,10 +808,8 @@ class Forecast(APIView):
             "products": products,
             "services": services,
             "accuracy": {
-                "products": {"mae": mean_of(products, "mae"), "mape": mean_of(products, "mape"),
-                             "wape": pooled_wape("products"), "count": len(products)},
-                "services": {"mae": mean_of(services, "mae"), "mape": mean_of(services, "mape"),
-                             "wape": pooled_wape("services"), "count": len(services)},
+                "products": {"mae": mean_of(products, "mae"), "mape": mean_of(products, "mape"), "count": len(products)},
+                "services": {"mae": mean_of(services, "mae"), "mape": mean_of(services, "mape"), "count": len(services)},
             },
         })
 

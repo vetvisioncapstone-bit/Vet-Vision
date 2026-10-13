@@ -574,3 +574,45 @@ select.form-input {
         min-height: 160px;
     }
 }
+
+/* Low stock / Fast moving cards are buttons that filter the table. */
+.stat-card-btn {
+    font: inherit;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+    width: 100%;
+}
+
+.stat-card-btn > span {
+    display: block; /* label, value and hint stack like the other cards (a button cannot hold <p>) */
+}
+
+.stat-card-btn:disabled {
+    cursor: default;
+}
+
+.stat-card-btn.selected {
+    border-color: #17693a;
+    box-shadow: 0 0 0 2px rgba(23, 105, 58, 0.25);
+}
+
+.stat-card-btn.alert.selected {
+    border-color: #e53935;
+    box-shadow: 0 0 0 2px rgba(229, 57, 53, 0.2);
+}
+
+.stat-card-btn:focus-visible {
+    outline: 2px solid #17693a;
+    outline-offset: 2px;
+}
+
+.records-filter {
+    font-weight: 500;
+    color: #646c68;
+}
+
+.records-filter .link-btn {
+    margin-left: 10px;
+    font-size: 13px;
+}

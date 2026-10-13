@@ -1,7 +1,7 @@
 """Forecast accuracy report for the thesis (section 3.8, "Forecasting Accuracy Testing").
 
 Runs the same code path the Forecasting page uses, per scope (all branches, each branch), and prints the Moving Average
-forecast with its back-tested MAE, MAPE and WAPE as a Markdown table.
+forecast with its back-tested MAE and MAPE as a Markdown table.
 
     python manage.py forecast_report [--out docs/qa/forecast_accuracy.md]
 """
@@ -13,8 +13,15 @@ from accounts.models import User
 SCOPES = ("All Branches", "Ibaan", "San Jose")
 
 
+def window_from(m):
+    """First month the average uses (basedOn.from is the start of the whole history read, back-test included)."""
+    y, mo = map(int, m["basedOn"]["to"].split("-"))
+    n = y * 12 + mo - m["windowMonths"]
+    return f"{n // 12}-{n % 12 + 1:02d}"
+
+
 class Command(BaseCommand):
-    help = "Print the forecast accuracy (MAE / MAPE / WAPE) for every scope as Markdown."
+    help = "Print the forecast accuracy (MAE / MAPE) for every scope as Markdown."
 
     def add_arguments(self, parser):
         parser.add_argument("--out", help="also write the report to this file")
@@ -33,17 +40,17 @@ class Command(BaseCommand):
             lines += [
                 f"### {scope}", "",
                 f"Moving Average of the previous {m['windowMonths']} complete months "
-                f"({m['basedOn']['from']} to {m['basedOn']['to']}), forecasting {m['forecastMonth']}; "
+                f"({window_from(m)} to {m['basedOn']['to']}), forecasting {m['forecastMonth']}; "
                 f"back-tested on the last {m['backtestMonths']} months.", "",
-                "| Measure | Forecast | MAE | MAPE | WAPE |", "|---|---:|---:|---:|---:|",
+                "| Measure | Forecast | MAE | MAPE |", "|---|---:|---:|---:|",
             ]
             for o in data["overall"].values():
                 a = o["accuracy"]
-                lines.append(f"| {o['label']} | {o['forecast']:,.1f} | {a['mae']:,.1f} | {a['mape']}% | {a['wape']}% |")
-            lines += ["", "| Item group | Items scored | Avg MAE (units) | Avg MAPE | Pooled WAPE |", "|---|---:|---:|---:|---:|"]
+                lines.append(f"| {o['label']} | {o['forecast']:,.1f} | {a['mae']:,.1f} | {a['mape']}% |")
+            lines += ["", "| Item group | Items scored | Avg MAE (units) | Avg MAPE |", "|---|---:|---:|---:|"]
             for g, label in (("products", "Products"), ("services", "Services")):
                 a = data["accuracy"][g]
-                lines.append(f"| {label} | {a['count']} | {a['mae']} | {a['mape']}% | {a['wape']}% |")
+                lines.append(f"| {label} | {a['count']} | {a['mae']} | {a['mape']}% |")
             lines.append("")
         text = "\n".join(lines)
         self.stdout.write(text)

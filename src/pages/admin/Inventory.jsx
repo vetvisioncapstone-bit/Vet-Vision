@@ -37,10 +37,16 @@ export default function Inventory() {
   const [ask, confirmBox] = useConfirm() // styled "are you sure?" box for deletes
   const { items: products, loading, create, update, remove } = useInventory()
   const movement = useAnalytics('inventory')
-  const lowStockCount = useMemo(() => products.filter((p) => p.quantity <= p.reorderPoint).length, [products])
-  const fastCount = movement.data
-    ? Object.values(movement.data.summary || {}).reduce((n, s) => n + (s.fast || 0), 0)
-    : movement.error ? '—' : null
+  const [branch, setBranch] = useState('') // '' = both branches
+  const [quick, setQuick] = useState('') // '' | 'low' | 'fast': set by clicking the Low stock / Fast moving cards
+  const inBranch = useMemo(() => products.filter((p) => !branch || p.branch === branch), [products, branch])
+  // Fast-moving is computed per branch and product by the analytics (top third of its category by units sold).
+  const fast = useMemo(() => new Set((movement.data?.items || []).filter((i) => i.movement === 'fast')
+    .map((i) => `${i.productId}|${i.branch}`)), [movement.data])
+  const isLow = (p) => p.quantity <= p.reorderPoint
+  const isFast = (p) => fast.has(`${p.productId}|${p.branch}`)
+  const lowStockCount = inBranch.filter(isLow).length
+  const fastCount = movement.data ? inBranch.filter(isFast).length : movement.error ? '—' : null
   const showToast = useToast()
   const [saving, setSaving] = useState(false)
 
@@ -59,18 +65,19 @@ export default function Inventory() {
   const categories = useMemo(() => [...new Set(products.map(p => p.category))].sort(), [products])
 
   const visibleProducts = useMemo(() => {
-    return products
+    return inBranch
       .filter(p => {
         const matchesSearch = !searchTerm || p.name.toLowerCase().includes(searchTerm) || p.category.toLowerCase().includes(searchTerm)
         const matchesCategory = activeCategories.size === 0 || activeCategories.has(p.category)
-        return matchesSearch && matchesCategory
+        const matchesQuick = !quick || (quick === 'low' ? isLow(p) : isFast(p))
+        return matchesSearch && matchesCategory && matchesQuick
       })
       .sort(compareExpiration)
-  }, [products, searchTerm, activeCategories])
+  }, [inBranch, searchTerm, activeCategories, quick, fast])
 
   // A page of the filtered list at a time; a new search or filter starts again at page 1.
   const [page, setPage] = useState(1)
-  useEffect(() => { setPage(1) }, [searchTerm, activeCategories])
+  useEffect(() => { setPage(1) }, [searchTerm, activeCategories, branch, quick])
   const pageCount = Math.max(1, Math.ceil(visibleProducts.length / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
   const pageProducts = visibleProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
@@ -172,6 +179,14 @@ export default function Inventory() {
             <input type="text" aria-label="Search items" autoComplete="off" placeholder="Search item" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.trim().toLowerCase())} />
           </div>
 
+          <div className="select-wrapper">
+            <select value={branch} onChange={(e) => setBranch(e.target.value)} aria-label="Branch">
+              <option value="">All branches</option>
+              <option>Ibaan</option>
+              <option>San Jose</option>
+            </select>
+            <svg className="select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+          </div>
           <div className="popover-wrapper">
             <button className="filter-btn" aria-haspopup="true" aria-expanded={filterOpen} onClick={(e) => { e.stopPropagation(); setFilterOpen(v => !v) }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
@@ -203,20 +218,28 @@ export default function Inventory() {
       <div className="stats-grid">
         <div className="stat-card">
           <p className="stat-label">Total SKUs</p>
-          <p className="stat-value">{products.length}</p>
+          <p className="stat-value">{inBranch.length}</p>
         </div>
-        <div className={`stat-card${lowStockCount ? ' alert' : ''}`}>
-          <p className="stat-label">Low stock alerts</p>
-          <p className="stat-value">{loading && !products.length ? '…' : lowStockCount}</p>
-        </div>
-        <div className="stat-card">
-          <p className="stat-label">Fast moving items</p>
-          <p className="stat-value">{fastCount === null ? '…' : fastCount}</p>
-        </div>
+        {/* Clicking a card shows only those items in the table below; clicking it again shows everything. */}
+        <button type="button" className={`stat-card stat-card-btn${lowStockCount ? ' alert' : ''}${quick === 'low' ? ' selected' : ''}`}
+          aria-pressed={quick === 'low'} onClick={() => setQuick((q) => (q === 'low' ? '' : 'low'))}>
+          <span className="stat-label">Low stock alerts</span>
+          <span className="stat-value">{loading && !products.length ? '…' : lowStockCount}</span>
+          <span className="stat-sub">{quick === 'low' ? 'Showing these below · click to show all' : 'Click to show them'}</span>
+        </button>
+        <button type="button" className={`stat-card stat-card-btn${quick === 'fast' ? ' selected' : ''}`}
+          aria-pressed={quick === 'fast'} disabled={!movement.data} onClick={() => setQuick((q) => (q === 'fast' ? '' : 'fast'))}>
+          <span className="stat-label">Fast moving items</span>
+          <span className="stat-value">{fastCount === null ? '…' : fastCount}</span>
+          <span className="stat-sub">{quick === 'fast' ? 'Showing these below · click to show all' : 'Click to show them'}</span>
+        </button>
       </div>
 
       <div className="table-card">
-        <h2>Product Records</h2>
+        <h2>
+          Product Records{quick && <span className="records-filter"> · {quick === 'low' ? 'Low stock' : 'Fast moving'}
+            <button type="button" className="link-btn" onClick={() => setQuick('')}>Show all</button></span>}
+        </h2>
         <div className="table-scroll">
           <table>
             <thead>

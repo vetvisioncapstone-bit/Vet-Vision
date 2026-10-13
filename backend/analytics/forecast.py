@@ -47,17 +47,39 @@ def mape(pairs):
     return float(mean_absolute_percentage_error(actual, forecast)) * 100
 
 
-def wape(pairs):
-    """Weighted Absolute Percentage Error, in percent: total absolute error / total actual. 
-    It measures the total forecasting error compared with the total actual sales.."""
-    total = sum(abs(a) for _, a in pairs)
-    return None if not total else sum(abs(f - a) for f, a in pairs) / total * 100
-
-
 def accuracy(values, window=WINDOW, months=BACKTEST_MONTHS, pairs=None):
-    """MAE / MAPE / WAPE of the back-test. Pass `pairs` (from backtest) to avoid computing it twice."""
+    """MAE / MAPE of the back-test. Pass `pairs` (from backtest) to avoid computing it twice."""
     pairs = backtest(values, window, months) if pairs is None else pairs
-    return {"mae": _round(mae(pairs)), "mape": _round(mape(pairs)), "wape": _round(wape(pairs)), "months": len(pairs)}
+    return {"mae": _round(mae(pairs)), "mape": _round(mape(pairs)), "months": len(pairs)}
+
+
+def seasonal_check(forecast, last_year, before, recent):
+    """What the moving average cannot see, shown next to it (the forecast itself is unchanged, as the thesis
+    specifies). A six-month average lags a rising or falling trend and misses yearly peaks.
+
+    last_year: the forecast month one year earlier; before: the six months before that one; recent: the latest six
+    months. Returns the change last year from those six months to the same month (a seasonal swing), the forecast
+    scaled by that swing ("if this year repeats last year"), and the change of the latest three months against the
+    three before them (the trend). Percentages are None when there is nothing to compare with."""
+    base = sum(before) / len(before) if before else 0
+    swing = growth_rate(last_year, base)
+    older, newer = sum(recent[:3]), sum(recent[3:])
+    return {
+        "lastYear": _round(last_year), "lastYearBefore": _round(base), "seasonalChange": _round(swing, 1),
+        "ifLikeLastYear": None if swing is None else _round(forecast * (1 + swing / 100)),
+        "trendChange": _round(growth_rate(newer, older), 1) if len(recent) == 6 else None,
+    }
+
+
+def lost_demand(sold_in_stock, days_in_stock, sold_out_of_stock, days_out):
+    """Units customers probably wanted but could not buy while the shelf was empty: the item's daily rate on the
+    days it was in stock, times the days it was out, less anything still sold on those days. None when the item was
+    out the whole period (no in-stock days to measure the rate from); 0 when it never ran out."""
+    if not days_out:
+        return 0.0
+    if not days_in_stock:
+        return None
+    return max(0.0, sold_in_stock / days_in_stock * days_out - sold_out_of_stock)
 
 
 def growth_rate(current, previous):
