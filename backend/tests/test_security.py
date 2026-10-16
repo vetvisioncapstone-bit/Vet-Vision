@@ -139,6 +139,18 @@ def test_audit_log_records_sensitive_actions_for_admin_only(api, admin, staff_ib
     assert client_for(staff_ibaan).get("/api/auth/audit/").status_code == 403
 
 
+def test_audit_log_filters_sign_ins_failures_and_changes(api, admin, staff_ibaan, stocked):
+    _login(api)
+    api.post("/api/auth/login/", {"email": "ana@ecovet.ph", "password": "bad"})
+    client_for(admin).delete(f"/api/inventory/{stocked[0].inventory_id}/")
+    get = lambda kind: {r["action"] for r in client_for(admin).get("/api/auth/audit/", {"kind": kind}).data}
+    assert get("failed") == {"login_failed"}
+    assert {"login", "login_failed"} <= get("signins") and "product.delete" not in get("signins")
+    assert "product.delete" in get("changes") and not get("changes") & {"login", "login_failed"}
+    deleted = next(r for r in client_for(admin).get("/api/auth/audit/").data if r["action"] == "product.delete")
+    assert deleted["name"] == admin.name  # who did it, by name
+
+
 def test_audit_log_is_paginated_and_searchable(admin, staff_ibaan, api):
     _login(api)
     r = client_for(admin).get("/api/auth/audit/", {"page": 1, "pageSize": 5, "q": "ana@"})

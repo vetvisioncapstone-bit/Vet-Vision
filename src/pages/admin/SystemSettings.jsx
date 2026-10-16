@@ -9,6 +9,7 @@ import { getInitialsFromName } from '../../utils/initials'
 import '../../styles/admin/system-settings.css'
 
 import Dialog from '../../components/shared/Dialog'
+import Pagination from '../../components/shared/Pagination'
 const EMPTY_EDIT_FORM = { name: '', email: '', newPassword: '', confirmPassword: '' }
 
 function Row({ title, desc }) {
@@ -22,59 +23,91 @@ function Row({ title, desc }) {
   )
 }
 
-const ACTION_LABELS = {
-  login: 'Signed in', login_failed: 'Wrong password', login_locked: 'Blocked (locked)', logout: 'Signed out',
-  password_change: 'Password changed', 'staff.create': 'Staff added', 'staff.update': 'Staff edited',
-  'staff.deactivate': 'Staff deactivated', 'patient.delete': 'Patient deleted', 'consultation.delete': 'Record deleted',
-  'product.delete': 'Product deleted', 'sale.create': 'Sale recorded', 'event.delete': 'Post deleted',
-  'request.approve': 'Request approved', 'request.deny': 'Request denied', 'request.dismiss': 'Request dismissed'
+// Every action the server records, in plain words. detail(d) turns the stored detail into a short note.
+const ACTIONS = {
+  login: { label: 'Signed in' },
+  logout: { label: 'Signed out' },
+  login_failed: { label: 'Wrong password', bad: true },
+  login_locked: { label: 'Blocked after too many wrong passwords', bad: true },
+  captcha_failed: { label: 'Failed the robot check', bad: true },
+  password_change: { label: 'Changed their password' },
+  register: { label: 'Pet owner signed up' },
+  'staff.create': { label: 'Added a staff account' },
+  'staff.update': { label: 'Edited a staff account' },
+  'staff.deactivate': { label: 'Deactivated a staff account' },
+  'pet.register': { label: 'Registered a pet' },
+  'patient.delete': { label: 'Deleted a patient' },
+  'consultation.delete': { label: 'Deleted a consultation' },
+  'visit.create': { label: 'Recorded a visit' },
+  'sale.create': { label: 'Recorded a sale' },
+  'stock.receive': { label: 'Received stock', detail: (d) => `${d} added` },
+  'product.delete': { label: 'Deleted a product' },
+  'service.create': { label: 'Added a service' },
+  'service.update': { label: 'Edited a service' },
+  'service.retire': { label: 'Retired a service' },
+  'service.delete': { label: 'Deleted a service' },
+  'event.delete': { label: 'Deleted a post' },
+  'request.approve': { label: 'Approved a staff request', detail: (d) => d.replace(/_/g, ' ') },
+  'request.deny': { label: 'Denied a staff request', detail: (d) => d.replace(/_/g, ' ') },
+  'request.dismiss': { label: 'Closed a staff request', detail: (d) => d.replace(/_/g, ' ') },
+  ai_query: { label: 'Asked the AI assistant' }
 }
-const BAD_ACTIONS = new Set(['login_failed', 'login_locked'])
+const KINDS = [['', 'All'], ['signins', 'Sign-ins'], ['failed', 'Failed sign-ins'], ['changes', 'Changes']]
+const PAGE_SIZE = 10
 
 function ActivityLog() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
+  const [kind, setKind] = useState('')
   const term = useDebounced(search.trim())
   const { data, loading, error } = useResource(
-    `/auth/audit/?page=${page}&pageSize=10${term ? `&q=${encodeURIComponent(term)}` : ''}`,
+    `/auth/audit/?page=${page}&pageSize=${PAGE_SIZE}${term ? `&q=${encodeURIComponent(term)}` : ''}${kind ? `&kind=${kind}` : ''}`,
     { refreshMs: 30000 }
   )
   const rows = data?.results || []
-  const totalPages = data?.totalPages || 1
 
   return (
     <div className="table-card settings-card audit-card">
       <div className="audit-head">
-        <h2>Activity log</h2>
+        <div>
+          <h2>Activity log</h2>
+          <p className="settings-admin-sub">Who signed in, and every change made in the system, newest first.</p>
+        </div>
         <input
-          type="search" className="audit-search" placeholder="Search email or action…" aria-label="Search the activity log"
+          type="search" className="audit-search" placeholder="Search a name, email or item" aria-label="Search the activity log"
           value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }}
         />
+      </div>
+      <div className="audit-kinds" role="group" aria-label="Show">
+        {KINDS.map(([id, label]) => (
+          <button key={id} type="button" className={`audit-kind${kind === id ? ' is-on' : ''}`} aria-pressed={kind === id}
+            onClick={() => { setKind(id); setPage(1) }}>{label}</button>
+        ))}
       </div>
       {error && <p className="settings-field-error">Could not load the activity log.</p>}
       <div className="table-scroll">
         <table>
-          <thead><tr><th>When</th><th>Who</th><th>What</th><th>Target</th><th>From</th></tr></thead>
+          <thead><tr><th>When</th><th>Who</th><th>What happened</th><th>Item</th><th>IP address</th></tr></thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className={BAD_ACTIONS.has(r.action) ? 'audit-bad' : undefined}>
-                <td>{new Date(r.at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                <td>{r.email || '—'}</td>
-                <td>{ACTION_LABELS[r.action] || r.action}{r.detail ? ` (${r.detail})` : ''}</td>
-                <td>{r.target || '—'}</td>
-                <td>{r.ip || '—'}</td>
-              </tr>
-            ))}
-            {!loading && rows.length === 0 && <tr><td colSpan="5" className="empty-state">Nothing recorded yet.</td></tr>}
+            {rows.map((r) => {
+              const a = ACTIONS[r.action] || { label: r.action }
+              const note = r.detail ? (a.detail ? a.detail(r.detail) : r.detail) : ''
+              return (
+                <tr key={r.id} className={a.bad ? 'audit-bad' : undefined}>
+                  <td>{new Date(r.at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                  <td>{r.name || r.email || '—'}{r.name && r.email && <small className="cell-sub">{r.email}</small>}</td>
+                  <td>{a.label}{note && <small className="cell-sub">{note}</small>}</td>
+                  <td>{r.target || '—'}</td>
+                  <td>{r.ip || '—'}</td>
+                </tr>
+              )
+            })}
+            {loading && !data && <tr><td colSpan="5" className="empty-state">Loading…</td></tr>}
+            {!loading && rows.length === 0 && <tr><td colSpan="5" className="empty-state">{term || kind ? 'Nothing matches this search or filter.' : 'Nothing recorded yet.'}</td></tr>}
           </tbody>
         </table>
       </div>
-      <div className="audit-pager">
-        <span>{data ? `${data.count} events` : ''}</span>
-        <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
-        <span>{data?.page || page} / {totalPages}</span>
-        <button type="button" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
-      </div>
+      <Pagination page={data?.page || page} pageSize={PAGE_SIZE} total={data?.count || 0} onPage={setPage} />
     </div>
   )
 }

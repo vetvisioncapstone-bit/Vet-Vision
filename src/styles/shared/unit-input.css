@@ -1,0 +1,11 @@
+/* A number field with its unit fixed inside on the right ("6.5 kg"). */
+.unit-input { position: relative; }
+.unit-input .form-input { width: 100%; padding-right: 44px; }
+.unit-suffix {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  font-size: 14px; font-weight: 600; color: #646c68; pointer-events: none;
+}
+/* The unit already says what the number is; the browser's spin arrows only crowd it. */
+.unit-input input::-webkit-outer-spin-button,
+.unit-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.unit-input input[type="number"] { -moz-appearance: textfield; appearance: textfield; }

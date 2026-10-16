@@ -5,9 +5,10 @@ import LoginButton from './LoginButton'
 import Turnstile, { turnstileEnabled } from './Turnstile'
 
 function LoginForm({ onLogin }) {
-  const [email, setEmail] = useState('')
+  const remembered = (() => { try { return localStorage.getItem('vvRememberEmail') || '' } catch { return '' } })()
+  const [email, setEmail] = useState(remembered)
   const [password, setPassword] = useState('')
-  const [remember, setRemember] = useState(true)
+  const [remember, setRemember] = useState(!!remembered)
   const [emailError, setEmailError] = useState(false)
   const [passwordError, setPasswordError] = useState(false)
   const [emailSuccess, setEmailSuccess] = useState(false)

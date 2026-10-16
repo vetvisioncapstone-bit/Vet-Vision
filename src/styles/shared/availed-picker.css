@@ -142,3 +142,7 @@ select.form-input:disabled {
 .availed-picker .availed-search .form-input {
     padding-left: 36px;
 }
+
+/* One line under the fields: stock left, weight range problems, "billed once per visit". */
+.availed-hint { margin: -4px 0 0; min-height: 16px; font-size: 12.5px; color: #646c68; }
+.availed-hint.is-error { color: #c62828; font-weight: 600; }

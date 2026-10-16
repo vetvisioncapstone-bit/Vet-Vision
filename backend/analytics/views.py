@@ -167,6 +167,11 @@ def sum_by_month(kpi, field):
     return out
 
 
+def same_day_last_year(d):
+    """The same calendar date a year earlier (29 February becomes the 28th)."""
+    return d.replace(year=d.year - 1, day=min(d.day, days_in(d.replace(year=d.year - 1, day=1))))
+
+
 def branch_towns():
     return {r["branch_id"]: r["town"] for r in rows("SELECT branch_id, town FROM branch")}
 
@@ -178,7 +183,8 @@ class Overview(APIView):
     """Dashboard cards, 12-month trend, branch share and most availed services for the current month, or for a past
     month picked with ?month=YYYY-MM. While the month is running the cards are month-to-date and compare with the
     same days of the last month; a past month is complete and compares with the whole month before it.
-    Stock counts are always today's: the system keeps no history of stock levels per month."""
+    Stock counts are today's for the current month, and for a past month as they stood at its end (rebuilt from the
+    stock ledger)."""
 
     permission_classes = [IsAdmin]
 
@@ -194,7 +200,8 @@ class Overview(APIView):
             cur, latest = win.cur, win.latest
         partial = cur == win.cur and not win.complete
         prev = add_months(cur, -1)
-        prev_end = prev.replace(day=min(latest.day, days_in(prev)))  # same number of days as this month so far
+        # A running month is compared with the same number of days of the month before; a complete one with all of it.
+        prev_end = prev.replace(day=min(latest.day, days_in(prev)) if partial else days_in(prev))
         towns = branch_towns()
 
         now = period_totals(cur, latest, bsql, bparams)
@@ -221,12 +228,25 @@ class Overview(APIView):
             (cur, latest, *bparams, cur, latest, *bparams),
         )[0]["n"]
 
-        stock = rows(
-            "SELECT count(*) FILTER (WHERE quantity_on_hand <= COALESCE(reorder_point, 0)) AS low, "
-            "count(*) FILTER (WHERE quantity_on_hand = 0) AS out_of_stock, count(*) AS tracked "
-            "FROM inventory WHERE TRUE" + bsql,
-            bparams,
-        )[0]
+        if picked and latest < win.latest:
+            # A past month: stock as it stood at the month's end, rebuilt from the stock ledger (every opening count,
+            # sale, delivery and adjustment). Items with no movement yet by then are not counted.
+            stock = rows(
+                "SELECT count(DISTINCT i.product_id) FILTER (WHERE b.q <= COALESCE(i.reorder_point, 0)) AS low, "
+                "count(DISTINCT i.product_id) FILTER (WHERE b.q <= 0) AS out_of_stock, count(DISTINCT i.product_id) AS tracked "
+                "FROM inventory i JOIN (SELECT product_id, branch_id, sum(quantity_change) AS q FROM inventory_transaction "
+                "WHERE txn_date <= %s GROUP BY 1, 2) b USING (product_id, branch_id) WHERE TRUE"
+                + bsql.replace("branch_id", "i.branch_id"),
+                (latest, *bparams),
+            )[0]
+        else:
+            stock = rows(
+                "SELECT count(DISTINCT product_id) FILTER (WHERE quantity_on_hand <= COALESCE(reorder_point, 0)) AS low, "
+                "count(DISTINCT product_id) FILTER (WHERE quantity_on_hand <= 0) AS out_of_stock, "
+                "count(DISTINCT product_id) AS tracked "
+                "FROM inventory WHERE TRUE" + bsql,
+                bparams,
+            )[0]
 
         svc = {}
         for (start, end), key in (((cur, latest), "current"), ((prev, prev_end), "previous")):
@@ -237,7 +257,7 @@ class Overview(APIView):
             ):
                 svc.setdefault((r["service_name"], r["branch_id"]), {"current": 0, "previous": 0})[key] = r["txns"]
         top_services = [
-            {"service": name, "branch": towns.get(bid, bid), "count": v["current"],
+            {"service": name, "branch": towns.get(bid, bid), "count": v["current"], "previous": v["previous"],
              "changePct": num(fc.growth_rate(v["current"], v["previous"]), 1)}
             for (name, bid), v in sorted(svc.items(), key=lambda kv: -kv[1]["current"])[:8]
         ]
@@ -245,7 +265,8 @@ class Overview(APIView):
         return Response({
             "asOf": as_of(win, cur),
             "months": active_months(),
-            "comparison": {"to": prev_end.isoformat(),
+            "current": {"from": cur.isoformat(), "to": latest.isoformat()},
+            "comparison": {"from": prev.isoformat(), "to": prev_end.isoformat(),
                            "label": "same days last month" if partial else "previous month"},
             "kpis": {
                 "totalSales": num(now["total"]),
@@ -351,13 +372,22 @@ class SalesAnalytics(APIView):
         if year not in years:
             year = month.year
 
-        # December of the previous year is fetched so January's growth rate has something to compare with.
-        kpi = kpi_rows(date(year - 1, 12, 1), date(year, 12, 1), bsql, bparams)
+        # The whole previous year is fetched: December for January's month-on-month growth, and every month for
+        # the same-month-last-year comparison.
+        kpi = kpi_rows(date(year - 1, 1, 1), date(year, 12, 1), bsql, bparams)
         monthly, by_month_total = [], sum_by_month(kpi, "total_gross")
         for m in month_range(date(year, 12, 1), 12):
             if m > month:
                 break
-            entry = {"month": month_key(m), "branches": {}, "partial": m == win.cur and not win.complete}
+            partial = m == win.cur and not win.complete
+            last_year = add_months(m, -12)
+            if partial:  # the running month against the same days of last year's month, not all of it
+                ly_total = period_totals(last_year, same_day_last_year(win.latest), bsql, bparams)["total"]
+            else:
+                ly_total = by_month_total.get(last_year, 0)
+            entry = {"month": month_key(m), "branches": {}, "partial": partial,
+                     "lastYear": num(ly_total) if ly_total else None,
+                     "yoyGrowth": num(fc.growth_rate(by_month_total.get(m, 0), ly_total), 1)}
             for r in kpi:
                 if r["month"] == m:
                     entry["branches"][towns.get(r["branch_id"], r["branch_name"])] = {
@@ -369,19 +399,44 @@ class SalesAnalytics(APIView):
             entry["growthRate"] = num(fc.growth_rate(by_month_total.get(m, 0), by_month_total.get(add_months(m, -1), 0)), 1)
             monthly.append(entry)
 
-        per_branch = {}
+        # Year to date per branch, against the same dates a year earlier, plus size-neutral measures so a new or
+        # smaller branch can be compared fairly with a bigger one (average sale, margin, revenue per month, share).
+        period_end = min(date(year, 12, 31), win.latest)
+        period_start = date(year, 1, 1)
+        active = {}  # branch -> months with any record this year (the running month as the share of it elapsed)
         for r in kpi:
-            if r["month"].year != year:
+            if r["month"].year == year and r["sale_txns"] + r["service_txns"]:
+                share = win.latest.day / days_in(r["month"]) if r["month"] == win.cur and not win.complete else 1
+                active[r["branch_id"]] = active.get(r["branch_id"], 0) + share
+        opened = {r["branch_id"]: r["date_opened"] for r in rows("SELECT branch_id, date_opened FROM branch")}
+        per_branch = {}
+        for bid, town in towns.items():
+            if bsql and bid not in bparams:
                 continue
-            b = per_branch.setdefault(towns.get(r["branch_id"], r["branch_name"]),
-                                      {"sales": 0.0, "services": 0.0, "total": 0.0, "profit": 0.0, "serviceTxns": 0, "saleTxns": 0})
-            b["sales"] += float(r["sales_gross"]); b["services"] += float(r["service_gross"])
-            b["total"] += float(r["total_gross"]); b["profit"] += float(r["total_profit"])
-            b["serviceTxns"] += r["service_txns"]; b["saleTxns"] += r["sale_txns"]
-        per_branch = {k: {kk: num(vv) for kk, vv in v.items()} for k, v in per_branch.items()}
+            # A branch that opened after last year's period began has no full year to compare with: its growth
+            # would only measure the opening, so it is reported as not comparable instead of, say, +300%.
+            new_branch = bool(opened.get(bid) and opened[bid] > date(year - 1, 1, 1))
+            only = " AND branch_id = %s"
+            now = period_totals(period_start, period_end, only, (bid,))
+            before = period_totals(date(year - 1, 1, 1), same_day_last_year(period_end), only, (bid,))
+            txns = now["saleTxns"] + now["serviceTxns"]
+            per_branch[town] = {
+                **{k: num(v) for k, v in now.items()},
+                "lastYear": num(before["total"]) if before["total"] else None,
+                "yoyGrowth": None if new_branch else num(fc.growth_rate(now["total"], before["total"]), 1),
+                "openedOn": opened[bid].isoformat() if new_branch else None,
+                "margin": num(now["profit"] / now["total"] * 100, 1) if now["total"] else None,
+                "avgTicket": num(now["total"] / txns) if txns else None,
+                "perMonth": num(now["total"] / active[bid]) if active.get(bid) else None,
+                "monthsActive": num(active.get(bid, 0), 1),
+            }
+        all_total = sum(b["total"] or 0 for b in per_branch.values())
+        for b in per_branch.values():
+            b["share"] = num(b["total"] / all_total * 100, 1) if all_total else None
 
-        # KPI window: the latest three complete months versus the three complete months before them.
-        w_months = recent_months(win.base_end, 3)
+        # KPI window: the last three complete months of the chosen year (the latest three for the running year)
+        # versus the three before them, so every section on the page follows the year picked.
+        w_months = recent_months(win.base_end if year == month.year else date(year, 12, 1), 3)
         p_months = recent_months(add_months(w_months[0], -1), 3) if w_months else []
         if not w_months:
             return empty()
@@ -405,26 +460,27 @@ class SalesAnalytics(APIView):
             (w_months, *bparams),
         )
 
-        def item_revenue(months):
+        # Products and services are ranked separately (services earn far more per line, so one mixed list hid the
+        # products): products by units sold, services by visits, each with its revenue and its trend against the
+        # three months before.
+        def ranked(view, name_col, count_sql, months):
             if not months:
                 return []
             return rows(
-                "SELECT 'Product' AS kind, product_name AS name, category, branch_id, sum(line_total) AS revenue "
-                "FROM v_sale_lines WHERE month = ANY(%s)" + bsql + " GROUP BY product_name, category, branch_id "
-                "UNION ALL SELECT 'Service', service_name, category, branch_id, sum(line_total) "
-                "FROM v_service_lines WHERE month = ANY(%s)" + bsql + " GROUP BY service_name, category, branch_id",
-                (months, *bparams, months, *bparams),
+                f"SELECT {name_col} AS name, category, branch_id, {count_sql} AS count, sum(line_total) AS revenue "
+                f"FROM {view} WHERE month = ANY(%s)" + bsql + f" GROUP BY {name_col}, category, branch_id",
+                (months, *bparams),
             )
 
-        before = {(r["kind"], r["name"], r["branch_id"]): float(r["revenue"] or 0) for r in item_revenue(p_months)}
-        top_items = []
-        for r in sorted(item_revenue(w_months), key=lambda r: -float(r["revenue"] or 0))[:12]:
-            rev = float(r["revenue"] or 0)
-            top_items.append({
-                "item": r["name"], "kind": r["kind"], "category": r["category"],
-                "branch": towns.get(r["branch_id"], r["branch_id"]), "revenue": num(rev),
-                "trendPct": num(fc.growth_rate(rev, before.get((r["kind"], r["name"], r["branch_id"]), 0)), 1),
-            })
+        def top(view, name_col, count_sql):
+            before = {(r["name"], r["branch_id"]): float(r["count"] or 0) for r in ranked(view, name_col, count_sql, p_months)}
+            now = sorted(ranked(view, name_col, count_sql, w_months), key=lambda r: (-float(r["count"] or 0), -float(r["revenue"] or 0)))
+            return [{
+                "item": r["name"], "category": r["category"], "branch": towns.get(r["branch_id"], r["branch_id"]),
+                "count": num(r["count"]), "revenue": num(r["revenue"]),
+                "previous": num(before.get((r["name"], r["branch_id"]), 0)),
+                "trendPct": num(fc.growth_rate(float(r["count"] or 0), before.get((r["name"], r["branch_id"]), 0)), 1),
+            } for r in now[:10]]
 
         year_start, year_end = date(year, 1, 1), date(year, 12, 31)
         ranking = rows(
@@ -440,17 +496,22 @@ class SalesAnalytics(APIView):
             "asOf": as_of(win),
             "year": year,
             "years": years,
+            "period": {"from": period_start.isoformat(), "to": period_end.isoformat(),
+                       "lastYearTo": same_day_last_year(period_end).isoformat()},
             "monthly": monthly,
             "perBranch": per_branch,
             "kpis": {
-                "window": {"from": month_key(w_start), "to": month_key(w_end)},
+                "window": {"from": month_key(w_start), "to": month_key(w_end),
+                           "previousFrom": month_key(p_months[0]) if p_months else None,
+                           "previousTo": month_key(p_months[-1]) if p_months else None},
                 "avgDailyTransactions": num(txns / days if days else 0),
                 "topServiceCategory": cat[0]["category"] if cat else None,
                 "revenue": num(cur_total),
                 "previousRevenue": num(prv_total),
                 "revenueGrowth": num(fc.growth_rate(cur_total, prv_total), 1),
             },
-            "topItems": top_items,
+            "topProducts": top("v_sale_lines", "product_name", "sum(quantity)"),
+            "topServices": top("v_service_lines", "service_name", "count(DISTINCT service_txn_id)"),
             "mostAvailedServices": [fmt(r) for r in ranking[:5]],
             "leastAvailedServices": [fmt(r) for r in ranking[::-1][:5]],
         })

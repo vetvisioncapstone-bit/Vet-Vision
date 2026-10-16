@@ -7,7 +7,8 @@ import { useSession } from './useSession'
 export function useServiceCatalog() {
   const { session } = useSession()
   const res = useResource('/services/', { enabled: !!session })
-  const refresh = () => invalidate('/services/')
+  // Prices and the catalog feed the forecast and sales analytics too.
+  const refresh = () => Promise.all([invalidate('/services/'), invalidate('/analytics/')])
   return {
     ...res,
     create: async (input) => { const row = await api.post('/services/', input); await refresh(); return row },
@@ -26,7 +27,8 @@ export function useInventory({ branch } = {}) {
   const key = `/inventory/${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`
   const { data, loading, error, reload } = useResource(key, { enabled: !!session })
 
-  const refresh = () => invalidate('/inventory/')
+  // Stock levels feed the dashboard, inventory analytics and the forecast's order advice.
+  const refresh = () => Promise.all([invalidate('/inventory/'), invalidate('/analytics/')])
 
   return {
     items: data || [],

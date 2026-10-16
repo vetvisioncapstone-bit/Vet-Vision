@@ -57,7 +57,8 @@ export function Legend({ items }) {
 }
 
 // data: [{ label, values: { [seriesKey]: number } }]; series: [{ key, label, color }]
-export function BarChart({ data, series, height = 260, format = (n) => String(n) }) {
+// `fill`: the chart grows to fill a card that is taller than `height` (a row whose other card is taller).
+export function BarChart({ data, series, height = 260, fill = false, format = (n) => String(n) }) {
   const canvas = useChart(() => ({
     type: 'bar',
     data: {
@@ -73,7 +74,7 @@ export function BarChart({ data, series, height = 260, format = (n) => String(n)
       scales: baseScales
     }
   }), JSON.stringify([data, series]))
-  return <div className="chart-box" style={{ height }}><canvas ref={canvas} role="img" aria-label="Bar chart" /></div>
+  return <div className="chart-box" style={fill ? { minHeight: height, flex: '1 1 auto' } : { height }}><canvas ref={canvas} role="img" aria-label="Bar chart" /></div>
 }
 
 // points: [{ label, actual?: number, forecast?: number }]. The forecast point is joined to the last actual one

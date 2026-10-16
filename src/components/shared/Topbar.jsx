@@ -61,6 +61,11 @@ export default function Topbar({ role, onToggleSidebar }) {
     navigate('/')
   }
 
+  function openRequest(id) { // the Staff requests page, scrolled to this one
+    closeAllPopovers()
+    navigate(`/admin/requests?id=${id}`)
+  }
+
   function handleFollowUpClick(patientId) {
     closeAllPopovers()
     const destination = role === 'employee'
@@ -122,8 +127,10 @@ export default function Topbar({ role, onToggleSidebar }) {
 
               {notif.deleteRequests.map(r => (
                 <div className="notif-item notif-item-request" key={r.id}>
-                  <p className="notif-item-title">Delete request: {escapeText(r.label)}</p>
-                  <p className="notif-item-sub">{escapeText(r.requestedByName)}{r.requestedByBranch ? ` · ${escapeText(r.requestedByBranch)}` : ''}</p>
+                  <button type="button" className="notif-item-body" onClick={() => openRequest(r.id)}>
+                    <p className="notif-item-title">Delete request: {escapeText(r.label)}</p>
+                    <p className="notif-item-sub">{escapeText(r.requestedByName)}{r.requestedByBranch ? ` · ${escapeText(r.requestedByBranch)}` : ''} · View request</p>
+                  </button>
                   <div className="notif-item-actions">
                     <button type="button" className="notif-action-btn approve" onClick={() => runAction(notif.approveDeleteRequest, r.id)}>Approve</button>
                     <button type="button" className="notif-action-btn deny" onClick={() => runAction(notif.denyDeleteRequest, r.id)}>Deny</button>
@@ -133,8 +140,10 @@ export default function Topbar({ role, onToggleSidebar }) {
 
               {notif.restockRequests.map(r => (
                 <div className="notif-item notif-item-request" key={r.id}>
-                  <p className="notif-item-title">Restock requested: {escapeText(r.productName)}</p>
-                  <p className="notif-item-sub">{escapeText(r.requestedByName)}{r.branch ? ` · ${escapeText(r.branch)}` : ''}</p>
+                  <button type="button" className="notif-item-body" onClick={() => openRequest(r.id)}>
+                    <p className="notif-item-title">Restock requested: {escapeText(r.productName)}</p>
+                    <p className="notif-item-sub">{escapeText(r.requestedByName)}{r.branch ? ` · ${escapeText(r.branch)}` : ''} · View request</p>
+                  </button>
                   <div className="notif-item-actions">
                     <button type="button" className="notif-action-btn" onClick={() => runAction(notif.dismissRestockRequest, r.id)}>Dismiss</button>
                   </div>

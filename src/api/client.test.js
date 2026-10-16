@@ -8,13 +8,18 @@ async function freshClient() {
 
 const json = (status, body) => ({ status, ok: status < 400, json: async () => body })
 
-beforeEach(() => {
+const fakeStorage = () => {
   const store = {}
-  vi.stubGlobal('sessionStorage', {
+  return {
     getItem: (k) => (k in store ? store[k] : null),
     setItem: (k, v) => { store[k] = String(v) },
     removeItem: (k) => { delete store[k] }
-  })
+  }
+}
+
+beforeEach(() => {
+  vi.stubGlobal('sessionStorage', fakeStorage())
+  vi.stubGlobal('localStorage', fakeStorage())
   vi.stubGlobal('window', new EventTarget())
 })
 afterEach(() => vi.unstubAllGlobals())
@@ -66,5 +71,32 @@ describe('api client', () => {
     setTokens({ access: 'A1', refresh: 'R1' })
     expect(await api.patch('/auth/me/', { newPassword: 'x' })).toEqual({ name: 'A' })
     expect(getRefreshToken()).toBe('R9')
+  })
+})
+
+describe('server error messages', () => {
+  it('finds the message in nested field errors', async () => {
+    const { ApiError } = await import('./client')
+    expect(new ApiError(400, { prescription: { nextAppointment: ['Date has wrong format.'] } }).message).toBe('Date has wrong format.')
+    expect(new ApiError(400, { labResults: [{ image: ['Upload a PNG, JPG, WebP, GIF or PDF file.'] }] }).message).toBe('Upload a PNG, JPG, WebP, GIF or PDF file.')
+    expect(new ApiError(400, { detail: 'Nope.' }).message).toBe('Nope.')
+    expect(new ApiError(400, null).message).toMatch(/fewer or smaller/)
+  })
+})
+
+describe('remember me', () => {
+  it('keeps the session past a browser close only when asked, and a refresh keeps it where it is', async () => {
+    const { setTokens, getRefreshToken, clearTokens } = await freshClient()
+    setTokens({ access: 'A', refresh: 'R1' }, true)
+    expect(localStorage.getItem('vvRefreshToken')).toBe('R1')
+    setTokens({ access: 'A', refresh: 'R2' }) // token rotation
+    expect(localStorage.getItem('vvRefreshToken')).toBe('R2')
+    expect(sessionStorage.getItem('vvRefreshToken')).toBeNull()
+    setTokens({ access: 'A', refresh: 'R3' }, false)
+    expect(sessionStorage.getItem('vvRefreshToken')).toBe('R3')
+    expect(localStorage.getItem('vvRefreshToken')).toBeNull()
+    expect(getRefreshToken()).toBe('R3')
+    clearTokens()
+    expect(getRefreshToken()).toBeNull()
   })
 })

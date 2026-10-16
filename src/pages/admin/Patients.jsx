@@ -16,6 +16,7 @@ import Dialog from '../../components/shared/Dialog'
 import Pagination from '../../components/shared/Pagination'
 import { onActivate } from '../../utils/a11y'
 import { useConfirm } from '../../components/shared/ConfirmDialog'
+import WeightInput, { withKg } from '../../components/shared/WeightInput'
 // ==================== CONSTANTS ====================
 const PAGE_SIZE = 50
 
@@ -394,7 +395,7 @@ export default function Patients() {
 
     const consultationInput = {
       date: consultDate,
-      weight: consultWeight.trim(),
+      weight: withKg(consultWeight),
       notes: consultNotes.trim(),
       availedItems: toPayload(pendingAvailedItems),
       remarks: consultRemarks.trim(),
@@ -813,7 +814,7 @@ export default function Patients() {
                   </div>
                   <div className="form-group">
                     <label className="form-label" htmlFor="consultWeight">Weight</label>
-                    <input type="text" id="consultWeight" className="form-input" placeholder="e.g. 6-8 kg" value={consultWeight} onChange={(e) => setConsultWeight(e.target.value)} />
+                    <WeightInput id="consultWeight" value={consultWeight} onChange={setConsultWeight} />
                   </div>
                 </div>
                 <div className="form-group">
@@ -822,7 +823,7 @@ export default function Patients() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Services / products</label>
-                  <AvailedItemsPicker key={pickerKey} branch={currentPatient.branch} items={pendingAvailedItems} onChange={setPendingAvailedItems} />
+                  <AvailedItemsPicker key={pickerKey} branch={currentPatient.branch} weight={consultWeight} items={pendingAvailedItems} onChange={setPendingAvailedItems} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Prescription</label>

@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.pagination import paginate, wants_page
-from core.ids import branch_letter, next_id
+from core.ids import branch_letter, ledger_id, next_id
 from accounts.audit import record
 from core.permissions import IsClinicStaff, branch_by_town, scope_branch
 from clinic.models import Customer
@@ -69,6 +69,10 @@ def create_sale(request, branch, items, customer=None, on=None, payment_method="
         inv = stock.get(inv_id)
         if inv is None or inv.branch_id != branch.branch_id:
             raise serializers.ValidationError({"items": f"Product {inv_id} is not stocked at this branch."})
+        if inv.expiration_date and inv.expiration_date < timezone.localdate():
+            raise serializers.ValidationError(
+                {"items": f"{inv.product.product_name} expired on {inv.expiration_date:%b %d, %Y} and cannot be sold."}
+            )
         if inv.quantity_on_hand < qty:
             raise serializers.ValidationError(
                 {"items": f"Only {int(inv.quantity_on_hand)} of {inv.product.product_name} left in stock."}
@@ -125,7 +129,7 @@ def undo_sale(sale, reason):
             inv.quantity_on_hand += d.quantity
             inv.save(update_fields=["quantity_on_hand"])
         InventoryTransaction.objects.create(
-            txn_id=next_id(InventoryTransaction, "txn_id", "ITX-", 8), product=d.product, branch=sale.branch,
+            txn_id=ledger_id(), product=d.product, branch=sale.branch,
             txn_type="return", quantity_change=d.quantity, reference_id=sale.sale_id, remarks=reason,
             txn_date=timezone.localdate(),
         )

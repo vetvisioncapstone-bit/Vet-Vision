@@ -42,10 +42,10 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('vv-auth-expired', onExpired)
   }, [])
 
-  const login = useCallback(async (email, password, captcha) => {
+  const login = useCallback(async (email, password, captcha, remember = false) => {
     try {
       const data = await api.post('/auth/login/', { email, password, captcha })
-      setTokens({ access: data.access, refresh: data.refresh })
+      setTokens({ access: data.access, refresh: data.refresh }, remember)
       setUser(data.user)
       return { success: true, session: toSession(data.user) }
     } catch (err) {
@@ -73,6 +73,8 @@ export function AuthProvider({ children }) {
     clearTokens()
     clearCache()
     setUser(null)
+    // A fresh page at the sign-in screen, replacing this one in the history: Back cannot show the app again.
+    window.location.replace('/')
   }, [])
 
   const value = useMemo(

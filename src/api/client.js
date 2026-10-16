@@ -1,5 +1,6 @@
-// Thin fetch wrapper for the Django API. The access token lives in memory; the refresh token
-// lives in sessionStorage (tab-scoped, like the prototype's session) so a reload keeps you signed in.
+// Thin fetch wrapper for the Django API. The access token lives in memory. The refresh token lives in
+// sessionStorage (signed out when the browser closes) or, after "Remember me", in localStorage (kept until it
+// expires, one day). Either way a reload keeps you signed in.
 
 const BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
 const REFRESH_KEY = 'vvRefreshToken'
@@ -15,14 +16,21 @@ export class ApiError extends Error {
   }
 }
 
+// The first readable message in a server error, however deeply it is nested: DRF reports a nested field as
+// { prescription: { nextAppointment: ["Date has wrong format…"] } } or { labResults: [{ image: ["…"] }] }.
+function firstMessage(value) {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value.map(firstMessage).find(Boolean) || null
+  if (value && typeof value === 'object') return Object.values(value).map(firstMessage).find(Boolean) || null
+  return null
+}
+
 function messageFrom(data, status) {
-  if (!data) return `Request failed (${status}).`
-  if (typeof data === 'string') return data
-  if (data.detail) return String(data.detail)
-  const first = Object.values(data)[0]
-  if (Array.isArray(first)) return String(first[0])
-  if (typeof first === 'string') return first
-  return `Request failed (${status}).`
+  if (status === 413 || (status === 400 && !data)) {
+    return status === 413 ? 'The attachments are too large to send at once. Remove some files and try again.'
+      : `The server rejected the request (${status}). If you attached files, try fewer or smaller ones.`
+  }
+  return (data && (data.detail ? String(data.detail) : firstMessage(data))) || `Request failed (${status}).`
 }
 
 export function errorMessage(err, fallback = 'Something went wrong. Please try again.') {
@@ -32,19 +40,26 @@ export function errorMessage(err, fallback = 'Something went wrong. Please try a
 }
 
 export function getRefreshToken() {
-  try { return sessionStorage.getItem(REFRESH_KEY) } catch { return null }
+  try { return sessionStorage.getItem(REFRESH_KEY) || localStorage.getItem(REFRESH_KEY) } catch { return null }
 }
 
-export function setTokens({ access, refresh }) {
+// `remember` true/false picks the store at sign-in; left out (a token refresh), the token stays where it was.
+export function setTokens({ access, refresh }, remember) {
   if (access) accessToken = access
-  if (refresh) {
-    try { sessionStorage.setItem(REFRESH_KEY, refresh) } catch { /* private mode: stays in memory only */ }
-  }
+  if (!refresh) return
+  try {
+    const keep = remember ?? !!localStorage.getItem(REFRESH_KEY)
+    ;(keep ? sessionStorage : localStorage).removeItem(REFRESH_KEY)
+    ;(keep ? localStorage : sessionStorage).setItem(REFRESH_KEY, refresh)
+  } catch { /* private mode: stays in memory only */ }
 }
 
 export function clearTokens() {
   accessToken = null
-  try { sessionStorage.removeItem(REFRESH_KEY) } catch { /* ignore */ }
+  try {
+    sessionStorage.removeItem(REFRESH_KEY)
+    localStorage.removeItem(REFRESH_KEY)
+  } catch { /* ignore */ }
 }
 
 async function raw(method, path, body, withAuth = true) {

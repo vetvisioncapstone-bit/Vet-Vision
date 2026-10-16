@@ -85,13 +85,13 @@ def visit(c, pid, items, **over):
 def test_billed_services_become_a_service_visit_on_the_dashboard(staff_ibaan, admin, catalog):
     c = client_for(staff_ibaan)
     pid = c.post("/api/patients/", PATIENT).data["id"]
-    r = visit(c, pid, [service(catalog["Vaccination"], 350), service(catalog["Grooming"], 100, qty=2)], weight="3.5 kg")
+    r = visit(c, pid, [service(catalog["Vaccination"], 350), service(catalog["Grooming"], 200)], weight="3.5 kg")
     assert r.status_code == 201
     txn = ServiceTransaction.objects.get()
-    assert txn.pet_id == pid and txn.customer_id == Pet.objects.get(pk=pid).customer_id and txn.total_amount == 550
+    assert txn.pet_id == pid and txn.customer_id == Pet.objects.get(pk=pid).customer_id and txn.total_amount == 550  # 350 + 200
     assert txn.branch.town == "Ibaan" and txn.weight_kg == Decimal("3.5") and txn.txn_date == date(2026, 9, 24)
     lines = {d.service.service_name: d for d in txn.details.all()}
-    assert lines["Vaccination"].line_profit == 350 - 120 and lines["Grooming"].quantity == 2
+    assert lines["Vaccination"].line_profit == 350 - 120 and lines["Grooming"].quantity == 1
     rec = MedicalRecord.objects.get()
     assert rec.source_txn_id == txn.service_txn_id and rec.total_price == 550
     # It is revenue now: the analytics read service transactions.
@@ -248,3 +248,31 @@ def test_deleting_a_service_removes_it_or_retires_it_when_visits_used_it(staff_i
     assert ServiceTransaction.objects.get().details.get().service_id == "SRV-0001"
     assert visit(c, pid, [service(catalog["Vaccination"], 350)]).status_code == 400  # cannot be billed any more
     assert boss.delete("/api/services/SRV-0001/").status_code == 404
+
+
+def test_service_weight_range_and_once_per_visit_rules(staff_ibaan, branches):
+    from clinic.views import weight_band
+    assert weight_band("DOG OVH 6 TO 10KG SURG") == (5, 10) and weight_band("400 PF") is None
+    small = Service.objects.create(service_id="SRV-0101", service_name="DOG CASTRATION UPTO 5KG SURG", category="SURGERY")
+    shot = Service.objects.create(service_id="SRV-0102", service_name="SMALL INJ", category="INJECTABLES")
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    too_big = c.post(f"/api/patients/{pid}/consultations/", consult(weight="8 kg", availedItems=[service(small, 2000)]))
+    assert too_big.status_code == 400 and "8 kg" in str(too_big.data)
+    twice = c.post(f"/api/patients/{pid}/consultations/", consult(weight="4 kg", availedItems=[service(small, 2000, qty=2)]))
+    assert twice.status_code == 400 and "once per visit" in str(twice.data)
+    ok = c.post(f"/api/patients/{pid}/consultations/", consult(weight="4 kg", availedItems=[service(small, 2000), service(shot, 150, qty=3)]))
+    assert ok.status_code == 201
+
+
+def test_request_log_shows_who_asked_and_what_became_of_it(staff_ibaan, admin):
+    c, boss = client_for(staff_ibaan), client_for(admin)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    req = c.post("/api/requests/", {"type": "patient", "targetId": pid, "label": "Duplicate record"}, format="json").data
+    assert req["petId"] == pid and req["status"] == "pending"
+    boss.post(f"/api/requests/{req['id']}/deny/")
+    log = boss.get("/api/requests/?all=1").data
+    assert log[0]["id"] == req["id"] and log[0]["status"] == "denied" and log[0]["resolvedByName"] == admin.name
+    assert boss.get("/api/requests/").data == []  # the bell lists pending ones only
+    mine = c.get("/api/requests/?mine=1").data
+    assert [r["status"] for r in mine] == ["denied"] and c.get("/api/requests/?all=1").data == []

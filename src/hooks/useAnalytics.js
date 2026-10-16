@@ -29,6 +29,9 @@ const NUM = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 1 })
 export const fmtMoney = (n) => (n === null || n === undefined ? '—' : PESO.format(n))
 export const fmtNum = (n) => (n === null || n === undefined ? '—' : NUM.format(n))
 export const fmtPct = (n) => (n === null || n === undefined ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(1)}%`)
+// A count's change in plain words for the owner: "Up 13%", "Down 20%", "Same", or "New" when there were none before.
+export const fmtChange = (pct, previous) => (!previous ? 'New' : pct === null || pct === undefined ? '—'
+  : Math.abs(pct) < 0.05 ? 'Same' : `${pct > 0 ? 'Up' : 'Down'} ${NUM.format(Math.abs(pct))}%`)
 
 // 'YYYY-MM' -> 'Jul' (short) or 'Jul 2026' (long).
 export function fmtMonth(key, long = false) {

@@ -169,6 +169,12 @@ def request_row(r):
         "requestedByBranch": r.branch.town if r.branch_id else "",
         "requestedAt": r.requested_at.isoformat(),
         "status": r.status,
+        "resolvedAt": r.resolved_at.isoformat() if r.resolved_at else None,
+        "resolvedByName": r.resolved_by.name if r.resolved_by_id else "",
+        # Where the item lives, for the "Open" link: a consultation is shown on its pet's record.
+        "petId": (MedicalRecord.objects.filter(pk=r.target_id).values_list("pet_id", flat=True).first()
+                  if r.kind == ApprovalRequest.DELETE_CONSULTATION else
+                  r.target_id if r.kind == ApprovalRequest.DELETE_PATIENT else None),
     }
 
 
@@ -183,11 +189,16 @@ class RequestList(APIView):
     permission_classes = [IsClinicStaff]
 
     def get(self, request):
-        """Pending requests. Only admins act on these, so staff receive an empty list."""
+        """Pending requests for the admin's bell. ?all=1: the admin's full log, newest first (pending and resolved).
+        ?mine=1: the requests the signed-in staff member sent, with what became of them."""
+        qs = ApprovalRequest.objects.select_related("branch", "resolved_by")
+        if request.query_params.get("mine"):
+            return Response([request_row(r) for r in qs.filter(requested_by=request.user).order_by("-requested_at")[:200]])
         if request.user.role != "admin":
             return Response([])
-        qs = ApprovalRequest.objects.filter(status=ApprovalRequest.STATUS_PENDING).select_related("branch")
-        return Response([request_row(r) for r in qs])
+        if request.query_params.get("all"):
+            return Response([request_row(r) for r in qs.order_by("-requested_at")[:300]])
+        return Response([request_row(r) for r in qs.filter(status=ApprovalRequest.STATUS_PENDING)])
 
     def post(self, request):
         s = RequestInput(data=request.data)

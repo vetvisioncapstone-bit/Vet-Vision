@@ -39,3 +39,13 @@ export function getStatusClass(status) {
 export function isImageDataUrl(url) {
   return typeof url === 'string' && url.startsWith('data:image/')
 }
+
+// Days until a 'YYYY-MM-DD' expiry date (negative once it has passed); null when there is no date.
+export function daysToExpiry(iso) {
+  if (!iso) return null
+  return Math.round((new Date(`${iso}T00:00`) - new Date(`${todayIso()}T00:00`)) / 86400000)
+}
+
+// Expired stock cannot be sold; stock expiring within this many days is flagged so it is used first.
+export const EXPIRY_WARN_DAYS = 30
+export const isExpired = (item) => (daysToExpiry(item.expiration) ?? 1) < 0

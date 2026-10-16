@@ -352,6 +352,23 @@ def _kg(text):
     return Decimal(m.group()) if m else None
 
 
+# Services billed once per visit; the rest (injections, confinement days) take a quantity. Same list as the picker.
+SINGLE_QUANTITY = {"SURGERY", "PROFESSIONAL FEE", "TEST KITS", "CBC/BLOOD CHEM", "GROOMING", "VACCINES"}
+
+
+def weight_band(name):
+    """(above, up_to) kg from a service name: "UPTO 5KG" -> (None, 5), "6 TO 10KG" -> (5, 10), "5KG ABOVE" ->
+    (5, None); None when the name carries no range. A pet fits when above < weight <= up_to."""
+    n = (name or "").upper()
+    if m := re.search(r"UPTO\s*(\d+(?:\.\d+)?)\s*KG", n):
+        return None, Decimal(m.group(1))
+    if m := re.search(r"(\d+(?:\.\d+)?)\s*TO\s*(\d+(?:\.\d+)?)\s*KG", n):
+        return Decimal(m.group(1)) - 1, Decimal(m.group(2))
+    if m := re.search(r"(\d+(?:\.\d+)?)\s*KG\s*ABOVE", n):
+        return Decimal(m.group(1)), None
+    return None
+
+
 def _bill_services(request, pet, branch, items, on, weight):
     """The visit's services become a service transaction, exactly like the clinic's own records, so they count
     in revenue, service demand, forecasts and reports. Prices are as entered (fees vary per case); the cost comes
@@ -360,6 +377,16 @@ def _bill_services(request, pet, branch, items, on, weight):
     missing = sorted({i["serviceId"] for i in items} - set(catalog))
     if missing:
         raise serializers.ValidationError({"availedItems": f"Unknown service: {', '.join(missing)}."})
+    pet_kg = _kg(weight)
+    for i in items:
+        svc = catalog[i["serviceId"]]
+        if svc.category in SINGLE_QUANTITY and i["quantity"] != 1:
+            raise serializers.ValidationError({"availedItems": f"{svc.service_name} is billed once per visit."})
+        band = weight_band(svc.service_name)
+        if band and pet_kg is not None and ((band[1] is not None and pet_kg > band[1])
+                                            or (band[0] is not None and pet_kg <= band[0])):
+            raise serializers.ValidationError(
+                {"availedItems": f"{svc.service_name} does not fit a {pet_kg:g} kg pet. Pick the service for its weight."})
     costs = {p.service_id: p.unit_capital
              for p in ServiceBranchPrice.objects.filter(service_id__in=list(catalog), branch=branch)}
     staff = request.user.staff if request.user.staff_id else None

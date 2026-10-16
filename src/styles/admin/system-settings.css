@@ -526,31 +526,15 @@
     color: #b3261e;
 }
 
-.audit-pager {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 14px;
-    font-size: 13px;
-    color: #6b7a72;
+/* Activity log quick filters: one choice at a time, the chosen one filled. */
+.audit-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
+.audit-kind {
+  padding: 6px 14px; border: 1px solid #dfe3e1; border-radius: 999px; background: #fff;
+  font: inherit; font-size: 13px; font-weight: 500; color: #3a3f3d; cursor: pointer;
 }
-
-.audit-pager span:first-child {
-    margin-right: auto;
-}
-
-.audit-pager button {
-    padding: 6px 12px;
-    border: 1px solid #dfe3e1;
-    border-radius: 7px;
-    background: #ffffff;
-    font: inherit;
-    font-size: 13px;
-    cursor: pointer;
-}
-
-.audit-pager button:disabled {
-    opacity: 0.5;
-    cursor: default;
-}
+.audit-kind:hover { background: #f0f4f1; }
+.audit-kind.is-on { border-color: #2d7a4d; background: #2d7a4d; color: #fff; }
+.audit-kind:focus-visible { outline: 2px solid #2d7a4d; outline-offset: 2px; }
+.audit-card td .cell-sub { display: block; margin-top: 2px; font-size: 12px; color: #646c68; }
+.audit-head .settings-admin-sub { margin-top: 2px; }
+@media (pointer: coarse) { .audit-kind { min-height: 44px; } }

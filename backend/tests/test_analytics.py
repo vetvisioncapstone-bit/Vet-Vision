@@ -131,6 +131,10 @@ def test_a_past_month_can_be_viewed_while_the_current_one_is_running(admin, hist
     assert r["asOf"]["month"] == "2026-03" and r["asOf"]["partial"] is False
     assert r["kpis"]["totalSales"] == 30 * PRICE and r["kpis"]["previousTotalSales"] == 20 * PRICE  # whole Feb
     assert r["comparison"]["label"] == "previous month"
+    # A complete 30-day month is compared with all 31 days of the month before, not just its first 30.
+    april = get(admin, "overview/?month=2026-04").data
+    assert april["current"] == {"from": "2026-04-01", "to": "2026-04-30"}
+    assert april["comparison"]["from"] == "2026-03-01" and april["comparison"]["to"] == "2026-03-31"
     assert r["trend"][-1]["month"] == "2026-03" and not any(t["partial"] for t in r["trend"])
     assert r["months"][:3] == ["2026-09", "2026-08", "2026-07"] and r["months"][-1] == "2026-01"
     live = get(admin, "live/?month=2026-03").data
@@ -262,7 +266,8 @@ def test_sales_analytics_year_and_kpis(admin, history):
     assert r["kpis"]["revenue"] == cur and r["kpis"]["previousRevenue"] == prev
     assert r["kpis"]["revenueGrowth"] == round((cur - prev) / prev * 100, 1)
     assert r["kpis"]["avgDailyTransactions"] == round(4 / 92, 2)  # 4 sales in Jun 1 - Aug 31 (92 days)
-    assert r["topItems"][0]["item"] == "Dog Food 5kg" and r["topItems"][0]["revenue"] == cur
+    top = r["topProducts"][0]
+    assert top["item"] == "Dog Food 5kg" and top["revenue"] == cur and top["count"] == 60 + 70 + 81  # units, Jun-Aug
 
 
 def test_report_data_for_a_month(admin, history):
@@ -309,3 +314,32 @@ def test_stockout_days_are_rebuilt_from_the_stock_ledger(branches, stocked):
                                             txn_type=kind, quantity_change=q)
     june = _stockouts([date(2026, 6, 1)], "", [])[product.product_id][date(2026, 6, 1)]
     assert june["daysOut"] == 5  # closed at zero on the 21st to the 25th; the delivery came on the 26th
+
+
+def test_branch_comparison_year_on_year_and_size_neutral_measures(admin, history, branches):
+    from analytics.views import same_day_last_year
+    assert same_day_last_year(date(2024, 2, 29)) == date(2023, 2, 28)
+    add_sale(branches[0], 500, date(2025, 3, 10), 100, history)  # Ibaan, same period last year
+    r = get(admin, "sales/?year=2026").data
+    assert r["period"] == {"from": "2026-01-01", "to": "2026-08-31", "lastYearTo": "2025-08-31"}
+    ibaan = r["perBranch"]["Ibaan"]
+    this_year = (sum(QTY_BY_MONTH.values()) + 1) * PRICE
+    assert ibaan["lastYear"] == 100 * PRICE
+    assert ibaan["yoyGrowth"] == round((this_year - 100 * PRICE) / (100 * PRICE) * 100, 1)
+    assert ibaan["avgTicket"] == round(this_year / 9, 2)  # nine sales
+    assert ibaan["margin"] == round((PRICE - CAPITAL) / PRICE * 100, 1)
+    assert ibaan["perMonth"] == round(this_year / 8, 2) and ibaan["share"] == 100.0
+    # San Jose opened in July 2025: no full year behind it, so no growth figure instead of a huge one.
+    assert r["perBranch"]["San Jose"]["openedOn"] == "2025-07-29" and r["perBranch"]["San Jose"]["yoyGrowth"] is None
+    mar = next(m for m in r["monthly"] if m["month"] == "2026-03")
+    assert mar["lastYear"] == 100 * PRICE and mar["yoyGrowth"] == round((30 - 100) / 100 * 100, 1)
+
+
+def test_items_to_reorder_counts_products_not_branch_shelves(admin, history, stocked):
+    """A product out at both branches is one product to reorder: the dashboard card must match the Inventory page,
+    which lists one row per product."""
+    for inv in stocked:
+        inv.quantity_on_hand = 0
+        inv.save(update_fields=["quantity_on_hand"])
+    k = get(admin, "overview/").data["kpis"]
+    assert (k["lowStockItems"], k["outOfStockItems"], k["trackedItems"]) == (1, 1, 1)

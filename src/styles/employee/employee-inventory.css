@@ -1,23 +1,5 @@
 /* ==================== EMPLOYEE INVENTORY TABLE ==================== */
 
-.movement-pill {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-.movement-fast {
-    background: #e4f6e8;
-    color: #17693a;
-}
-
-.movement-slow {
-    background: #fdf1e0;
-    color: #8a5300;
-}
-
 .employee-row-actions {
     display: flex;
     align-items: center;
@@ -45,3 +27,7 @@
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* The product search doubles as a dropdown; it gets room for the product names it lists. */
+.staff-search input { width: 280px; }
+@media (max-width: 600px) { .staff-search, .staff-search input { width: 100%; } }

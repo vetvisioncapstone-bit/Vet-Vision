@@ -90,7 +90,7 @@ def build_context():
     return {
         "dataAsOf": overview["asOf"],
         "dashboard": _pick(overview, "kpis", "comparison", "trend", "branchShare", "topServices"),
-        "salesAnalytics": _pick(sales, "year", "monthly", "perBranch", "kpis", "topItems", "mostAvailedServices",
+        "salesAnalytics": _pick(sales, "year", "monthly", "perBranch", "kpis", "topProducts", "topServices", "mostAvailedServices",
                                 "leastAvailedServices"),
         "inventory": {
             "movementWindow": inventory.get("window"),

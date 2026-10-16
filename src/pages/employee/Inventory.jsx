@@ -9,26 +9,16 @@ import '../../styles/employee/employee-inventory.css'
 
 import Dialog from '../../components/shared/Dialog'
 import Pagination from '../../components/shared/Pagination'
+import SearchPicker from '../../components/shared/SearchPicker'
+import CategoryFilter from '../../components/shared/CategoryFilter'
 import ReceiveStockDialog from '../../components/shared/ReceiveStockDialog'
 import { useConfirm } from '../../components/shared/ConfirmDialog'
+import { ActionsGuide, QuantityChangeHint, RowActions } from '../../components/shared/InventoryActions'
+import { getStatus, needsAction, urgency } from '../../utils/stockOrder'
 // ==================== HELPERS ====================
 // Rows come from the API, already scoped to this employee's branch by the server.
 
-const PAGE_SIZE = 10 // products per page
-
-function getStatus(product) {
-  if (product.quantity <= 0) return { label: 'Out of stock', cls: 'status-out-of-stock' }
-  if (product.quantity <= product.reorderPoint) return { label: 'Low stock', cls: 'status-low-stock' }
-  return { label: 'Ok', cls: 'status-ok' }
-}
-
-// There's no real sales-velocity tracking in this prototype yet (Sales
-// analytics / Forecasting are still stubs) - this is a simple stand-in
-// heuristic based on how close a product is to its reorder point, not an
-// actual measured turnover rate. Ported as-is from employee-inventory.js.
-function getMovementLabel(product) {
-  return product.quantity <= product.reorderPoint * 2 ? 'Fast' : 'Slow'
-}
+const PAGE_SIZE = 25 // products per page
 
 const EMPTY_FORM = {
   name: '', category: '', quantity: '', reorderPoint: '', delivery: '', expiration: '', photo: null
@@ -50,6 +40,7 @@ export default function Inventory() {
   }, [])
 
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeCategories, setActiveCategories] = useState(new Set())
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -58,26 +49,26 @@ export default function Inventory() {
 
   const branchProducts = products
   const visibleProducts = useMemo(() => {
+    // Most urgent first, the same order the admin sees: expired, out of stock, low, expiring soon, then OK.
+    const term = searchTerm.trim().toLowerCase()
     return branchProducts.filter(p =>
-      !searchTerm || p.name.toLowerCase().includes(searchTerm) || p.category.toLowerCase().includes(searchTerm)
-    )
-  }, [branchProducts, searchTerm])
+      (!term || p.name.toLowerCase().includes(term) || p.category.toLowerCase().includes(term))
+      && (activeCategories.size === 0 || activeCategories.has(p.category))
+    ).sort((a, b) => urgency(a, b) || a.name.localeCompare(b.name))
+  }, [branchProducts, searchTerm, activeCategories])
+  const categoryCounts = useMemo(() => branchProducts.reduce((n, p) => ({ ...n, [p.category]: (n[p.category] || 0) + 1 }), {}), [branchProducts])
+  const attentionCount = useMemo(() => visibleProducts.filter(needsAction).length, [visibleProducts])
 
   // A page of the filtered list at a time; a new search or filter starts again at page 1.
   const [page, setPage] = useState(1)
-  useEffect(() => { setPage(1) }, [searchTerm])
+  useEffect(() => { setPage(1) }, [searchTerm, activeCategories])
   const pageCount = Math.max(1, Math.ceil(visibleProducts.length / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
   const pageProducts = visibleProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   const statTotalItems = branchProducts.length
-  let statLowStock = 0
-  let statOutOfStock = 0
-  for (const p of branchProducts) {
-    const label = getStatus(p).label
-    if (label === 'Low stock') statLowStock++
-    else if (label === 'Out of stock') statOutOfStock++
-  }
+  const statLowStock = branchProducts.filter((p) => getStatus(p).rank === 2).length
+  const statOutOfStock = branchProducts.filter((p) => getStatus(p).rank === 1).length
 
   function openAddModal() {
     setEditingId(null)
@@ -98,6 +89,8 @@ export default function Inventory() {
     })
     setModalOpen(true)
   }
+
+  const editingProduct = products.find((p) => p.id === editingId)
 
   function closeModal() {
     setModalOpen(false)
@@ -121,8 +114,8 @@ export default function Inventory() {
       branch, // ignored by the server; staff are forced to their own branch
       quantity: Number(form.quantity),
       reorderPoint: Number(form.reorderPoint),
-      delivery: form.delivery,
-      expiration: form.expiration,
+      delivery: form.delivery || null, // blank: no date (e.g. items that do not expire)
+      expiration: form.expiration || null,
       photo: form.photo
     }
 
@@ -165,7 +158,7 @@ export default function Inventory() {
   return (
     <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
-        <h1>My Branch - {branch}</h1>
+        <h1>Inventory · {branch}</h1>
         <div className="employee-datetime">
           <p>{now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
           <p>{now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
@@ -173,7 +166,7 @@ export default function Inventory() {
       </div>
 
       <div className="scope-banner">
-        <p>You are viewing inventory for your branch only. To request a restock, click the button beside an item — this will notify the admin.</p>
+        <p>You are viewing inventory for your branch only.</p>
       </div>
 
       <div className="stats-grid">
@@ -195,62 +188,61 @@ export default function Inventory() {
 
       <div className="table-card">
         <div className="table-card-header">
-          <h2>Product Records</h2>
+          <h2>Products</h2>
           <div className="header-filters">
-            <div className="search-wrapper">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-              <input type="text" aria-label="Search products" autoComplete="off" placeholder="search product…" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.trim().toLowerCase())} />
-            </div>
+            <SearchPicker id="staff-products" className="staff-search" items={branchProducts} value={searchTerm} onChange={setSearchTerm}
+              onPick={(p) => setSearchTerm(p.name)} noun="products" meta={(p) => `${p.quantity} in stock`}
+              label="Search or pick a product" placeholder="Search or pick a product" />
+            <CategoryFilter counts={categoryCounts} selected={activeCategories} onChange={setActiveCategories} />
             <button className="new-btn" onClick={openAddModal}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-              <span>New</span>
+              <span>New product</span>
             </button>
           </div>
         </div>
+        <ActionsGuide />
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
                 <th>Product</th>
                 <th>Stock</th>
-                <th>Reorder pt.</th>
-                <th>Movement</th>
                 <th>Status</th>
-                <th>Action</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && branchProducts.length === 0 ? (
-                <tr><td colSpan="6" className="empty-state">Loading…</td></tr>
+                <tr><td colSpan="4" className="empty-state">Loading…</td></tr>
               ) : branchProducts.length === 0 ? (
-                <tr><td colSpan="6" className="empty-state">No products for this branch yet. Click "+ New" to add one.</td></tr>
+                <tr><td colSpan="4" className="empty-state">No products for this branch yet. Click "New product" to add one.</td></tr>
               ) : visibleProducts.length === 0 ? (
-                <tr><td colSpan="6" className="empty-state">No products match your search.</td></tr>
-              ) : pageProducts.map(p => {
+                <tr><td colSpan="4" className="empty-state">No products match your search or category.</td></tr>
+              ) : pageProducts.map((p, i) => {
                 const status = getStatus(p)
-                const movement = getMovementLabel(p)
+                // A heading row marks where "needs action" starts and where it ends, as on the admin page.
+                const groupStart = i === 0 || needsAction(pageProducts[i - 1]) !== needsAction(p)
                 return (
-                  <tr key={p.id}>
-                    <td>{p.name}</td>
-                    <td>{p.quantity} pcs</td>
-                    <td>{p.reorderPoint}pcs</td>
-                    <td><span className={`movement-pill movement-${movement.toLowerCase()}`}>{movement}</span></td>
+                  <React.Fragment key={p.id}>
+                  {groupStart && (
+                    <tr className="group-row">
+                      <th colSpan="4" scope="colgroup">
+                        {needsAction(p)
+                          ? <>Needs action <span>{attentionCount} product{attentionCount === 1 ? '' : 's'}, most urgent first</span></>
+                          : <>In stock <span>{visibleProducts.length - attentionCount} products</span></>}
+                      </th>
+                    </tr>
+                  )}
+                  <tr>
+                    <td className="product-cell">{p.name}<small className="cell-sub">{p.category.toLowerCase()}</small></td>
+                    <td><span className="branch-count"><span><b>{p.quantity}</b> <small title="The item shows as Low stock at or below this count">· reorder at {p.reorderPoint}</small></span></span></td>
                     <td><span className={`status-pill ${status.cls}`}>{status.label}</span></td>
                     <td>
-                      <div className="employee-row-actions">
-                        <button type="button" className="restock-btn" onClick={() => handleRestockRequest(p)}>Request Stock</button>
-                        <button type="button" className="row-action-btn receive" aria-label={`Receive stock of ${p.name}`} title="Receive stock" onClick={() => setReceiving(p)}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5Z" /><path d="M12 13v8" /><path d="m3 8 9 5 9-5" /><path d="M16 5.5 7.5 10.3" /></svg>
-                        </button>
-                        <button type="button" className="row-action-btn edit" aria-label="Edit product" onClick={() => openEditModal(p)}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" /></svg>
-                        </button>
-                        <button type="button" className="row-action-btn delete" aria-label="Request deletion" onClick={() => handleDeleteRequest(p)}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
-                        </button>
-                      </div>
+                      <RowActions product={p} needsStock={status.rank > 0 && status.rank < 3} onRequest={handleRestockRequest}
+                        onReceive={setReceiving} onEdit={openEditModal} onDelete={handleDeleteRequest} deleteLabel="Ask to delete" />
                     </td>
                   </tr>
+                  </React.Fragment>
                 )
               })}
             </tbody>
@@ -303,6 +295,7 @@ export default function Inventory() {
                     <label className="form-label" htmlFor="src-pages-employee-inventory-f4">Quantity</label>
                     <input id="src-pages-employee-inventory-f4" type="number" className="form-input" min="0" step="1" placeholder="e.g. 25" required
                       value={form.quantity} onChange={(e) => setForm(f => ({ ...f, quantity: e.target.value }))} />
+                    {editingId && <QuantityChangeHint before={editingProduct?.quantity} after={form.quantity} />}
                   </div>
                   <div className="form-group">
                     <label className="form-label" htmlFor="src-pages-employee-inventory-f5">Reorder point</label>
@@ -313,20 +306,21 @@ export default function Inventory() {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label" htmlFor="src-pages-employee-inventory-f6">Delivery date</label>
-                    <input id="src-pages-employee-inventory-f6" type="date" className="form-input" required
+                    <label className="form-label" htmlFor="src-pages-employee-inventory-f6">{editingId ? 'Last delivery' : 'Delivery date'} <span className="optional">(optional)</span></label>
+                    <input id="src-pages-employee-inventory-f6" type="date" className="form-input"
                       value={form.delivery} onChange={(e) => setForm(f => ({ ...f, delivery: e.target.value }))} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label" htmlFor="src-pages-employee-inventory-f7">Expiration date</label>
-                    <input id="src-pages-employee-inventory-f7" type="date" className="form-input" required
+                    <label className="form-label" htmlFor="src-pages-employee-inventory-f7">{editingId ? 'Expires on' : 'Expiration date'} <span className="optional">(optional)</span></label>
+                    <input id="src-pages-employee-inventory-f7" type="date" className="form-input"
                       value={form.expiration} onChange={(e) => setForm(f => ({ ...f, expiration: e.target.value }))} />
                   </div>
                 </div>
+                {editingId && <p className="field-hint">These change by themselves when you <b>Receive</b> a delivery. Change them here only to correct a mistake.</p>}
               </div>
             </div>
 
-            <p className="form-hint">Status is worked out from Quantity vs. Reorder point. Deleting a product needs the admin's approval - use the trash icon to send a request.</p>
+            <p className="form-hint">The status is worked out from the quantity and the reorder point: at or below the reorder point, the item shows as Low stock. Deleting a product needs the admin's approval: use <b>Ask to delete</b>.</p>
 
             <button type="submit" className="modal-submit-btn" disabled={saving}>{editingId ? 'Save changes' : 'Add product'}</button>
           </form>

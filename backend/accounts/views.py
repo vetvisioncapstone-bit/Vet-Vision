@@ -222,20 +222,33 @@ class MeView(APIView):
         return Response(payload)
 
 
+# The activity log's quick filters. "changes" is everything that is not a sign-in event.
+SIGN_IN_ACTIONS = ["login", "logout", "login_failed", "login_locked", "captcha_failed", "password_change", "register"]
+FAILED_ACTIONS = ["login_failed", "login_locked", "captcha_failed"]
+
+
 class AuditList(APIView):
-    """GET /api/auth/audit/?q=&page=&pageSize= - newest first. Admin only."""
+    """GET /api/auth/audit/?q=&kind=signins|failed|changes&page=&pageSize= - newest first. Admin only."""
 
     permission_classes = [IsAdmin]
 
     def get(self, request):
-        qs = AuditLog.objects.all()
+        qs = AuditLog.objects.select_related("user")
         q = request.query_params.get("q", "").strip()
         if q:
-            qs = qs.filter(Q(email__icontains=q) | Q(action__icontains=q) | Q(target__icontains=q))
+            qs = qs.filter(Q(email__icontains=q) | Q(user__name__icontains=q) | Q(action__icontains=q)
+                           | Q(target__icontains=q))
+        kind = request.query_params.get("kind", "")
+        if kind == "signins":
+            qs = qs.filter(action__in=SIGN_IN_ACTIONS)
+        elif kind == "failed":
+            qs = qs.filter(action__in=FAILED_ACTIONS)
+        elif kind == "changes":
+            qs = qs.exclude(action__in=SIGN_IN_ACTIONS)
 
         def row(a):
             return {"id": a.pk, "at": a.created_at.isoformat(), "email": a.email, "action": a.action,
-                    "target": a.target, "detail": a.detail, "ip": a.ip}
+                    "name": a.user.name if a.user else "", "target": a.target, "detail": a.detail, "ip": a.ip}
 
         if wants_page(request):
             return paginate(request, qs, row)

@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { LineChart } from '../../components/shared/charts'
 import { fmtMoney, fmtMonth, fmtNum, useAnalytics } from '../../hooks/useAnalytics'
 import '../../styles/admin/forecasting.css'
 import Chevron from '../../components/shared/Chevron'
+import SearchPicker from '../../components/shared/SearchPicker'
 
 const BRANCHES = ['Ibaan', 'San Jose']
 const MOVEMENT = { fast: 'Fast-moving', moderate: 'Moderate', slow: 'Slow-moving' }
@@ -116,34 +117,10 @@ export default function Forecasting() {
 
   const list = data?.[kind] || []
   const isProduct = kind === 'products'
-  const term = search.trim().toLowerCase()
-  // The item box is a search and a dropdown in one: focusing it lists every product (or service) by category, and
-  // typing narrows the list. Arrow keys move through it, Enter picks, Escape closes.
-  const [listOpen, setListOpen] = useState(false)
-  const [active, setActive] = useState(0)
-  const matches = useMemo(
-    () => list.filter((p) => !term || p.name.toLowerCase().includes(term) || p.category.toLowerCase().includes(term))
-      .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)),
-    [list, term]
-  )
-  useEffect(() => { // keep the highlighted item in view while arrowing through a long list
-    if (listOpen && matches[active]) document.getElementById(`fc-item-${matches[active].id}`)?.scrollIntoView({ block: 'nearest' })
-  }, [active, listOpen, matches])
+  // The item box is a search and a dropdown in one (SearchPicker): it lists every product or service by category.
   function pick(item) {
     setPickedId(item.id)
     setSearch('')
-    setListOpen(false)
-  }
-  function onSearchKey(e) {
-    if (e.key === 'Escape') { setListOpen(false); setSearch(''); return }
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault()
-      setListOpen(true)
-      setActive((i) => Math.max(0, Math.min(matches.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1))))
-    } else if (e.key === 'Enter' && listOpen && matches[active]) {
-      e.preventDefault()
-      pick(matches[active])
-    }
   }
   const selected = useMemo(() => {
     if (!list.length) return null
@@ -216,40 +193,10 @@ export default function Forecasting() {
           </select>
           <Chevron />
         </div>
-        <div className="search-wrapper forecast-search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-          <input type="text" role="combobox" aria-expanded={listOpen} aria-controls="forecast-items" aria-autocomplete="list"
-            aria-activedescendant={listOpen && matches[active] ? `fc-item-${matches[active].id}` : undefined}
-            aria-label={`Search or pick a ${isProduct ? 'product' : 'service'}`} autoComplete="off"
-            placeholder={selected ? `${selected.name} · search or pick another ${isProduct ? 'product' : 'service'}…` : `Search or pick a ${isProduct ? 'product' : 'service'}…`}
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setListOpen(true); setActive(0) }}
-            onFocus={() => { setListOpen(true); setActive(0) }}
-            onBlur={() => setListOpen(false)}
-            onKeyDown={onSearchKey} />
-          <button type="button" className="forecast-search-toggle" tabIndex={-1} aria-label={listOpen ? 'Close the list' : 'Show all'}
-            onMouseDown={(e) => { e.preventDefault(); setListOpen((o) => !o) }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-          </button>
-          {/* Drops down under the box, so picking an item does not push the page around. */}
-          {listOpen && (
-            <ul className="search-results" id="forecast-items" role="listbox">
-              {matches.map((m, i) => (
-                <React.Fragment key={m.id}>
-                  {(i === 0 || matches[i - 1].category !== m.category) && <li className="search-group" role="presentation">{m.category}</li>}
-                  <li id={`fc-item-${m.id}`} role="option" aria-selected={i === active}>
-                    {/* mousedown, not click: picking must happen before the box loses focus and closes the list */}
-                    <button type="button" tabIndex={-1} className={`${i === active ? 'is-active' : ''}${selected?.id === m.id ? ' is-current' : ''}`}
-                      onMouseDown={(e) => { e.preventDefault(); pick(m) }} onMouseEnter={() => setActive(i)}>
-                      <span>{m.name}</span><small>{fmtNum(m.forecast)} next month</small>
-                    </button>
-                  </li>
-                </React.Fragment>
-              ))}
-              {matches.length === 0 && <li className="search-empty">No {kind} match “{search}”.</li>}
-            </ul>
-          )}
-        </div>
+        <SearchPicker id="forecast-items" className="forecast-search" items={list} value={search} onChange={setSearch} onPick={pick}
+          currentId={selected?.id} noun={kind} meta={(m) => `${fmtNum(m.forecast)} next month`}
+          label={`Search or pick a ${isProduct ? 'product' : 'service'}`}
+          placeholder={`Search or pick a ${isProduct ? 'product' : 'service'}`} />
       </div>
 
       {selected ? (

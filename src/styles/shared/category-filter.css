@@ -1,0 +1,48 @@
+/* Category filter on the inventory pages: button with a picked count, and a panel of categories with counts. */
+.cat-filter { position: relative; }
+.cat-filter-btn { min-height: 36px; }
+.cat-filter-btn.is-on { border-color: #2d7a4d; background: #eef7f1; color: #17693a; }
+.cat-filter-btn .cat-filter-chevron { width: 13px; height: 13px; color: #646c68; }
+.cat-filter-count {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  background: #2d7a4d; color: #fff; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+
+.cat-filter-panel {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: 300px;
+  background: #fff; border: 1px solid #e3e7e5; border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(20, 40, 30, 0.06), 0 16px 36px rgba(20, 40, 30, 0.12);
+}
+.cat-filter-panel fieldset { border: 0; margin: 0; padding: 12px 8px 4px; min-width: 0; }
+.cat-filter-panel legend { float: left; width: 100%; padding: 2px 8px 8px; font-size: 12px; font-weight: 600; color: #646c68; }
+.cat-filter-list { clear: both; max-height: min(340px, 55vh); overflow-y: auto; overflow-x: hidden; }
+
+.cat-filter-option {
+  display: flex; align-items: center; gap: 10px; padding: 9px 8px; border-radius: 8px;
+  font-size: 13.5px; color: #1a1a1a; cursor: pointer;
+}
+.cat-filter-option:hover { background: #f4f8f5; }
+.cat-filter-option.is-checked .cat-filter-name { font-weight: 600; color: #17693a; }
+.cat-filter-option input { width: 16px; height: 16px; margin: 0; flex-shrink: 0; accent-color: #2d7a4d; cursor: pointer; }
+.cat-filter-name { flex: 1; min-width: 0; line-height: 1.35; }
+.cat-filter-num { flex-shrink: 0; font-size: 12px; color: #646c68; font-variant-numeric: tabular-nums; }
+.cat-filter-empty { padding: 8px; font-size: 13px; color: #646c68; }
+
+.cat-filter-foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-top: 1px solid #ececec; }
+.cat-filter-foot .link-btn:disabled { color: #9aa5a0; cursor: default; text-decoration: none; }
+.cat-filter-done {
+  padding: 6px 16px; border: 0; border-radius: 8px; background: #2d7a4d; color: #fff;
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.cat-filter-done:hover { background: #246640; }
+
+@media (pointer: coarse) {
+  .cat-filter-option { min-height: 44px; }
+  .cat-filter-done { min-height: 44px; }
+}
+
+/* Phones: the panel takes the width of the screen instead of hanging off its edge. */
+@media (max-width: 600px) {
+  .cat-filter { position: static; }
+  .cat-filter-panel { left: 16px; right: 16px; width: auto; top: auto; margin-top: 8px; }
+}

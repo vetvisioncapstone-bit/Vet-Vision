@@ -1,5 +1,6 @@
 """The data-entry gaps from docs/data_entry_and_dashboard_audit.md: prices (G3), receiving stock (G5), the customer on
 a counter sale (G2) and managing services with their supplies (G4)."""
+from datetime import date, timedelta
 from decimal import Decimal
 
 from clinic.models import Customer
@@ -104,3 +105,47 @@ def test_a_billed_service_uses_up_its_supplies(admin, staff_ibaan, stocked):
     shelf.refresh_from_db()
     assert shelf.quantity_on_hand == Decimal("8")  # 10 - 2 per deworming
     assert Service.objects.get(pk=sid).service_name == "Deworming"
+
+
+def test_sales_keep_working_after_stock_is_received(staff_ibaan, stocked):
+    """Regression (tester case Admin_010, 2026-10-15): receiving stock took ledger ids as highest + 1 while the sale
+    trigger used its own sequence, so the next sale reused an id and failed. Both now share the sequence."""
+    c, inv = client_for(staff_ibaan), stocked[0]
+    line = [{"inventoryId": inv.inventory_id, "quantity": 1, "price": 250}]
+    for _ in range(3):
+        r = c.post(f"/api/inventory/{inv.inventory_id}/receive/", {"quantity": 5, "confirmRepeat": True}, format="json")
+        assert r.status_code in (200, 201)
+        assert c.post("/api/sales/", {"items": line}, format="json").status_code == 201
+
+
+def test_the_same_delivery_is_not_added_twice_without_asking(staff_ibaan, admin, stocked):
+    """Two people logging the same box (or Save tapped twice) must not double the count silently."""
+    inv = stocked[0]  # Ibaan, 10 on hand
+    url = f"/api/inventory/{inv.inventory_id}/receive/"
+    assert client_for(staff_ibaan).post(url, {"quantity": 5}, format="json").data["quantity"] == 15
+    again = client_for(admin).post(url, {"quantity": 5}, format="json")
+    assert again.status_code == 409 and again.data["repeat"]["quantity"] == "5"
+    inv.refresh_from_db()
+    assert inv.quantity_on_hand == 15  # nothing added until confirmed
+    confirmed = client_for(admin).post(url, {"quantity": 5, "confirmRepeat": True}, format="json")
+    assert confirmed.status_code == 200 and confirmed.data["quantity"] == 20
+
+
+def test_expired_stock_is_neither_received_nor_sold(staff_ibaan, stocked):
+    c, inv = client_for(staff_ibaan), stocked[0]
+    past = (date.today() - timedelta(days=1)).isoformat()
+    r = c.post(f"/api/inventory/{inv.inventory_id}/receive/", {"quantity": 5, "expiration": past}, format="json")
+    assert r.status_code == 400 and "expired" in str(r.data["expiration"]).lower()
+    inv.expiration_date = date.today() - timedelta(days=1)
+    inv.save()
+    sale = c.post("/api/sales/", {"items": [{"inventoryId": inv.inventory_id, "quantity": 1, "price": 250}]}, format="json")
+    assert sale.status_code == 400 and "expired" in sale.data["items"]
+
+
+def test_editing_a_product_without_dates_is_allowed(admin, branches):
+    """Items that never expire (collars, soap) have no dates; the Edit form sends them blank as null."""
+    c = client_for(admin)
+    r = c.post("/api/inventory/", {**PRODUCT, "delivery": None, "expiration": None}, format="json")
+    assert r.status_code == 201
+    edited = c.put(f"/api/inventory/{r.data['id']}/", {**PRODUCT, "unitPrice": 30, "delivery": None, "expiration": None}, format="json")
+    assert edited.status_code == 200 and edited.data["unitPrice"] == 30 and not edited.data["expiration"]

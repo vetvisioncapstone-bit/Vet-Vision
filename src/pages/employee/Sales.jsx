@@ -5,7 +5,7 @@ import { useEmployeeContext } from '../../hooks/useEmployeeContext'
 import { useToast } from '../../components/shared/Toast'
 import { errorMessage } from '../../api/client'
 import '../../styles/employee/employee-sales.css'
-import { formatPrice } from '../../utils/format'
+import { formatPrice, isExpired } from '../../utils/format'
 import OwnerPicker from '../../components/shared/OwnerPicker'
 
 // ==================== HELPERS ====================
@@ -32,7 +32,7 @@ export default function Sales() {
   const [owner, setOwner] = useState(null) // { id, name } or null for a walk-in
 
   const branchProducts = useMemo(() => products.filter(p => p.branch === branch), [products, branch])
-  const inStockProducts = useMemo(() => branchProducts.filter(p => p.quantity > 0), [branchProducts])
+  const inStockProducts = useMemo(() => branchProducts.filter(p => p.quantity > 0 && !isExpired(p)), [branchProducts]) // expired stock cannot be sold
 
   function getCartQuantity(inventoryId) {
     const line = cartItems.find(i => i.inventoryId === inventoryId)

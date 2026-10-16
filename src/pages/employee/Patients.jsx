@@ -16,6 +16,7 @@ import Pagination from '../../components/shared/Pagination'
 import AvailedItemsPicker, { toPayload } from '../../components/shared/AvailedItemsPicker'
 import { onActivate } from '../../utils/a11y'
 import { useConfirm } from '../../components/shared/ConfirmDialog'
+import WeightInput, { withKg } from '../../components/shared/WeightInput'
 // ==================== HELPERS ====================
 // Ported from employee-patients.js - uses the same API-backed patients as the
 // admin Patients page; the server scopes them to this employee's own branch. The
@@ -185,7 +186,7 @@ export default function Patients() {
     try {
       await addConsultation(detailPatient.id, {
         date: consultForm.date,
-        weight: consultForm.weight.trim(),
+        weight: withKg(consultForm.weight),
         notes: consultForm.notes.trim(),
         remarks: consultForm.remarks.trim(),
         availedItems: toPayload(consultForm.availedItems)
@@ -424,7 +425,7 @@ export default function Patients() {
                   </div>
                   <div className="form-group">
                     <label className="form-label" htmlFor="src-pages-employee-patients-f14">Weight</label>
-                    <input id="src-pages-employee-patients-f14" type="text" className="form-input" placeholder="e.g. 6-8 kg" value={consultForm.weight} onChange={(e) => setConsultForm(f => ({ ...f, weight: e.target.value }))} />
+                    <WeightInput id="src-pages-employee-patients-f14" value={consultForm.weight} onChange={(v) => setConsultForm(f => ({ ...f, weight: v }))} />
                   </div>
                 </div>
                 <div className="form-group">
@@ -437,7 +438,7 @@ export default function Patients() {
                 </div>
                 <div className="form-group">
                   <span className="form-label">Services / products</span>
-                  <AvailedItemsPicker key={pickerKey} branch={detailPatient.branch} items={consultForm.availedItems}
+                  <AvailedItemsPicker key={pickerKey} branch={detailPatient.branch} weight={consultForm.weight} items={consultForm.availedItems}
                     onChange={(availedItems) => setConsultForm(f => ({ ...f, availedItems }))} />
                 </div>
                 <div className="consultation-form-actions">

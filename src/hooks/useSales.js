@@ -22,7 +22,7 @@ export function useSales({ since, limit = 200, branch } = {}) {
     // so do NOT decrement inventory client-side. Throws ApiError (e.g. "Only 3 of X left in stock.").
     create: async (items, extra = {}) => {
       const sale = await api.post('/sales/', { items, ...extra })
-      await Promise.all([invalidate('/sales/'), invalidate('/inventory/')])
+      await Promise.all([invalidate('/sales/'), invalidate('/inventory/'), invalidate('/analytics/')])
       return sale
     }
   }

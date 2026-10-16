@@ -1,6 +1,6 @@
 import re
 
-from django.db import transaction
+from django.db import connection, transaction
 
 
 def branch_letter(branch_id):
@@ -29,3 +29,20 @@ def next_id(model, field, prefix, width):
             if match:
                 number = int(match.group(1))
     return f"{prefix}{number + 1:0{width}d}"
+
+
+def seq_id(sequence, prefix, width):
+    """Next id from a database sequence, for the two tables the stock triggers also write to (inventory_transaction
+    via seq_inv_txn_id, inventory via seq_inventory_id). Ids taken any other way (max()+1) would collide with the
+    trigger's next number and every later sale would fail."""
+    with connection.cursor() as c:
+        c.execute("SELECT nextval(%s)", [sequence])
+        return f"{prefix}{c.fetchone()[0]:0{width}d}"
+
+
+def ledger_id():
+    return seq_id("seq_inv_txn_id", "ITX-", 8)
+
+
+def inventory_id():
+    return seq_id("seq_inventory_id", "INV-", 6)
