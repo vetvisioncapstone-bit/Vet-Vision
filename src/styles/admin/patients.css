@@ -817,14 +817,6 @@ textarea.form-input {
 
 /* ==================== TABLE ==================== */
 
-.checkbox-col {
-    width: 40px;
-}
-.checkbox-col input {
-    accent-color: #163a26;
-    cursor: pointer;
-}
-
 .action-col {
     width: 32px;
 }
@@ -940,14 +932,12 @@ textarea.form-input {
 
 /* ==================== PRESCRIPTION (form + Rx pad print) ==================== */
 
-.rx-btn-symbol { font-size: 16px; font-weight: 700; line-height: 1; }
 .rx-fields { border: 1px solid #dfe3e1; border-radius: 12px; padding: 14px; background: #fff; }
 .rx-fields-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .rx-fields-head p { flex: 1; margin: 0; font-size: 12.5px; color: #646c68; }
 .rx-fields-symbol { font-size: 26px; font-weight: 700; color: #163a26; line-height: 1; }
 .rx-fields .rx-signer { grid-template-columns: 1.4fr 1fr 1fr; }
 @media (max-width: 640px) { .rx-fields .rx-signer { grid-template-columns: 1fr; } }
-.consultation-print-btn.rx { font-size: 14px; font-weight: 700; line-height: 1; }
 .consultation-rx { margin-top: 8px; padding: 8px 10px; border-left: 3px solid #17693a; background: #f4faf6; border-radius: 6px; }
 .consultation-rx-text { margin: 4px 0 0; font-size: 13px; white-space: pre-wrap; }
 
@@ -982,3 +972,6 @@ textarea.form-input {
 /* Laboratory results: several pictures, listed one per line under the upload button. */
 .file-upload-count { font-size: 12.5px; color: #646c68; }
 .form-group > .file-upload-preview { margin-top: 8px; }
+
+/* A status pill sits after the pet name, only when it is not Active. */
+.patient-row .status-pill { margin-left: 8px; }

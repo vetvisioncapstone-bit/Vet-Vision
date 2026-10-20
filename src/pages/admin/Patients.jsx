@@ -119,11 +119,10 @@ export default function Patients() {
   const [page, setPage] = useState(1)
   const [searchParams] = useSearchParams()
 
-  // ==================== STATE: search / filter / selection ====================
+  // ==================== STATE: search / filter ====================
   const [searchInput, setSearchInput] = useState('')
   const [selectedBranch, setSelectedBranch] = useState('All Branches')
   const [activeStatuses, setActiveStatuses] = useState(() => new Set())
-  const [selectedPatientIds, setSelectedPatientIds] = useState(() => new Set())
   const [filterOpen, setFilterOpen] = useState(false)
   const [printJob, setPrintJob] = useState(null) // { patient, consultations, single } while the print sheet is open
   const [regYear, setRegYear] = useState('') // '' = any year
@@ -162,13 +161,10 @@ export default function Patients() {
   // ==================== STATE: consultation history modal ====================
   const [historyOpen, setHistoryOpen] = useState(false)
 
-  const selectAllRef = useRef(null)
   const followUpNoteFieldRef = useRef(null)
   const deepLinkHandledRef = useRef(false)
 
   // ==================== DERIVED ====================
-
-  const visiblePatients = patients
 
   const stats = useMemo(
     () => ({ activeThisMonth: serverStats?.activeThisMonth ?? 0, followUpNeeded: serverStats?.followUpNeeded ?? 0 }),
@@ -183,18 +179,6 @@ export default function Patients() {
   const filtersActive = Boolean(searchTerm) || selectedBranch !== 'All Branches' || activeStatuses.size > 0 || Boolean(regYear) || Boolean(visitYear)
 
   useEffect(() => { setPage(1) }, [searchTerm, selectedBranch, activeStatuses, regYear, visitYear])
-
-  const visibleIds = useMemo(() => visiblePatients.map(p => p.id), [visiblePatients])
-  const selectedVisibleCount = useMemo(
-    () => visibleIds.filter(id => selectedPatientIds.has(id)).length,
-    [visibleIds, selectedPatientIds]
-  )
-  const selectAllChecked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length
-  const selectAllIndeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length
-
-  useEffect(() => {
-    if (selectAllRef.current) selectAllRef.current.indeterminate = selectAllIndeterminate
-  }, [selectAllIndeterminate])
 
   // List rows leave out attached images, so the open patient is fetched in full.
   const { patient: detailFromServer } = usePatient(currentDetailPatientId)
@@ -283,36 +267,12 @@ export default function Patients() {
     }
   }
 
-  // ==================== SELECTION (SELECT ALL) ====================
-
-  function handleSelectAllChange(e) {
-    const checked = e.target.checked
-    setSelectedPatientIds(prev => {
-      const next = new Set(prev)
-      visiblePatients.forEach(p => (checked ? next.add(p.id) : next.delete(p.id)))
-      return next
-    })
-  }
-
-  function handleRowCheckboxChange(id, checked) {
-    setSelectedPatientIds(prev => {
-      const next = new Set(prev)
-      if (checked) next.add(id); else next.delete(id)
-      return next
-    })
-  }
-
   // ==================== ROW ACTIONS ====================
 
   async function handleDeletePatient(patient) {
     if (!(await ask({ title: 'Delete this patient record?', message: <p><strong>{patient.petName}</strong>'s record will be deleted.</p> }))) return
     try {
       await remove(patient.id)
-      setSelectedPatientIds(prev => {
-        const next = new Set(prev)
-        next.delete(patient.id)
-        return next
-      })
       showToast(`"${patient.petName}" was deleted.`)
     } catch (err) {
       showToast(errorMessage(err))
@@ -320,6 +280,16 @@ export default function Patients() {
   }
 
   // ==================== STATUS FILTER POPOVER ====================
+
+  const followUpOnly = activeStatuses.size === 1 && activeStatuses.has('Follow-up needed')
+
+  function clearFilters() {
+    setSearchInput('')
+    setSelectedBranch('All Branches')
+    setActiveStatuses(new Set())
+    setRegYear('')
+    setVisitYear('')
+  }
 
   function toggleStatus(status) {
     setActiveStatuses(prev => {
@@ -508,18 +478,21 @@ export default function Patients() {
 
       {/* Stat cards */}
       <div className="stats-grid">
-        <div className="stat-card">
-          <p className="stat-label">Total patients</p>
-          <p className={`stat-value${(serverStats?.total ?? 0) === 0 ? ' muted' : ''}`}>{serverStats?.total ?? 0}</p>
-        </div>
+        <button type="button" className="stat-card stat-card-btn" disabled={!filtersActive} onClick={clearFilters}>
+          <span className="stat-label">Total patients</span>
+          <span className={`stat-value${(serverStats?.total ?? 0) === 0 ? ' muted' : ''}`}>{serverStats?.total ?? 0}</span>
+          {filtersActive && <span className="stat-sub">Click to clear the filters</span>}
+        </button>
         <div className="stat-card">
           <p className="stat-label">Active this month</p>
           <p className={`stat-value${(serverStats?.total ?? 0) === 0 ? ' muted' : ''}`}>{stats.activeThisMonth}</p>
         </div>
-        <div className={`stat-card${stats.followUpNeeded > 0 ? ' follow-up-active' : ''}`}>
-          <p className="stat-label">Follow-up needed</p>
-          <p className={`stat-value${(serverStats?.total ?? 0) === 0 ? ' muted' : ''}`}>{stats.followUpNeeded}</p>
-        </div>
+        <button type="button" className={`stat-card stat-card-btn${stats.followUpNeeded > 0 ? ' follow-up-active' : ''}${followUpOnly ? ' selected' : ''}`}
+          aria-pressed={followUpOnly} onClick={() => setActiveStatuses(followUpOnly ? new Set() : new Set(['Follow-up needed']))}>
+          <span className="stat-label">Follow-up needed</span>
+          <span className={`stat-value${(serverStats?.total ?? 0) === 0 ? ' muted' : ''}`}>{stats.followUpNeeded}</span>
+          <span className="stat-sub">{followUpOnly ? 'Showing only these. Click to show all' : 'Click to show only these'}</span>
+        </button>
       </div>
 
       {/* Table */}
@@ -527,13 +500,13 @@ export default function Patients() {
         <div className="patients-toolbar">
           <div className="search-wrapper">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-            <input type="text" aria-label="Search patients or owners" autoComplete="off" placeholder="search patient or owner" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
+            <input type="text" aria-label="Search patients or owners" autoComplete="off" placeholder="Search patient or owner" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
           </div>
 
           <div className="toolbar-actions">
             <button className="new-btn" onClick={openAddModal}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-              <span>New</span>
+              <span>New patient</span>
             </button>
 
             <div className="popover-wrapper">
@@ -576,38 +549,36 @@ export default function Patients() {
           <table>
             <thead>
               <tr>
-                <th className="checkbox-col"><input type="checkbox" ref={selectAllRef} checked={selectAllChecked} onChange={handleSelectAllChange} aria-label="Select all patients" /></th>
                 <th>Patient</th>
                 <th>Owner</th>
-                <th>Owner email</th>
+                <th>Owner phone</th>
                 <th>Species</th>
                 <th>Branch</th>
                 <th>Last visit</th>
                 <th>Visits</th>
-                <th>Status</th>
                 <th className="action-col"></th>
               </tr>
             </thead>
             <tbody>
               {loading && patients.length === 0 ? (
-                <tr><td colSpan="10" className="empty-state">Loading patients...</td></tr>
+                <tr><td colSpan="8" className="empty-state">Loading patients...</td></tr>
               ) : patients.length === 0 && !filtersActive ? (
-                <tr><td colSpan="10" className="empty-state">No patients yet. Click "+ New" to add one.</td></tr>
+                <tr><td colSpan="8" className="empty-state">No patients yet. Click "New patient" to add one.</td></tr>
               ) : patients.length === 0 ? (
-                <tr><td colSpan="10" className="empty-state">No patients match your search or filter.</td></tr>
+                <tr><td colSpan="8" className="empty-state">No patients match your search or filter.</td></tr>
               ) : pagePatients.map(p => (
                 <tr className="patient-row" key={p.id} tabIndex={0} onKeyDown={onActivate(() => openPatientDetailModal(p))} onClick={() => openPatientDetailModal(p)}>
-                  <td className="checkbox-col" onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" className="patient-row-checkbox" checked={selectedPatientIds.has(p.id)} onChange={(e) => handleRowCheckboxChange(p.id, e.target.checked)} aria-label={`Select ${p.petName}`} />
+                  <td>
+                    {dash(p.petName)}
+                    {/* Nearly every pet is Active, so only a status worth noticing gets a pill. */}
+                    {p.status && p.status !== 'Active' && <span className={`status-pill ${getStatusClass(p.status)}`}>{p.status}</span>}
                   </td>
-                  <td>{dash(p.petName)}</td>
                   <td>{dash(`${p.ownerName || ''} ${p.ownerSurname || ''}`.trim())}</td>
-                  <td>{dash(p.ownerEmail)}</td>
+                  <td>{dash(p.ownerMobile)}</td>
                   <td>{dash(p.petSpecie)}</td>
                   <td>{dash(p.branch)}</td>
                   <td>{formatDate(getLastVisitDate(p))}</td>
                   <td>{getVisitCount(p)}</td>
-                  <td><span className={`status-pill ${getStatusClass(p.status)}`}>{p.status}</span></td>
                   <td className="action-col">
                     <div className="row-actions" onClick={(e) => e.stopPropagation()}>
                       <button type="button" className="row-action-btn edit" aria-label="Edit patient" onClick={() => openEditModal(p)}>
@@ -642,7 +613,7 @@ export default function Patients() {
               <div className="patient-form-col">
                 <div className="patient-form-col-head">
                   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" /><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" /></svg>
-                  <h3>Owner Information</h3>
+                  <h3>Owner information</h3>
                 </div>
                 <div className="patient-form-fields">
                   <div className="form-group">
@@ -671,7 +642,7 @@ export default function Patients() {
               <div className="patient-form-col">
                 <div className="patient-form-col-head">
                   <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="7" cy="7" r="2.3" /><circle cx="12" cy="4.5" r="2.3" /><circle cx="17" cy="7" r="2.3" /><path d="M12 12c-3.5 0-6.5 2.4-6.5 5.4 0 2 1.7 3.1 3.6 2.4.9-.3 1.9-.5 2.9-.5s2 .2 2.9.5c1.9.7 3.6-.4 3.6-2.4C18.5 14.4 15.5 12 12 12Z" /></svg>
-                  <h3>Pet Information</h3>
+                  <h3>Pet information</h3>
                 </div>
                 <div className="patient-form-fields">
                   <div className="form-row">
@@ -832,7 +803,7 @@ export default function Patients() {
                     : (
                       <div className="file-upload-row">
                         <button type="button" className="file-upload-btn" onClick={() => setPrescription(newPrescription())}>
-                          <span className="rx-btn-symbol" aria-hidden="true">℞</span>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" /><path d="m8.5 8.5 7 7" /></svg>
                           <span>Write prescription</span>
                         </button>
                       </div>
@@ -909,7 +880,9 @@ export default function Patients() {
                           </span>
                           <div className="consultation-item-actions">
                             {c.prescription && (
-                              <button type="button" className="consultation-print-btn rx" aria-label="Print prescription" title="Print prescription" onClick={() => printPrescription(currentPatient, c)}>℞</button>
+                              <button type="button" className="consultation-print-btn rx" aria-label="Print prescription" title="Print prescription" onClick={() => printPrescription(currentPatient, c)}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" /><path d="m8.5 8.5 7 7" /></svg>
+                              </button>
                             )}
                             <button type="button" className="consultation-print-btn" aria-label="Print this consultation" onClick={() => printConsultationReceipt(currentPatient, c)}>
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
@@ -925,7 +898,7 @@ export default function Patients() {
                         {c.remarks && <p className="consultation-remarks">{c.remarks}</p>}
                         {c.prescription && (
                           <div className="consultation-rx">
-                            <p className="consultation-field-label">℞ Prescription{c.diagnosis ? ` · ${c.diagnosis}` : ''}</p>
+                            <p className="consultation-field-label">Prescription{c.diagnosis ? ` · ${c.diagnosis}` : ''}</p>
                             <p className="consultation-rx-text">{c.prescription.rx}</p>
                           </div>
                         )}
