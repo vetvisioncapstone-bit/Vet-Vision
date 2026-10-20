@@ -89,11 +89,11 @@ Staff cannot hard-delete: they raise an approval request and the admin's approva
   them at once.
 - 5 wrong passwords lock that account for 15 minutes (`accounts/audit.py`), on top of the per-IP rate limits (login
   10/min, refresh 30/min, sign-up 5/min, 1500/min per user).
-- **Cloudflare Turnstile** guards sign-in and sign-up (`core/turnstile.py`): the page sends a one-time token, the server
-  verifies it with Cloudflare before looking at the password, and a missing/rejected token or Cloudflare being
-  unreachable is refused (400, logged as `captcha_failed`, not counted towards the lockout). Keys: `TURNSTILE_SECRET_KEY`
-  in `backend/.env`, `VITE_TURNSTILE_SITE_KEY` in the frontend `.env.local`. Both example files hold Cloudflare's public
-  test keys (always pass). Production refuses to start without a secret key.
+- **Google reCAPTCHA v2** ("I'm not a robot") guards sign-in and sign-up (`core/recaptcha.py`): the page sends a
+  one-time token, the server verifies it with Google before looking at the password, and a missing/rejected token or
+  Google being unreachable is refused (400, logged as `captcha_failed`, not counted towards the lockout). Keys:
+  `RECAPTCHA_SECRET_KEY` in `backend/.env`, `VITE_RECAPTCHA_SITE_KEY` in the frontend `.env.local`. Both example files
+  hold Google's public test keys (always pass). Production refuses to start without a secret key.
 - Every sign-in, failure, lockout, password change, sign-up and destructive action is written to `AuditLog`
   (`GET /api/auth/audit/`, shown on the admin System Settings page).
 - With `DJANGO_DEBUG=False`: HTTPS redirect, secure cookies, HSTS, JSON-only API; the Django admin site is off unless
@@ -158,11 +158,12 @@ if it is not on the PATH).
 1. **Database (Supabase):** create a project, restore your data (`pg_restore` a `backup_db` dump), copy the connection
    string (Project settings -> Database -> URI).
 2. **API (Render):** New -> Blueprint from this repo (`render.yaml`). Set `DATABASE_URL` (the string above),
-   `CORS_ALLOWED_ORIGINS` (your Pages URL), `DJANGO_ALLOWED_HOSTS` and `TURNSTILE_SECRET_KEY`. The build runs the
+   `CORS_ALLOWED_ORIGINS` (your Pages URL), `DJANGO_ALLOWED_HOSTS` and `RECAPTCHA_SECRET_KEY`. The build runs the
    migrations.
 3. **Web app (any static host, for example Cloudflare Pages, Netlify or Vercel):** build command `npm run build`, output `dist`, environment variables
-   `VITE_API_URL=https://<your-api>.onrender.com/api` and `VITE_TURNSTILE_SITE_KEY`. `public/_redirects` makes deep links
-   work. In the Cloudflare dashboard (Turnstile -> Add widget) add the site's hostname to get the real site and secret keys.
+   `VITE_API_URL=https://<your-api>.onrender.com/api` and `VITE_RECAPTCHA_SITE_KEY`. `public/_redirects` makes deep links
+   work. At https://www.google.com/recaptcha/admin create a v2 "I'm not a robot" key with the site's domain to get the
+   real site and secret keys.
 4. Create the admin login (`python manage.py createsuperuser` in the Render shell), then delete any test accounts.
 
 Customer records are personal data (Data Privacy Act): use the real clinic data only on a host you control.

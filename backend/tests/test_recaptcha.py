@@ -5,24 +5,24 @@ from urllib.error import URLError
 import pytest
 
 from accounts.models import AuditLog
-from core import turnstile
+from core import recaptcha
 
 from .conftest import PASSWORD
 
 
 @pytest.fixture
 def on(settings):
-    settings.TURNSTILE_SECRET_KEY = "test-secret"
+    settings.RECAPTCHA_SECRET_KEY = "test-secret"
 
 
-def cloudflare_says(monkeypatch, success):
+def google_says(monkeypatch, success):
     calls = []
 
     def fake_urlopen(url, data, timeout):
         calls.append(data.decode())
         return io.BytesIO(json.dumps({"success": success, "error-codes": [] if success else ["invalid-input-response"]}).encode())
 
-    monkeypatch.setattr(turnstile, "urlopen", fake_urlopen)
+    monkeypatch.setattr(recaptcha, "urlopen", fake_urlopen)
     return calls
 
 
@@ -34,14 +34,14 @@ def test_login_without_token_is_refused_before_the_password_is_checked(on, clien
 
 
 def test_login_with_a_rejected_token_is_refused(on, client, admin, monkeypatch):
-    cloudflare_says(monkeypatch, False)
+    google_says(monkeypatch, False)
     r = client.post("/api/auth/login/", {"email": admin.email, "password": PASSWORD, "captcha": "tok"},
                     content_type="application/json")
     assert r.status_code == 400
 
 
 def test_login_with_a_genuine_token_signs_in(on, client, admin, monkeypatch):
-    calls = cloudflare_says(monkeypatch, True)
+    calls = google_says(monkeypatch, True)
     r = client.post("/api/auth/login/", {"email": admin.email, "password": PASSWORD, "captcha": "tok"},
                     content_type="application/json")
     assert r.status_code == 200
@@ -54,14 +54,14 @@ def test_register_needs_the_check_too(on, client, branches):
     assert r.status_code == 400
 
 
-def test_cloudflare_unreachable_fails_closed(on, monkeypatch):
+def test_google_unreachable_fails_closed(on, monkeypatch):
     def down(*a, **k):
         raise URLError("offline")
 
-    monkeypatch.setattr(turnstile, "urlopen", down)
-    assert turnstile.verify("tok") is False
+    monkeypatch.setattr(recaptcha, "urlopen", down)
+    assert recaptcha.verify("tok") is False
 
 
 def test_no_secret_means_no_check(settings):
-    settings.TURNSTILE_SECRET_KEY = ""
-    assert turnstile.verify(None) is True
+    settings.RECAPTCHA_SECRET_KEY = ""
+    assert recaptcha.verify(None) is True

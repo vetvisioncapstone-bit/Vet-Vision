@@ -123,8 +123,8 @@ button.forgot-password {
     line-height: 1.5;
 }
 
-/* Cloudflare Turnstile widget (flexible width; reserves its height so the button does not jump when it loads) */
-.turnstile {
-    min-height: 65px;
+/* Google reCAPTCHA checkbox (reserves its height so the button does not jump when it loads) */
+.recaptcha {
+    min-height: 78px;
     margin: 4px 0 16px;
 }

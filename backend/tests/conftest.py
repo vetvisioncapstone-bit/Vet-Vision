@@ -64,9 +64,9 @@ def stocked(branches):
 
 
 @pytest.fixture(autouse=True)
-def _no_turnstile(settings):
-    """Tests never call Cloudflare or Gemini; test_turnstile.py and test_assistant.py fake them where needed."""
-    settings.TURNSTILE_SECRET_KEY = ""
+def _no_recaptcha(settings):
+    """Tests never call Google reCAPTCHA or Gemini; test_recaptcha.py and test_assistant.py fake them where needed."""
+    settings.RECAPTCHA_SECRET_KEY = ""
     settings.GEMINI_API_KEY = ""
 
 

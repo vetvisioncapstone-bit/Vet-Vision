@@ -41,7 +41,10 @@ export default function Dashboard() {
   const kpis = data?.kpis
   const seriesBranches = branch === 'All Branches' ? BRANCHES : [branch]
   const series = seriesBranches.map((b) => ({ key: b, label: b, color: branchColor(b) }))
-  const bars = (data?.trend || []).map((t) => ({ label: fmtMonth(t.month) + (t.partial ? '*' : ''), values: t.branches }))
+  const bars = (data?.trend || []).map((t, i) => ({
+    label: fmtMonth(t.month) + (i === 0 || t.month.endsWith('-01') ? ` '${t.month.slice(2, 4)}` : '') + (t.partial ? '*' : ''),
+    values: t.branches
+  }))
   const share = (data?.branchShare || []).map((s) => ({ label: s.branch, value: s.total, color: branchColor(s.branch) }))
   // Under the 12-month chart: best and lowest full month, the last 3 months against the 3 before, the branch split.
   const doneTrend = (data?.trend || []).filter((t) => !t.partial)
@@ -180,11 +183,11 @@ export default function Dashboard() {
         <div className="chart-card">
           <div className="card-head">
             <h2>Monthly revenue</h2>
-            <p className="card-note">What each branch earned in each of the last 12 months</p>
+            <p className="card-note">What each branch earned in the 12 months up to {asOf || 'the latest month'}. {asOf ? `${asOf} is the solid bar.` : ''}</p>
           </div>
           {loading ? <div className="skeleton" style={{ height: 300 }} /> : bars.length ? (
             <>
-              <BarChart data={bars} series={series} format={fmtMoney} height={300} fill />
+              <BarChart data={bars} series={series} format={fmtMoney} height={300} fill highlight={bars.length ? bars.length - 1 : null} />
               <Legend items={series} />
               {partial && <p className="accuracy-note">* {asOf} is still running, so its bar is the total so far.</p>}
               <ChartInsight items={revenueInsight} />

@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react'
 import LoginButton from './LoginButton'
-import Turnstile, { turnstileEnabled } from './Turnstile'
+import Recaptcha, { recaptchaEnabled } from './Recaptcha'
 import { useAuth } from '../../hooks/useAuth'
 
 const EMPTY = { firstName: '', lastName: '', email: '', mobile: '', branch: 'Ibaan', password: '', confirm: '' }
@@ -42,7 +42,7 @@ function SignUpForm({ onSignedUp }) {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [captcha, setCaptcha] = useState('')
-  const [attempt, setAttempt] = useState(0) // new Turnstile widget (and token) per attempt
+  const [attempt, setAttempt] = useState(0) // new reCAPTCHA widget (and token) per attempt
   const formRef = useRef(null)
 
   const set = (key) => (e) => {
@@ -63,7 +63,7 @@ function SignUpForm({ onSignedUp }) {
     if (isLoading) return
     const found = checkLocally(form)
     if (Object.keys(found).length) return show(found)
-    if (turnstileEnabled && !captcha) return show({ form: 'Please wait for the security check below to finish, then try again.' })
+    if (recaptchaEnabled && !captcha) return show({ form: 'Please wait for the security check below to finish, then try again.' })
 
     setErrors({})
     setIsLoading(true)
@@ -147,7 +147,7 @@ function SignUpForm({ onSignedUp }) {
       </div>
       {field('confirm', 'Confirm password', <input type={showPassword ? 'text' : 'password'} autoComplete="new-password" />)}
 
-      <Turnstile key={attempt} action="register" onToken={setCaptcha} />
+      <Recaptcha key={attempt} onToken={setCaptcha} />
 
       <LoginButton isLoading={isLoading} label="Create account" />
     </form>

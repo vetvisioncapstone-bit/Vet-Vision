@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import EmailInput from './EmailInput'
 import PasswordInput from './PasswordInput'
 import LoginButton from './LoginButton'
-import Turnstile, { turnstileEnabled } from './Turnstile'
+import Recaptcha, { recaptchaEnabled } from './Recaptcha'
 
 function LoginForm({ onLogin }) {
   const remembered = (() => { try { return localStorage.getItem('vvRememberEmail') || '' } catch { return '' } })()
@@ -17,7 +17,7 @@ function LoginForm({ onLogin }) {
   const [isLoading, setIsLoading] = useState(false)
   const [forgotNote, setForgotNote] = useState(false)
   const [captcha, setCaptcha] = useState('')
-  const [attempt, setAttempt] = useState(0) // new Turnstile widget (and token) per attempt
+  const [attempt, setAttempt] = useState(0) // new reCAPTCHA widget (and token) per attempt
 
   useEffect(() => {
     // Keyboard shortcuts
@@ -90,7 +90,7 @@ function LoginForm({ onLogin }) {
       return
     }
 
-    if (turnstileEnabled && !captcha) {
+    if (recaptchaEnabled && !captcha) {
       setLoginError('Please wait for the security check below to finish, then sign in.')
       return
     }
@@ -183,7 +183,7 @@ function LoginForm({ onLogin }) {
         </div>
       )}
 
-      <Turnstile key={attempt} action="login" onToken={setCaptcha} />
+      <Recaptcha key={attempt} onToken={setCaptcha} />
 
       <LoginButton isLoading={isLoading} />
 

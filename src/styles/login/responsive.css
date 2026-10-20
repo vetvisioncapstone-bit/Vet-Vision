@@ -38,7 +38,7 @@
 }
 
 @media (max-width: 480px) {
-    /* The Cloudflare check is a fixed 300px box; 20px sides leave it room on a 360-390px phone. */
+    /* The reCAPTCHA checkbox is a fixed 304px box; 20px sides leave it room on a 360-390px phone. */
     .login-card {
         padding: 28px 20px;
     }
@@ -61,4 +61,9 @@
 
 ::-webkit-scrollbar-thumb:hover {
     background: #2d7a4d;
+}
+
+/* Phones narrower than 360px: shrink the fixed-size reCAPTCHA checkbox so it does not spill out of the card. */
+@media (max-width: 359px) {
+    .recaptcha > div { transform: scale(0.86); transform-origin: 0 0; }
 }

@@ -22,7 +22,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The dev server proxies `/api` to the backend on port 8000
+Open http://127.0.0.1:5173 (not localhost: the reCAPTCHA key does not accept that name). The dev server proxies `/api` to the backend on port 8000
 (set `VITE_PROXY_TARGET` to point somewhere else).
 
 | Where | Who |

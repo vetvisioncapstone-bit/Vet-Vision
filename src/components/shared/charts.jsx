@@ -58,13 +58,15 @@ export function Legend({ items }) {
 
 // data: [{ label, values: { [seriesKey]: number } }]; series: [{ key, label, color }]
 // `fill`: the chart grows to fill a card that is taller than `height` (a row whose other card is taller).
-export function BarChart({ data, series, height = 260, fill = false, format = (n) => String(n) }) {
+// highlight: index of one bar group to keep at full colour (e.g. the month being viewed); the others are faded.
+export function BarChart({ data, series, height = 260, fill = false, format = (n) => String(n), highlight = null }) {
   const canvas = useChart(() => ({
     type: 'bar',
     data: {
       labels: data.map((d) => d.label),
       datasets: series.map((s) => ({
-        label: s.label, backgroundColor: s.color, borderRadius: 4, maxBarThickness: 28,
+        label: s.label, borderRadius: 4, maxBarThickness: 28,
+        backgroundColor: highlight === null ? s.color : data.map((_, i) => (i === highlight ? s.color : `${s.color}55`)),
         data: data.map((d) => d.values[s.key] || 0)
       }))
     },
@@ -73,7 +75,7 @@ export function BarChart({ data, series, height = 260, fill = false, format = (n
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${format(c.parsed.y)}` } } },
       scales: baseScales
     }
-  }), JSON.stringify([data, series]))
+  }), JSON.stringify([data, series, highlight]))
   return <div className="chart-box" style={fill ? { minHeight: height, flex: '1 1 auto' } : { height }}><canvas ref={canvas} role="img" aria-label="Bar chart" /></div>
 }
 

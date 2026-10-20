@@ -15,7 +15,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from clinic.models import Customer
 
-from core import turnstile
+from core import recaptcha
 from core.pagination import paginate, wants_page
 from core.ids import branch_letter, next_id
 from core.permissions import IsAdmin, branch_by_town
@@ -50,9 +50,9 @@ def revoke_sessions(user):
 
 
 def human_check_failed(request, email=""):
-    """None when the Turnstile token is genuine, else the 400 response to send back (and an audit entry).
+    """None when the reCAPTCHA token is genuine, else the 400 response to send back (and an audit entry).
     Checked before the password, so a script without a token never gets to try passwords at all."""
-    if turnstile.verify(request.data.get("captcha"), client_ip(request)):
+    if recaptcha.verify(request.data.get("captcha"), client_ip(request)):
         return None
     record(request, "captcha_failed", email=email)
     return Response({"detail": "The security check did not pass. Please complete it and try again."},

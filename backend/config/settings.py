@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -85,12 +86,15 @@ DATABASES = {
     }
 }
 
-# Hosted databases (Supabase, Render) hand out one connection string: postgresql://user:password@host:port/name
-if os.getenv("DATABASE_URL"):
+# Hosted databases (Railway, Supabase, Render) hand out one connection string: postgresql://user:password@host:port/name
+# The test suite always uses the local DB_* server: it creates and drops its own test database, never on the hosted one.
+if os.getenv("DATABASE_URL") and "pytest" not in sys.modules:
     _u = urlparse(os.environ["DATABASE_URL"])
     DATABASES["default"].update(
         NAME=_u.path.lstrip("/"), USER=unquote(_u.username or ""), PASSWORD=unquote(_u.password or ""),
-        HOST=_u.hostname, PORT=str(_u.port or 5432), OPTIONS={"sslmode": os.getenv("DB_SSLMODE", "require")},
+        HOST=_u.hostname, PORT=str(_u.port or 5432),
+        # connect_timeout: an unreachable database fails a request in 10 s with an error instead of hanging it.
+        OPTIONS={"sslmode": os.getenv("DB_SSLMODE", "require"), "connect_timeout": 10},
         CONN_MAX_AGE=60,
     )
 
@@ -146,11 +150,11 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
-# Cloudflare Turnstile on sign-in and sign-up (core/turnstile.py). Empty switches the check off, which is
+# Google reCAPTCHA v2 on sign-in and sign-up (core/recaptcha.py). Empty switches the check off, which is
 # allowed only while developing: production refuses to start without it.
-TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "").strip()
-if not DEBUG and not TURNSTILE_SECRET_KEY:
-    raise RuntimeError("Set TURNSTILE_SECRET_KEY in backend/.env (see .env.example).")
+RECAPTCHA_SECRET_KEY = os.getenv("RECAPTCHA_SECRET_KEY", "").strip()
+if not DEBUG and not RECAPTCHA_SECRET_KEY:
+    raise RuntimeError("Set RECAPTCHA_SECRET_KEY in backend/.env (see .env.example).")
 
 # Admin AI assistant (analytics/assistant.py, thesis section 3.6): Google Gemini, free tier. Without a key the chat
 # says it is not set up. The model can be changed without touching the code.
