@@ -1,0 +1,61 @@
+/* Table footer with page count and previous / next (components/shared/Pagination.jsx). */
+
+.table-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #f2f2f2;
+}
+
+.table-footer-count {
+    font-size: 13px;
+    color: #646c68;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.page-btn {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 6px;
+    border-radius: 7px;
+    border: 1px solid #dfe3e1;
+    background: #ffffff;
+    color: #1a1a1a;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+}
+
+.page-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.page-btn:hover:not(:disabled) {
+    background: #f0f4f1;
+}
+
+.page-btn.active {
+    background: #163a26;
+    border-color: #163a26;
+    color: #ffffff;
+}
+
+.page-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

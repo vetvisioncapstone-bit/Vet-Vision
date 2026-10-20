@@ -1,0 +1,282 @@
+/* ==================== RIGHT SECTION ==================== */
+
+.right-section {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    background: #fbfdfb;
+    animation: slideInRight 0.8s ease-out;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 400px;
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: 0 2px 8px rgba(20, 40, 30, 0.05), 0 12px 32px rgba(20, 40, 30, 0.08);
+    animation: slideInUp 0.8s ease-out 0.2s backwards;
+}
+
+.welcome-text {
+    margin-bottom: 30px;
+}
+
+.welcome-text h1 {
+    font-size: 28px;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+    font-weight: bold;
+    animation: slideInRight 0.6s ease-out 0.3s backwards;
+}
+
+.welcome-text p {
+    color: #666;
+    font-size: 14px;
+    animation: slideInRight 0.6s ease-out 0.4s backwards;
+}
+
+/* ==================== FORM STYLES ==================== */
+/* Scoped to .login-card: the app's pages use the same class names for their own forms. */
+
+.login-card .form-group {
+    margin-bottom: 20px;
+    animation: slideInUp 0.6s ease-out backwards;
+}
+
+.login-card .form-group:nth-child(1) {
+    animation-delay: 0.5s;
+}
+
+.login-card .form-group:nth-child(2) {
+    animation-delay: 0.6s;
+}
+
+.login-card .form-label {
+    display: block;
+    margin-bottom: 8px;
+    color: #333;
+    font-size: 14px;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.login-card .input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.login-card .form-input {
+    width: 100%;
+    padding: 13px 15px 13px 42px;
+    border: 1px solid #e6e6e6;
+    border-radius: 10px;
+    font-size: 14px;
+    transition: border-color 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease;
+    background: #fafafa;
+}
+
+.login-card .form-input:focus {
+    outline: none;
+    border-color: #4caf50;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+    animation: glow 1s ease-in-out infinite;
+}
+
+.login-card .form-input::placeholder {
+    color: #6b736f;
+    transition: color 0.3s ease;
+}
+
+
+.login-card .input-icon {
+    position: absolute;
+    left: 14px;
+    display: inline-flex;
+    color: #888;
+    opacity: 0.7;
+    pointer-events: none;
+    transition: color 0.3s ease, opacity 0.3s ease;
+}
+
+.login-card .input-icon svg {
+    width: 17px;
+    height: 17px;
+}
+
+.login-card .input-wrapper:focus-within .input-icon {
+    color: #2d7a4d;
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+/* ==================== PASSWORD INPUT ==================== */
+
+.login-card .password-input-wrapper .form-input {
+    padding-right: 42px;
+}
+
+/* Hide the browser's own built-in reveal/clear icons (e.g. Edge) so only
+   our custom eye toggle shows in the password field. */
+.password-input-wrapper .form-input::-ms-reveal,
+.password-input-wrapper .form-input::-ms-clear {
+    display: none;
+}
+
+.password-input-wrapper .form-input::-webkit-credentials-auto-fill-button,
+.password-input-wrapper .form-input::-webkit-strong-password-auto-fill-button {
+    display: none !important;
+}
+
+.toggle-password {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #2d7a4d;
+    transition: color 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toggle-password svg {
+    width: 18px;
+    height: 18px;
+}
+
+.toggle-password .icon-eye-off,
+.toggle-password.is-visible .icon-eye {
+    display: none;
+}
+
+.toggle-password.is-visible .icon-eye-off {
+    display: block;
+}
+
+.toggle-password:hover {
+    color: #2d7a4d;
+    transform: translateY(-50%) scale(1.15);
+}
+
+/* ==================== SIGN-UP (same card as sign-in) ==================== */
+
+.login-card .form-input.plain {
+    padding-left: 15px;
+}
+
+/* The sign-up form is taller than a short laptop screen: the card centres when it fits and otherwise starts at the
+   top and the column scrolls, instead of being cut off at the top. */
+.right-section {
+    align-items: flex-start;
+    overflow-y: auto;
+}
+
+.login-card {
+    margin: auto 0;
+}
+
+#signUpForm .form-group {
+    margin-bottom: 14px;
+}
+
+.login-card .select-field {
+    position: relative;
+}
+
+.login-card .select-field select.form-input {
+    appearance: none;
+    padding-right: 36px;
+    cursor: pointer;
+}
+
+.login-card .select-field svg {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    transform: translateY(-50%);
+    color: #646c68;
+    pointer-events: none;
+}
+
+.login-card .field-error {
+    margin: 6px 0 0;
+    font-size: 12.5px;
+    color: #c62828;
+}
+
+.login-card .password-rules {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    font-size: 12.5px;
+    color: #646c68;
+}
+
+.login-card .password-rules li::before {
+    content: "\25CB";  /* open circle */
+    margin-right: 5px;
+}
+
+.login-card .password-rules li.met {
+    color: #17693a;
+}
+
+.login-card .password-rules li.met::before {
+    content: "\2713";  /* check mark */
+}
+
+.login-card .password-rules li.rule-note::before {
+    content: none;
+}
+
+.login-card .password-rules li.rule-note {
+    flex-basis: 100%;
+}
+
+.login-card .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.auth-switch {
+    margin-top: 18px;
+    text-align: center;
+    font-size: 13.5px;
+    color: #666;
+}
+
+.auth-switch button {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-weight: 600;
+    color: #2d7a4d;
+    cursor: pointer;
+}
+
+.auth-switch button:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+    .login-card .form-row {
+        grid-template-columns: 1fr;
+        row-gap: 0; /* stacked fields keep the same spacing as the single ones */
+    }
+}

@@ -1,0 +1,278 @@
+from datetime import date
+from decimal import Decimal
+
+import pytest
+
+from accounts.models import User
+from clinic.models import MedicalRecord, Pet
+from inventory.models import InventoryTransaction, Service, ServiceBranchPrice
+from sales.models import Sale, ServiceTransaction
+
+from .conftest import client_for
+
+PATIENT = {
+    "ownerName": "Maria", "ownerSurname": "Santos", "ownerEmail": "maria@example.com",
+    "ownerAddress": "123 Rizal St", "ownerMobile": "09171234567", "petName": "Bantay", "petSpecie": "Dog",
+    "petBreed": "Aspin", "petSex": "Male", "petDob": "2023-05-10", "petMarking": "Brown",
+}
+
+
+def consult(**over):
+    return {"date": "2026-09-24", "notes": "Checked", **over}
+
+
+def test_create_patient_and_duplicate_email(staff_ibaan):
+    c = client_for(staff_ibaan)
+    r = c.post("/api/patients/", PATIENT)
+    assert r.status_code == 201
+    assert r.data["branch"] == "Ibaan" and r.data["status"] == "Active" and r.data["id"].startswith("PET-I")
+    assert r.data["ownerName"] == "Maria" and r.data["consultations"] == []
+    dup = c.post("/api/patients/", {**PATIENT, "petName": "Other"})
+    assert dup.status_code == 400 and "ownerEmail" in dup.data
+
+
+def test_owners_without_email_can_be_saved_and_edited(staff_ibaan):
+    c = client_for(staff_ibaan)
+    a = c.post("/api/patients/", {**PATIENT, "ownerEmail": ""})
+    b = c.post("/api/patients/", {**PATIENT, "ownerEmail": "", "ownerName": "Jose", "petName": "Muning"})
+    assert a.status_code == 201 and b.status_code == 201 and a.data["ownerEmail"] == ""  # two blanks do not clash
+    assert c.put(f"/api/patients/{a.data['id']}/", {**PATIENT, "ownerEmail": ""}).status_code == 200
+
+
+def test_branch_scoping(staff_ibaan, staff_sanjose):
+    pid = client_for(staff_ibaan).post("/api/patients/", PATIENT).data["id"]
+    other = client_for(staff_sanjose)
+    assert other.get("/api/patients/").data == []
+    assert other.get(f"/api/patients/{pid}/").status_code == 404
+
+
+@pytest.fixture
+def catalog(branches):
+    """Two services from the clinic's catalog, priced at Ibaan."""
+    out = {}
+    for sid, name, category, price, capital in (("SRV-0001", "Vaccination", "VACCINES", 300, 120),
+                                                ("SRV-0002", "Grooming", "GROOMING", 100, 40)):
+        out[name] = Service.objects.create(service_id=sid, service_name=name, category=category)
+        ServiceBranchPrice.objects.create(service=out[name], branch=branches[0], unit_price=price, unit_capital=capital)
+    return out
+
+
+def service(svc, price, qty=1):
+    return {"type": "Service", "serviceId": svc.service_id, "price": price, "quantity": qty}
+
+
+def test_follow_up_lifecycle(staff_ibaan, catalog):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    r = c.post(f"/api/patients/{pid}/consultations/", consult(followUp=True, followUpNote="Vaccination"))
+    assert r.data["status"] == "Follow-up needed" and r.data["followUpNote"] == "Vaccination"
+    # A different service does not resolve it...
+    r = c.post(f"/api/patients/{pid}/consultations/", consult(availedItems=[service(catalog["Grooming"], 100)]))
+    assert r.data["status"] == "Follow-up needed"
+    # ...the due service does.
+    r = c.post(f"/api/patients/{pid}/consultations/", consult(availedItems=[service(catalog["Vaccination"], 300)]))
+    assert r.data["status"] == "Active" and r.data["followUpNote"] == ""
+    assert len(r.data["consultations"]) == 3 and r.data["consultations"][2]["totalPrice"] == 300
+
+
+# ------------------- a consultation is a billed visit (dashboard, stock, owner history) -------------------
+
+
+def visit(c, pid, items, **over):
+    return c.post(f"/api/patients/{pid}/consultations/", consult(availedItems=items, **over))
+
+
+def test_billed_services_become_a_service_visit_on_the_dashboard(staff_ibaan, admin, catalog):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    r = visit(c, pid, [service(catalog["Vaccination"], 350), service(catalog["Grooming"], 200)], weight="3.5 kg")
+    assert r.status_code == 201
+    txn = ServiceTransaction.objects.get()
+    assert txn.pet_id == pid and txn.customer_id == Pet.objects.get(pk=pid).customer_id and txn.total_amount == 550  # 350 + 200
+    assert txn.branch.town == "Ibaan" and txn.weight_kg == Decimal("3.5") and txn.txn_date == date(2026, 9, 24)
+    lines = {d.service.service_name: d for d in txn.details.all()}
+    assert lines["Vaccination"].line_profit == 350 - 120 and lines["Grooming"].quantity == 1
+    rec = MedicalRecord.objects.get()
+    assert rec.source_txn_id == txn.service_txn_id and rec.total_price == 550
+    # It is revenue now: the analytics read service transactions.
+    kpi = client_for(admin).get("/api/analytics/overview/?month=2026-09").data
+    assert kpi["kpis"]["totalSales"] == 550
+
+
+def test_products_handed_out_are_sold_to_the_owner_and_leave_the_shelf(staff_ibaan, stocked):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    ibaan_stock = stocked[0]
+    r = visit(c, pid, [{"type": "Product", "inventoryId": ibaan_stock.inventory_id, "price": 250, "quantity": 3}])
+    assert r.status_code == 201
+    sale = Sale.objects.get()
+    assert sale.customer_id == Pet.objects.get(pk=pid).customer_id and sale.total_amount == 750
+    ibaan_stock.refresh_from_db()
+    assert ibaan_stock.quantity_on_hand == 7  # 10 - 3, deducted by the database trigger
+    item = r.data["consultations"][0]["availedItems"][0]
+    assert item["name"] == "Dog Food 5kg" and item["saleId"] == sale.sale_id
+
+
+def test_nothing_is_saved_when_an_item_is_wrong(staff_ibaan, stocked, catalog):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    other_branch = stocked[1].inventory_id  # San Jose stock, patient is at Ibaan
+    bad = [service(catalog["Vaccination"], 300), {"type": "Product", "inventoryId": other_branch, "price": 250}]
+    assert visit(c, pid, bad).status_code == 400
+    assert visit(c, pid, [{"type": "Service", "serviceId": "SRV-9999", "price": 1}]).status_code == 400
+    assert visit(c, pid, [{"type": "Service", "name": "Free text", "price": 1}]).status_code == 400
+    assert not (MedicalRecord.objects.exists() or ServiceTransaction.objects.exists() or Sale.objects.exists())
+
+
+def test_deleting_a_consultation_undoes_its_visit_and_returns_the_products(staff_ibaan, admin, stocked, catalog):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    items = [service(catalog["Vaccination"], 300), {"type": "Product", "inventoryId": stocked[0].inventory_id,
+                                                    "price": 250, "quantity": 2}]
+    cid = visit(c, pid, items).data["consultations"][0]["id"]
+    assert client_for(admin).delete(f"/api/consultations/{cid}/").status_code == 204
+    assert not (MedicalRecord.objects.exists() or ServiceTransaction.objects.exists() or Sale.objects.exists())
+    stocked[0].refresh_from_db()
+    assert stocked[0].quantity_on_hand == 10
+    assert InventoryTransaction.objects.filter(txn_type="return", quantity_change=2).exists()
+
+
+def test_an_approved_staff_delete_request_undoes_the_visit_too(staff_ibaan, admin, catalog):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    cid = visit(c, pid, [service(catalog["Grooming"], 100)]).data["consultations"][0]["id"]
+    req = c.post("/api/requests/", {"type": "consultation", "targetId": cid, "label": "Oops"}, format="json")
+    assert client_for(admin).post(f"/api/requests/{req.data['id']}/approve/").status_code == 200
+    assert not (MedicalRecord.objects.exists() or ServiceTransaction.objects.exists())
+
+
+def test_the_owner_sees_the_visit_once(staff_ibaan, catalog):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    visit(c, pid, [service(catalog["Vaccination"], 300)])
+    pet = Pet.objects.get(pk=pid)
+    owner = User.objects.create(email="owner@x.ph", name="Owner", role="customer", customer=pet.customer)
+    visits = client_for(owner).get("/api/me/pets/").data[0]["visits"]
+    assert len(visits) == 1 and visits[0]["type"] == "Consultation"
+
+
+def test_service_catalog_lists_branch_prices(staff_ibaan, catalog):
+    rows = client_for(staff_ibaan).get("/api/services/").data
+    vacc = next(r for r in rows if r["name"] == "Vaccination")
+    assert vacc["id"] == "SRV-0001" and vacc["prices"] == {"Ibaan": 300.0}
+
+
+def test_follow_up_requires_note(staff_ibaan):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    assert c.post(f"/api/patients/{pid}/consultations/", consult(followUp=True)).status_code == 400
+
+
+def test_staff_cannot_hard_delete_admin_can(staff_ibaan, admin):
+    pid = client_for(staff_ibaan).post("/api/patients/", PATIENT).data["id"]
+    assert client_for(staff_ibaan).delete(f"/api/patients/{pid}/").status_code == 403
+    assert client_for(admin).delete(f"/api/patients/{pid}/").status_code == 204
+    assert not Pet.objects.filter(pk=pid).exists()
+
+
+def test_admin_deletes_consultation(staff_ibaan, admin):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    cid = c.post(f"/api/patients/{pid}/consultations/", consult()).data["consultations"][0]["id"]
+    assert c.delete(f"/api/consultations/{cid}/").status_code == 403
+    assert client_for(admin).delete(f"/api/consultations/{cid}/").status_code == 204
+    assert not MedicalRecord.objects.exists()
+
+
+def test_status_filter_for_the_notification_bell(staff_ibaan):
+    c = client_for(staff_ibaan)
+    a = c.post("/api/patients/", PATIENT).data["id"]
+    c.post("/api/patients/", {**PATIENT, "ownerEmail": "b@example.com", "petName": "Two"})
+    c.post(f"/api/patients/{a}/consultations/", consult(followUp=True, followUpNote="Vaccination"))
+    rows = c.get("/api/patients/?status=Follow-up needed").data
+    assert [r["id"] for r in rows] == [a]
+
+
+def test_list_puts_the_most_recently_seen_pets_first(staff_ibaan):
+    c = client_for(staff_ibaan)
+    seen = c.post("/api/patients/", PATIENT).data["id"]
+    unseen = c.post("/api/patients/", {**PATIENT, "ownerEmail": "b@example.com", "petName": "Two"}).data["id"]
+    Pet.objects.filter(pet_id=seen).update(created_at="2020-01-01T00:00:00Z")
+    Pet.objects.filter(pet_id=unseen).update(created_at="2021-01-01T00:00:00Z")
+    c.post(f"/api/patients/{seen}/consultations/", consult())
+    rows = c.get("/api/patients/?page=1&pageSize=10").data["results"]
+    assert [r["id"] for r in rows] == [seen, unseen]  # a visit in 2026 beats a registration in 2021
+    assert rows[0]["lastVisit"] == "2026-09-24" and len(rows[0]["consultations"]) == 1
+
+
+def test_a_consultation_can_carry_a_prescription(staff_ibaan):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    rx = {"diagnosis": "Otitis externa", "rx": "Otomax ear drops\n3 drops twice a day for 7 days",
+          "nextAppointment": "2026-10-01", "veterinarian": "Dr. Reyes", "licenseNo": "0012345", "ptr": "PTR-998"}
+    saved = c.post(f"/api/patients/{pid}/consultations/", consult(prescription=rx)).data["consultations"][0]
+    assert saved["diagnosis"] == "Otitis externa"
+    assert saved["prescription"] == {k: v for k, v in rx.items() if k != "diagnosis"}
+    plain = c.post(f"/api/patients/{pid}/consultations/", consult()).data["consultations"][1]
+    assert plain["prescription"] is None and plain["diagnosis"] == ""
+    bad = c.post(f"/api/patients/{pid}/consultations/", consult(prescription={"diagnosis": "x"}))
+    assert bad.status_code == 400 and "prescription" in bad.data  # the Rx itself is required
+
+
+def test_a_consultation_keeps_several_lab_pictures_and_waivers(staff_ibaan):
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    pics = [{"name": f"page{i}.png", "image": f"data:image/png;base64,AAA{i}"} for i in range(3)]
+    waivers = [{"name": "consent.pdf", "image": "data:application/pdf;base64,JVBE"}, pics[0]]
+    r = c.post(f"/api/patients/{pid}/consultations/", consult(labResults=pics, waivers=waivers))
+    assert r.data["consultations"][0]["labResults"] == pics and r.data["consultations"][0]["waivers"] == waivers
+    bad = c.post(f"/api/patients/{pid}/consultations/", consult(labResults=[{"name": "x", "image": "not-a-picture"}]))
+    assert bad.status_code == 400
+    many = c.post(f"/api/patients/{pid}/consultations/", consult(labResults=pics * 4))  # 12 > the limit of 10
+    assert many.status_code == 400
+
+
+def test_deleting_a_service_removes_it_or_retires_it_when_visits_used_it(staff_ibaan, admin, catalog):
+    c, boss = client_for(staff_ibaan), client_for(admin)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    visit(c, pid, [service(catalog["Vaccination"], 350)])
+    assert c.delete("/api/services/SRV-0002/").status_code == 403  # staff never delete services
+
+    assert boss.delete("/api/services/SRV-0002/").status_code == 204  # never used: gone for good
+    assert not Service.objects.filter(pk="SRV-0002").exists()
+
+    r = boss.delete("/api/services/SRV-0001/")  # used on a visit: hidden, history kept
+    assert r.status_code == 200 and r.data == {"retired": True}
+    assert Service.objects.get(pk="SRV-0001").is_active is False
+    assert [s["id"] for s in boss.get("/api/services/").data] == []
+    assert ServiceTransaction.objects.get().details.get().service_id == "SRV-0001"
+    assert visit(c, pid, [service(catalog["Vaccination"], 350)]).status_code == 400  # cannot be billed any more
+    assert boss.delete("/api/services/SRV-0001/").status_code == 404
+
+
+def test_service_weight_range_and_once_per_visit_rules(staff_ibaan, branches):
+    from clinic.views import weight_band
+    assert weight_band("DOG OVH 6 TO 10KG SURG") == (5, 10) and weight_band("400 PF") is None
+    small = Service.objects.create(service_id="SRV-0101", service_name="DOG CASTRATION UPTO 5KG SURG", category="SURGERY")
+    shot = Service.objects.create(service_id="SRV-0102", service_name="SMALL INJ", category="INJECTABLES")
+    c = client_for(staff_ibaan)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    too_big = c.post(f"/api/patients/{pid}/consultations/", consult(weight="8 kg", availedItems=[service(small, 2000)]))
+    assert too_big.status_code == 400 and "8 kg" in str(too_big.data)
+    twice = c.post(f"/api/patients/{pid}/consultations/", consult(weight="4 kg", availedItems=[service(small, 2000, qty=2)]))
+    assert twice.status_code == 400 and "once per visit" in str(twice.data)
+    ok = c.post(f"/api/patients/{pid}/consultations/", consult(weight="4 kg", availedItems=[service(small, 2000), service(shot, 150, qty=3)]))
+    assert ok.status_code == 201
+
+
+def test_request_log_shows_who_asked_and_what_became_of_it(staff_ibaan, admin):
+    c, boss = client_for(staff_ibaan), client_for(admin)
+    pid = c.post("/api/patients/", PATIENT).data["id"]
+    req = c.post("/api/requests/", {"type": "patient", "targetId": pid, "label": "Duplicate record"}, format="json").data
+    assert req["petId"] == pid and req["status"] == "pending"
+    boss.post(f"/api/requests/{req['id']}/deny/")
+    log = boss.get("/api/requests/?all=1").data
+    assert log[0]["id"] == req["id"] and log[0]["status"] == "denied" and log[0]["resolvedByName"] == admin.name
+    assert boss.get("/api/requests/").data == []  # the bell lists pending ones only
+    mine = c.get("/api/requests/?mine=1").data
+    assert [r["status"] for r in mine] == ["denied"] and c.get("/api/requests/?all=1").data == []

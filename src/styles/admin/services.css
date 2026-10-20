@@ -1,0 +1,63 @@
+/* Admin Services page (pages/admin/Services.jsx). Layout, table and modal come from inventory.css. */
+
+.services-count {
+    margin-left: 8px;
+    font-size: 13px;
+    font-weight: 400;
+    color: #646c68;
+}
+
+.services-category-filter {
+    min-width: 190px;
+}
+
+.service-prices {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0 0 16px;
+    padding: 0;
+    border: none;
+}
+
+.service-prices legend {
+    margin-bottom: 8px;
+}
+
+.service-price-row,
+.service-supply-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 1fr;
+    gap: 10px;
+    align-items: center;
+}
+
+.service-supply-row {
+    grid-template-columns: minmax(0, 1fr) 90px auto;
+}
+
+.service-branch {
+    font-size: 14px;
+    font-weight: 600;
+    color: #45514a;
+}
+
+.service-supply-list {
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13.5px;
+}
+
+.service-supply-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 10px;
+    background: #f9fbfa;
+    border: 1px solid #ececec;
+    border-radius: 8px;
+}

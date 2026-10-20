@@ -1,0 +1,31 @@
+/* SearchPicker: a search box that doubles as a dropdown. An arrow on the right, the matches dropping down under the
+   box, category headings, and the highlighted and current item. */
+.search-picker input { padding-right: 40px; }
+
+.search-picker-toggle {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; border: none; background: none; border-radius: 8px;
+  color: #646c68; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.search-picker-toggle:hover { background: #f0f4f1; }
+.search-picker .search-picker-toggle svg { position: static; width: 16px; height: 16px; }
+
+.search-results {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 20; list-style: none; margin: 0; padding: 4px;
+  background: #fff; border: 1px solid #e3e7e5; border-radius: 10px; box-shadow: 0 10px 28px rgba(20, 40, 30, 0.12);
+  max-height: 280px; overflow-y: auto;
+}
+.search-results li button {
+  width: 100%; text-align: left; padding: 10px 12px; background: none; border: none; border-radius: 7px; font: inherit;
+  font-size: 14px; color: #1a1a1a; cursor: pointer; display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+}
+.search-results li button:hover, .search-results li button:focus-visible, .search-results li button.is-active { background: #f4f8f5; outline: none; }
+.search-results li button.is-current span { font-weight: 700; color: #17693a; }
+.search-results small { color: #6b736f; font-size: 12px; white-space: nowrap; }
+.search-results .search-group { padding: 8px 12px 4px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; color: #6b736f; text-transform: uppercase; }
+.search-empty { padding: 10px 12px; font-size: 13.5px; color: #6b736f; }
+
+@media (pointer: coarse) {
+  .search-picker-toggle { width: 44px; height: 44px; right: 0; }
+  .search-results li button { min-height: 44px; }
+}

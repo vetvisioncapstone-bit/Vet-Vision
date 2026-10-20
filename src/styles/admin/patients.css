@@ -1,0 +1,984 @@
+/* ==================== MODAL ==================== */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 30, 25, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+    visibility: hidden;
+    overscroll-behavior: contain;
+    z-index: 100;
+}
+
+.modal-overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
+    transition-delay: 0s;
+}
+
+.modal {
+    background: #ffffff;
+    border-radius: 18px;
+    width: 100%;
+    max-width: 420px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+    transform: translateY(16px) scale(0.97);
+    transition: transform 0.2s ease;
+}
+
+.modal-overlay.show .modal {
+    transform: translateY(0) scale(1);
+}
+
+/* The double class beats the 420px .modal that several page sheets define (they stay loaded after a visit). */
+.modal.patient-modal {
+    max-width: 920px;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid #ececec;
+}
+
+.modal-header h2 {
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.modal-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: #6b736f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.modal-close svg {
+    width: 16px;
+    height: 16px;
+}
+
+.modal-close:hover {
+    background: #f0f4f1;
+}
+
+.modal-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ==================== FORM CONTROLS ==================== */
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #45514a;
+}
+
+.required {
+    color: #c62828;
+}
+
+.form-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #dde3e0;
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    color: #1a1a1a;
+    background: #f9fbfa;
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #4caf50;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.12);
+}
+
+select.form-input {
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
+.form-select-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.form-select-wrapper .form-input {
+    padding-right: 36px;
+}
+
+.form-select-chevron {
+    position: absolute;
+    right: 12px;
+    width: 15px;
+    height: 15px;
+    color: #6b736f;
+    pointer-events: none;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); /* fields shrink with the window, never spill out */
+    gap: 14px;
+}
+
+/* ==================== PATIENT FORM ==================== */
+
+.patient-form-panel {
+    display: grid;
+    /* Owner and Pet side by side when there is room, stacked when there is not (phones, narrow windows). */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: 20px;
+    background: #f4f6f5;
+    border-radius: 16px;
+    padding: 20px;
+}
+
+.patient-form-col {
+    min-width: 0;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.patient-form-col-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #163a26;
+}
+
+.patient-form-col-head svg {
+    width: 20px;
+    height: 20px;
+}
+
+.patient-form-col-head h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a1a1a;
+}
+
+.patient-form-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.patient-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.patient-save-btn {
+    padding: 11px 28px;
+    background: #163a26;
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.patient-save-btn:hover {
+    background: #0f2a1a;
+    transform: translateY(-1px);
+}
+
+.patient-cancel-btn {
+    padding: 11px 24px;
+    background: #ffffff;
+    color: #1a1a1a;
+    border: 1px solid #dfe3e1;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.patient-cancel-btn:hover {
+    background: #f0f4f1;
+}
+
+@media (max-width: 480px) {
+    .patient-form-panel {
+        padding: 12px;
+    }
+
+    .patient-form-panel .form-row {
+        grid-template-columns: minmax(0, 1fr); /* one field per line on a phone */
+    }
+}
+
+textarea.form-input {
+    resize: vertical;
+    min-height: 60px;
+    line-height: 1.5;
+}
+
+/* ==================== PATIENT DETAIL MODAL ==================== */
+
+/* Wide enough for the consultation form's fields side by side; .modal (420px) is defined in several page sheets,
+   so the double class wins whatever order they load in. */
+.modal.patient-detail-modal {
+    max-width: 860px;
+}
+
+.detail-owner-sub {
+    font-size: 13px;
+    color: #6b736f;
+    margin-top: 2px;
+}
+
+.detail-info-grid {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    background: #f4f6f5;
+    border-radius: 14px;
+    padding: 18px;
+}
+
+.detail-info-group {
+    flex: 1;
+    min-width: 140px;
+}
+
+.detail-info-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #646c68;
+    margin-bottom: 6px;
+}
+
+.detail-info-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 3px;
+}
+
+.detail-info-sub {
+    font-size: 12.5px;
+    color: #6b736f;
+    line-height: 1.6;
+}
+
+.modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.detail-edit-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    border: 1px solid #dfe3e1;
+    background: #ffffff;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: inherit;
+    color: #45514a;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.detail-edit-btn svg {
+    width: 13px;
+    height: 13px;
+}
+
+.detail-edit-btn:hover {
+    background: #f0f4f1;
+}
+
+.detail-actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.detail-history-title {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.detail-actions-buttons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.detail-history-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    background: #ffffff;
+    border: 1px solid #dfe3e1;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 600;
+    color: #45514a;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.detail-history-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.detail-history-btn:hover {
+    background: #f0f4f1;
+}
+
+.patient-history-modal {
+    max-width: 560px;
+}
+
+.history-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+/* ==================== FILE UPLOAD (lab results / waivers) ==================== */
+
+.file-upload-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.file-upload-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 14px;
+    background: #f9fbfa;
+    border: 1px dashed #c7d0cb;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #45514a;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.file-upload-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.file-upload-btn:hover {
+    background: #f0f4f1;
+    border-color: #4caf50;
+}
+
+.file-upload-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px 5px 5px;
+    background: #f4f6f5;
+    border-radius: 8px;
+}
+
+.file-upload-preview-icon {
+    width: 18px;
+    height: 18px;
+    color: #6b736f;
+    flex-shrink: 0;
+}
+
+.file-upload-name {
+    font-size: 12.5px;
+    color: #45514a;
+    font-weight: 500;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-upload-remove {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.08);
+    color: #45514a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.file-upload-remove svg {
+    width: 11px;
+    height: 11px;
+}
+
+.file-upload-remove:hover {
+    background: rgba(0, 0, 0, 0.16);
+}
+
+/* ==================== FOLLOW-UP CHECKBOX ==================== */
+
+.follow-up-check {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 11px 14px;
+    background: #fdf1e0;
+    border: 1px solid #f4dcae;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #8a5a06;
+    cursor: pointer;
+}
+
+.follow-up-check input {
+    accent-color: #b8720a;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.follow-up-block {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.follow-up-note {
+    color: #8a5300;
+    font-weight: 600;
+}
+
+/* ==================== CONSULTATION HISTORY EXTRAS ==================== */
+
+.consultation-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.consultation-print-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: #646c68;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.consultation-print-btn svg {
+    width: 13px;
+    height: 13px;
+}
+
+.consultation-print-btn:hover {
+    background: #eaf1fb;
+    color: #1d5fae;
+}
+
+.consultation-attachment {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.consultation-attachment img {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 1px solid #ececec;
+}
+
+.consultation-attachment a {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #1d5fae;
+    text-decoration: none;
+}
+
+.consultation-attachment a:hover {
+    text-decoration: underline;
+}
+
+.follow-up-pill {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #fdf1e0;
+    color: #8a5300;
+    font-size: 11.5px;
+    font-weight: 700;
+}
+
+.consultation-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: #f9fbfa;
+    border: 1px solid #ececec;
+    border-radius: 14px;
+    padding: 18px;
+}
+
+.consultation-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.consultation-history {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.consultation-item {
+    border: 1px solid #ececec;
+    border-radius: 12px;
+    padding: 14px 16px;
+}
+
+.consultation-item-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.consultation-date {
+    font-size: 13px;
+    font-weight: 700;
+    color: #163a26;
+}
+
+.consultation-weight {
+    font-size: 12px;
+    color: #646c68;
+    margin-left: 8px;
+    font-weight: 500;
+}
+
+.consultation-delete-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: #646c68;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.consultation-delete-btn svg {
+    width: 13px;
+    height: 13px;
+}
+
+.consultation-delete-btn:hover {
+    background: #fdecea;
+    color: #c62828;
+}
+
+.consultation-field {
+    font-size: 13px;
+    color: #2a302d;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+.consultation-field + .consultation-field {
+    margin-top: 6px;
+}
+
+.consultation-field-label {
+    font-weight: 600;
+    color: #45514a;
+}
+
+.consultation-total {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #163a26;
+    margin-top: 4px;
+}
+
+.consultation-remarks {
+    font-size: 12.5px;
+    color: #646c68;
+    margin-top: 8px;
+    font-style: italic;
+}
+
+/* ==================== TOOLBAR ==================== */
+
+.patients-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 220px;
+    max-width: 360px;
+}
+
+.search-wrapper svg {
+    position: absolute;
+    left: 12px;
+    width: 15px;
+    height: 15px;
+    color: #646c68;
+    pointer-events: none;
+}
+
+.search-wrapper input {
+    width: 100%;
+    border: 1px solid #dfe3e1;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 9px 12px 9px 34px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search-wrapper input:focus {
+    outline: none;
+    border-color: #4caf50;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+.toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.new-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #163a26;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: 600;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.new-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.new-btn:hover {
+    background: #0f2a1a;
+    transform: translateY(-1px);
+}
+
+.new-btn:active {
+    transform: translateY(0);
+}
+
+.filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #ffffff;
+    border: 1px solid #dfe3e1;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: 500;
+    color: #1a1a1a;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.filter-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.select-chevron-inline {
+    width: 13px !important;
+    height: 13px !important;
+    color: #777;
+}
+
+.filter-btn:hover {
+    background: #f0f4f1;
+}
+
+.filter-popover {
+    width: 200px;
+}
+
+.filter-options {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.stat-value.muted {
+    color: #646c68;
+}
+
+/* ==================== TABLE ==================== */
+
+.checkbox-col {
+    width: 40px;
+}
+.checkbox-col input {
+    accent-color: #163a26;
+    cursor: pointer;
+}
+
+.action-col {
+    width: 32px;
+}
+
+.filter-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 6px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #333;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.filter-option:hover {
+    background: #f0f4f1;
+}
+
+.filter-option input[type="checkbox"] {
+    accent-color: #163a26;
+    cursor: pointer;
+}
+
+.row-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.row-action-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #6b736f;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.row-action-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.row-action-btn:hover {
+    background: #f0f4f1;
+    color: #1a1a1a;
+}
+
+.row-action-btn.delete:hover {
+    background: #fdecea;
+    color: #c62828;
+}
+
+/* ==================== PATIENT STATUS PILLS ==================== */
+
+.status-ok {
+    background: #e4f6e8;
+    color: #17693a;
+}
+
+.status-follow-up {
+    background: #fdf1e0;
+    color: #8a5300;
+}
+
+.status-inactive {
+    background: #eef0ef;
+    color: #6b736f;
+}
+
+.filter-year { width: 100%; margin: 4px 0 12px; padding: 8px 10px; border: 1px solid #dfe3e1; border-radius: 8px; font: inherit; background: #fff; }
+.filter-clear { background: none; border: none; color: #2d7a4d; font: inherit; font-weight: 600; cursor: pointer; padding: 0; text-decoration: underline; }
+
+/* ==================== PRINT SHEET (clinic chart) ==================== */
+/* Patient modals sit at z-index 100; the sheet has to open above them. */
+.report-overlay.clinic-overlay { z-index: 200; }
+.clinic-sheet { background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; max-width: 720px; margin: 0 auto; padding: 28px 34px; border-radius: 12px; }
+.cs-actions { display: flex; gap: 10px; margin-bottom: 18px; }
+.cs-actions .report-btn { width: auto; padding: 9px 16px; }
+.cs-letterhead { display: flex; align-items: center; justify-content: center; gap: 14px; border-bottom: 3px solid #111; padding-bottom: 10px; margin-bottom: 4px; }
+.cs-letterhead img { width: 52px; height: 52px; object-fit: contain; }
+.cs-letterhead h1 { font-size: 26px; letter-spacing: 0.02em; margin: 0; }
+.cs-address { font-size: 12px; text-align: center; margin: 4px 0 18px; }
+.cs-info { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.cs-row { display: flex; gap: 22px; flex-wrap: wrap; }
+.cs-field { display: flex; align-items: baseline; gap: 6px; flex: 1; min-width: 140px; }
+.cs-label { font-weight: 700; font-size: 12.5px; white-space: nowrap; }
+.cs-value { flex: 1; border-bottom: 1px solid #111; font-size: 12.5px; padding-bottom: 1px; min-height: 14px; }
+/* Fixed columns that wrap: the dashboard's table rules (no wrapping, grey headers) would otherwise push long
+   remarks past the paper's edge. */
+.cs-log { width: 100%; border-collapse: collapse; border: 1.5px solid #111; table-layout: fixed; }
+.cs-log th, .cs-log td { white-space: normal; overflow-wrap: anywhere; color: #111; }
+.cs-log th { border: 1px solid #111; padding: 6px 8px; font-size: 12.5px; font-weight: 700; background: #f2f2f2; text-align: left; }
+.cs-log td { border: 1px solid #111; padding: 8px; font-size: 12px; vertical-align: top; }
+.cs-log th:first-child { width: 96px; }
+.cs-log td:first-child { white-space: nowrap; }
+.cs-log th:last-child { width: 34%; }
+.cs-log tfoot td { font-weight: 700; background: #f7f7f7; }
+.cs-attach-label { font-weight: 700; font-size: 12px; margin: 14px 0 4px; }
+.cs-attach-img { max-width: 100%; max-height: 320px; border: 1px solid #ccc; border-radius: 6px; }
+.cs-note { font-size: 12px; color: #666; }
+.cs-footer { margin-top: 20px; font-size: 10.5px; color: #888; text-align: center; }
+@media print {
+  .clinic-sheet { max-width: none; padding: 0; border-radius: 0; }
+}
+
+/* ==================== PRESCRIPTION (form + Rx pad print) ==================== */
+
+.rx-btn-symbol { font-size: 16px; font-weight: 700; line-height: 1; }
+.rx-fields { border: 1px solid #dfe3e1; border-radius: 12px; padding: 14px; background: #fff; }
+.rx-fields-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.rx-fields-head p { flex: 1; margin: 0; font-size: 12.5px; color: #646c68; }
+.rx-fields-symbol { font-size: 26px; font-weight: 700; color: #163a26; line-height: 1; }
+.rx-fields .rx-signer { grid-template-columns: 1.4fr 1fr 1fr; }
+@media (max-width: 640px) { .rx-fields .rx-signer { grid-template-columns: 1fr; } }
+.consultation-print-btn.rx { font-size: 14px; font-weight: 700; line-height: 1; }
+.consultation-rx { margin-top: 8px; padding: 8px 10px; border-left: 3px solid #17693a; background: #f4faf6; border-radius: 6px; }
+.consultation-rx-text { margin: 4px 0 0; font-size: 13px; white-space: pre-wrap; }
+
+/* The paper pad: letterhead, patient lines, the Rx symbol over a faint caduceus, logo and signature block. */
+.rx-wrap { max-width: 600px; margin: 0 auto; }
+.rx-sheet { background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; aspect-ratio: 1 / 1.414; display: flex;
+  flex-direction: column; padding: 34px 40px 28px; border-radius: 4px; }
+.rx-head { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+.rx-head h1 { margin: 0 0 8px; font-size: 32px; font-weight: 800; letter-spacing: 0.03em; }
+.rx-head p { margin: 0; font-size: 15px; line-height: 1.35; }
+.rx-info { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; padding: 14px 6px 0; }
+.rx-info > div { display: flex; flex-direction: column; gap: 6px; }
+.rx-pair { display: flex; gap: 10px; }
+.rx-pair .rx-line { flex: 1; }
+.rx-line { display: flex; align-items: baseline; gap: 6px; font-size: 12.5px; }
+.rx-line-label { font-weight: 700; white-space: nowrap; }
+.rx-line-value { flex: 1; min-width: 40px; border-bottom: 1px solid #333; min-height: 15px; padding-bottom: 1px; }
+.rx-body { position: relative; flex: 1; padding: 18px 6px 0; }
+.rx-watermark { position: absolute; left: 50%; top: 52%; width: 62%; transform: translate(-50%, -50%); color: #8fa39a; opacity: 0.22; pointer-events: none; }
+.rx-symbol { position: relative; display: inline-block; font-size: 64px; font-weight: 800; line-height: 1; font-family: Arial, Helvetica, sans-serif; }
+.rx-symbol span { position: absolute; left: 30px; top: 30px; font-size: 54px; }
+.rx-text { position: relative; margin: 26px 0 0 18px; font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+.rx-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+.rx-foot img { width: 96px; height: 96px; object-fit: contain; }
+.rx-sign { flex: 0 1 300px; display: flex; flex-direction: column; gap: 8px; }
+.rx-sign .rx-line-label { width: 92px; text-align: right; }
+@media print {
+  .rx-wrap { max-width: none; }
+  .rx-sheet { aspect-ratio: auto; min-height: 100vh; padding: 10mm 12mm; border-radius: 0; }
+}
+
+/* Laboratory results: several pictures, listed one per line under the upload button. */
+.file-upload-count { font-size: 12.5px; color: #646c68; }
+.form-group > .file-upload-preview { margin-top: 8px; }

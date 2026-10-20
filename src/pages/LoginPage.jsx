@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import LeftSection from '../components/LeftSection'
-import RightSection from '../components/RightSection'
-import SuccessOverlay from '../components/SuccessOverlay'
-import { getAdminProfile, getStaffAccounts, setSession } from '../utils/auth'
-import '../styles/LoginPage.css'
+import React, { useState, useEffect, useRef } from 'react'
+import { Navigate, useNavigate } from 'react-router-dom'
+import LeftSection from '../components/login/LeftSection'
+import RightSection from '../components/login/RightSection'
+import SuccessOverlay from '../components/login/SuccessOverlay'
+import { useAuth } from '../hooks/useAuth'
+import { useSession } from '../hooks/useSession'
+import { homePathFor } from '../utils/homePath'
+import '../styles/login/LoginPage.css'
 
 function LoginPage() {
   const [showSuccess, setShowSuccess] = useState(false)
@@ -24,58 +26,38 @@ function LoginPage() {
     console.log('%cTry pressing Escape to clear the form!', 'font-size: 12px; color: #666; font-style: italic;')
   }, [])
 
-  const handleLogin = (email, password, remember) => {
-    const adminProfile = getAdminProfile()
-    let matchedSession = null
+  const { login } = useAuth()
+  const { session, loading } = useSession()
+  const signingIn = useRef(false) // true while this page shows its own "welcome" overlay after signing in
 
-    // Check admin credentials
-    if (email.toLowerCase() === adminProfile.email.toLowerCase() && password === adminProfile.password) {
-      matchedSession = { 
-        role: 'admin', 
-        name: adminProfile.name, 
-        email: adminProfile.email 
-      }
-    } else {
-      // Check staff credentials
-      const staffAccount = getStaffAccounts().find(
-        a => a.email.toLowerCase() === email.toLowerCase() && a.password === password
-      )
-      if (staffAccount) {
-        matchedSession = {
-          role: 'employee',
-          id: staffAccount.id,
-          name: staffAccount.name,
-          email: staffAccount.email,
-          branch: staffAccount.branch,
-          photo: staffAccount.photo || null
-        }
-      }
-    }
+  const handleLogin = async (email, password, remember, captcha) => {
+    signingIn.current = true
+    const result = await login(email.trim(), password, captcha, remember)
+    if (!result.success) signingIn.current = false
+    try { // "Remember me" also fills in the email next time
+      if (remember && result.success) localStorage.setItem('vvRememberEmail', email.trim())
+      else if (result.success) localStorage.removeItem('vvRememberEmail')
+    } catch { /* storage blocked: nothing to remember */ }
+    if (!result.success) return result
 
-    if (!matchedSession) {
-      return { success: false, message: 'Incorrect email or password.' }
-    }
-
-    // Set session
-    setSession(matchedSession)
     setSuccessData({ email, remember })
     setShowSuccess(true)
 
-    // Navigate after delay
+    // Navigate after the success overlay has had a moment
     setTimeout(() => {
-      const destination = matchedSession.role === 'admin' 
-        ? '/admin/dashboard' 
-        : '/employee/dashboard'
-      navigate(destination)
+      navigate(homePathFor(result.session.role), { replace: true })
     }, 1500)
 
     return { success: true }
   }
 
+  // Already signed in (Back from the portal, or "/" typed in): go straight to the portal instead of showing the form.
+  if (!loading && session && !signingIn.current) return <Navigate to={homePathFor(session.role)} replace />
+
   return (
     <div className="container">
       <LeftSection />
-      <RightSection onLogin={handleLogin} />
+      <RightSection onLogin={handleLogin} onSignedUp={() => navigate(homePathFor('customer'), { replace: true })} />
       {showSuccess && (
         <SuccessOverlay 
           email={successData.email} 

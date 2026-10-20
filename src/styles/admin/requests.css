@@ -1,0 +1,14 @@
+/* Staff requests page (pages/admin/Requests.jsx). */
+.request-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.request-tabs button { padding: 8px 16px; border-radius: 999px; border: 1px solid #dfe3e1; background: #fff; font: inherit; font-size: 13.5px; font-weight: 600; color: #4a524e; cursor: pointer; }
+.request-tabs button.active { background: #163a26; border-color: #163a26; color: #fff; }
+.request-actions { display: flex; gap: 6px; }
+.request-status { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.request-status.status-pending { background: #fff3dc; color: #8a5300; }
+.request-status.status-approved { background: #e4f6e8; color: #17693a; }
+.request-status.status-denied { background: #fdecea; color: #b3261e; }
+.request-status.status-dismissed { background: #eef1ef; color: #4a524e; }
+tr.request-focus td { background: #f4faf6; }
+
+/* "Restock" is a link to the Receive form, styled like the buttons beside it. */
+a.notif-action-btn { display: inline-flex; align-items: center; text-decoration: none; }

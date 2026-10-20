@@ -1,0 +1,148 @@
+/* ==================== SEARCH ==================== */
+
+.search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-wrapper svg {
+    position: absolute;
+    left: 14px;
+    width: 15px;
+    height: 15px;
+    color: #646c68;
+    pointer-events: none;
+}
+
+.search-wrapper input {
+    width: 100%;
+    border: 1px solid #dfe3e1;
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 12px 14px 12px 40px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search-wrapper input:focus {
+    outline: none;
+    border-color: #4caf50;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+
+/* ==================== MONTH STRIP ==================== */
+
+.section-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 14px;
+}
+
+.month-strip {
+    background: #ffffff;
+    border: 1px solid #ececec;
+    border-radius: 12px;
+    margin-bottom: 24px;
+}
+
+.month-strip.is-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+}
+
+/* ==================== FORECAST GRID ==================== */
+
+.forecast-grid {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 20px;
+    align-items: stretch; /* the order cards fill the chart's height instead of stopping short */
+}
+
+.forecast-grid > * {
+    min-width: 0; /* lets the chart shrink on a phone instead of widening the page */
+}
+
+/* ==================== INSIGHT CARDS ==================== */
+
+.insight-col {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.insight-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: #ffffff;
+    border: 1px solid #ececec;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.insight-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #444;
+    margin-bottom: 6px;
+}
+
+.insight-value {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.insight-value.muted {
+    font-size: 15px;
+    font-weight: 500;
+    color: #646c68;
+}
+
+.insight-desc {
+    font-size: 12px;
+    color: #6b736f;
+    line-height: 1.5;
+}
+
+/* ==================== RESPONSIVE ==================== */
+
+@media (max-width: 1024px) {
+    .forecast-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Item type and search sit on one line at the same height; the matches drop down under the search box. */
+.forecast-picker { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+.forecast-picker .search-wrapper { flex: 0 1 460px; min-width: 220px; }
+.forecast-picker select, .forecast-picker .search-wrapper input { height: 44px; border-radius: 10px; }
+.forecast-picker select { min-width: 220px; }
+.forecast-item-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+
+/* Seasonal / trend context next to an item's forecast (the forecast itself stays the Moving Average). */
+.seasonal-note { background: #fff8eb; border: 1px solid #f4dcae; border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; font-size: 13px; line-height: 1.55; color: #4a3a12; }
+.seasonal-note .insight-title { color: #8a5300; margin-bottom: 4px; }
+.seasonal-note p + p { margin-top: 4px; }
+
+
+/* Accuracy in plain words: a reliability tag, the sentence, then the raw figures small for the record. */
+.rel-tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.rel-very { background: #e4f4ea; color: #17693a; }
+.rel-good { background: #eaf3e6; color: #3d6b1f; }
+.rel-rough { background: #fff3dc; color: #8a5300; }
+.rel-judge { background: #fdecea; color: #b3261e; }
+.metric-raw { display: block; margin-top: 2px; font-size: 11.5px; color: #8a928e; }
+.metric-help { margin: -8px 0 24px; font-size: 13px; color: #4a524e; }
+.metric-help summary { cursor: pointer; color: #17693a; font-weight: 600; width: fit-content; }
+.metric-help p, .metric-help ul { margin-top: 8px; line-height: 1.55; }
+.metric-help ul { padding-left: 18px; }
+.metric-help li + li { margin-top: 4px; }
+.table-card .metric-help { margin: 12px 0 0; }

@@ -1,0 +1,33 @@
+/* ==================== EMPLOYEE INVENTORY TABLE ==================== */
+
+.employee-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.restock-btn {
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #163a26;
+    background: #ffffff;
+    color: #163a26;
+    font-size: 12.5px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.restock-btn:hover {
+    background: #eef7f0;
+}
+
+.restock-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* The product search doubles as a dropdown; it gets room for the product names it lists. */
+.staff-search input { width: 280px; }
+@media (max-width: 600px) { .staff-search, .staff-search input { width: 100%; } }

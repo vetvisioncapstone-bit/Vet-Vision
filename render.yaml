@@ -1,0 +1,30 @@
+# Render Blueprint: the Django API. The database is Supabase (paste its connection string as DATABASE_URL) and the
+# React app is a static site on any static host - see backend/README.md "Deploying".
+services:
+  - type: web
+    name: vet-vision-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt && python manage.py migrate --noinput
+    # One worker (with threads): rate-limit counters and the forecast cache live in process memory, so a second
+    # worker would count separately and double every limit. Add a shared cache before adding workers.
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 60
+    healthCheckPath: /api/health/
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_ALLOWED_HOSTS
+        value: vet-vision-api.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false   # e.g. https://vet-vision.pages.dev
+      - key: RECAPTCHA_SECRET_KEY
+        sync: false   # Google reCAPTCHA v2 secret key (the site key goes in the frontend build as VITE_RECAPTCHA_SITE_KEY)
+      - key: GEMINI_API_KEY
+        sync: false   # admin AI assistant (Google Gemini, free tier)
+      - key: DATABASE_URL
+        sync: false   # Supabase connection string
+      - key: PYTHON_VERSION
+        value: "3.10.11"

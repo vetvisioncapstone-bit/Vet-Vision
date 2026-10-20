@@ -1,0 +1,69 @@
+/* ==================== RESPONSIVE DESIGN ==================== */
+
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+    }
+
+    .left-section {
+        min-height: 40vh;
+        padding: 20px;
+        animation: slideInUp 0.8s ease-out;
+    }
+
+    .pet-image {
+        width: 260px;
+        height: 260px;
+    }
+
+    .tagline {
+        font-size: 16px;
+    }
+
+    .right-section {
+        min-height: 60vh;
+        padding: 30px 20px;
+        animation: slideInDown 0.8s ease-out;
+    }
+
+    .login-card {
+        max-width: 100%;
+    }
+
+    .paw-print {
+        font-size: 60px;
+    }
+}
+
+@media (max-width: 480px) {
+    /* The reCAPTCHA checkbox is a fixed 304px box; 20px sides leave it room on a 360-390px phone. */
+    .login-card {
+        padding: 28px 20px;
+    }
+}
+
+/* ==================== SCROLLBAR STYLING ==================== */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4caf50;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #2d7a4d;
+}
+
+/* Phones narrower than 360px: shrink the fixed-size reCAPTCHA checkbox so it does not spill out of the card. */
+@media (max-width: 359px) {
+    .recaptcha > div { transform: scale(0.86); transform-origin: 0 0; }
+}
