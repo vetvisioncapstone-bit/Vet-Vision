@@ -7,10 +7,20 @@ import { errorMessage } from '../../api/client'
 import '../../styles/employee/employee-sales.css'
 import { formatPrice, isExpired } from '../../utils/format'
 import OwnerPicker from '../../components/shared/OwnerPicker'
+import Clock from '../../components/shared/Clock'
 
 // ==================== HELPERS ====================
 // Sales are recorded through the API; the server validates stock and the
 // database deducts it, so nothing is decremented client-side.
+
+const FIELD_IDS = { product: 'saleProduct', quantity: 'saleQuantity', price: 'salePrice' }
+
+// The message under a field, linked to it with aria-describedby.
+function FieldError({ field, errors }) {
+  return errors[field] ? <p className="field-error" id={`${FIELD_IDS[field]}-error`}>{errors[field]}</p> : null
+}
+
+const invalid = (field, errors) => (errors[field] ? { 'aria-invalid': true, 'aria-describedby': `${FIELD_IDS[field]}-error` } : {})
 
 export default function Sales() {
   const { items: products, loading: inventoryLoading } = useInventory()
@@ -18,18 +28,13 @@ export default function Sales() {
   const { branch } = useEmployeeContext()
   const showToast = useToast()
 
-  const [now, setNow] = useState(() => new Date())
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30000)
-    return () => clearInterval(id)
-  }, [])
-
   const [cartItems, setCartItems] = useState([])
   const [selectedProductId, setSelectedProductId] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [price, setPrice] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [owner, setOwner] = useState(null) // { id, name } or null for a walk-in
+  const [errors, setErrors] = useState({}) // shown under the product / quantity / price fields
 
   const branchProducts = useMemo(() => products.filter(p => p.branch === branch), [products, branch])
   const inStockProducts = useMemo(() => branchProducts.filter(p => p.quantity > 0 && !isExpired(p)), [branchProducts]) // expired stock cannot be sold
@@ -63,6 +68,7 @@ export default function Sales() {
   // The admin's selling price for this branch, when set; still editable (discounts).
   function pickProduct(id) {
     setSelectedProductId(id)
+    setErrors({})
     const p = branchProducts.find(x => x.id === id)
     setPrice(p?.unitPrice != null ? String(p.unitPrice) : '')
   }
@@ -73,22 +79,16 @@ export default function Sales() {
     const qty = Number(quantity)
     const unitPrice = Number(price)
 
-    if (!product) {
-      showToast('Pick a product first.')
-      return
-    }
-    if (!qty || qty < 1) {
-      showToast('Enter a quantity of at least 1.')
-      return
-    }
-    if (price === '' || unitPrice < 0) {
-      showToast('Enter a unit price.')
-      return
-    }
-
-    const avail = getAvailableStock(product)
-    if (qty > avail) {
-      showToast(`Only ${avail} unit${avail === 1 ? '' : 's'} of "${product.name}" left.`)
+    const avail = product ? getAvailableStock(product) : 0
+    const errs = {}
+    if (!product) errs.product = 'Pick a product first.'
+    if (!qty || qty < 1) errs.quantity = 'Enter a quantity of at least 1.'
+    else if (product && qty > avail) errs.quantity = `Only ${avail} unit${avail === 1 ? '' : 's'} left.`
+    if (price === '' || unitPrice < 0) errs.price = 'Enter a unit price.'
+    setErrors(errs)
+    const first = ['product', 'quantity', 'price'].find((k) => errs[k])
+    if (first) {
+      document.getElementById(FIELD_IDS[first])?.focus()
       return
     }
 
@@ -132,11 +132,8 @@ export default function Sales() {
   return (
     <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
-        <h1>My Branch - {branch}</h1>
-        <div className="employee-datetime">
-          <p>{now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-          <p>{now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
-        </div>
+        <h1>Sales · {branch}</h1>
+        <Clock />
       </div>
 
       <div className="scope-banner">
@@ -156,9 +153,9 @@ export default function Sales() {
 
             <div className="sale-add-row">
               <div className="form-group">
-                <label className="form-label" htmlFor="src-pages-employee-sales-f1">Product</label>
+                <label className="form-label" htmlFor="saleProduct">Product</label>
                 <div className="form-select-wrapper">
-                  <select id="src-pages-employee-sales-f1"
+                  <select id="saleProduct" {...invalid('product', errors)}
                     className="form-input"
                     value={selectedProductId}
                     disabled={inStockProducts.length === 0}
@@ -171,28 +168,31 @@ export default function Sales() {
                   </select>
                   <svg className="form-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                 </div>
+                <FieldError field="product" errors={errors} />
               </div>
               <div className="form-group">
-                <label className="form-label" htmlFor="src-pages-employee-sales-f2">Quantity</label>
-                <input id="src-pages-employee-sales-f2"
+                <label className="form-label" htmlFor="saleQuantity">Quantity</label>
+                <input id="saleQuantity" {...invalid('quantity', errors)}
                   type="number" className="form-input" min="1" step="1"
                   value={quantity} max={available === null ? undefined : available}
-                  onChange={(e) => setQuantity(e.target.value)}
+                  onChange={(e) => { setQuantity(e.target.value); setErrors({}) }}
                 />
+                <FieldError field="quantity" errors={errors} />
               </div>
               <div className="form-group">
-                <label className="form-label" htmlFor="src-pages-employee-sales-f3">Unit price (₱)</label>
-                <input id="src-pages-employee-sales-f3"
-                  type="number" className="form-input" min="0" step="0.01" placeholder="0.00"
-                  value={price} onChange={(e) => setPrice(e.target.value)}
+                <label className="form-label" htmlFor="salePrice">Unit price (₱)</label>
+                <input id="salePrice" {...invalid('price', errors)}
+                  type="number" inputMode="decimal" className="form-input" min="0" step="0.01" placeholder="0.00"
+                  value={price} onChange={(e) => { setPrice(e.target.value); setErrors({}) }}
                 />
+                <FieldError field="price" errors={errors} />
               </div>
               <button type="button" className="new-btn" disabled={inStockProducts.length === 0} onClick={handleAddToCart}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                <span>Add</span>
+                <span>Add to cart</span>
               </button>
             </div>
-            <p className={`form-hint${selectedProduct && available <= 0 ? ' is-warning' : ''}`}>
+            <p className={`form-hint${selectedProduct && available <= 0 ? ' is-warning' : ''}`} aria-live="polite">
               {selectedProduct
                 ? (available <= 0
                   ? `No more "${selectedProduct.name}" left to sell.`
@@ -215,7 +215,7 @@ export default function Sales() {
                   {cartItems.length === 0 ? (
                     <tr><td colSpan="5" className="empty-state">{inventoryLoading ? 'Loading…' : 'No items added yet.'}</td></tr>
                   ) : cartItems.map((item, index) => (
-                    <tr key={index}>
+                    <tr key={item.inventoryId}>
                       <td>{item.name}</td>
                       <td>{item.quantity}</td>
                       <td>{formatPrice(item.price)}</td>
@@ -255,8 +255,8 @@ export default function Sales() {
                     <span>{sale.customerName || 'Walk-in'}</span>
                     <span className="recent-sale-total">{formatPrice(sale.total)}</span>
                   </div>
-                  <p className="recent-sale-items">{sale.items.map(i => `${i.name} x${i.quantity}`).join(', ')}</p>
-                  <p className="recent-sale-time">{new Date(sale.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}{sale.staffName ? ` · ${sale.staffName}` : ''}</p>
+                  <p className="recent-sale-items">{sale.items.map(i => `${i.name} ×${i.quantity}`).join(', ')}</p>
+                  <p className="recent-sale-time">{new Date(sale.createdAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}{sale.staffName ? ` · ${sale.staffName}` : ''}</p>
                 </li>
               ))}
             </ul>

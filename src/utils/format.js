@@ -14,6 +14,14 @@ export function todayIso() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// Whole years from a 'YYYY-MM-DD' birth date to today (0 for pets under a year); '' when there is no date.
+export function ageFromDob(dob, today = new Date()) {
+  if (!dob) return ''
+  const [y, m, d] = dob.split('-').map(Number)
+  const years = today.getFullYear() - y - (today.getMonth() + 1 < m || (today.getMonth() + 1 === m && today.getDate() < d) ? 1 : 0)
+  return Math.max(0, years)
+}
+
 export function formatPrice(amount) {
   return `₱${Number(amount || 0).toFixed(2)}`
 }

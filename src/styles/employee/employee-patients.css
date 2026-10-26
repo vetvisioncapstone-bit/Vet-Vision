@@ -192,3 +192,6 @@
 .action-col {
     width: 32px;
 }
+
+/* A status pill sits after the pet name, only when it is not Active. */
+.patient-row .status-pill { margin-left: 8px; }

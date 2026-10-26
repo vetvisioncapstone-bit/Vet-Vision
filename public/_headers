@@ -1,0 +1,8 @@
+# Security headers for the static host (Cloudflare Pages / Netlify read this file from the build output).
+# reCAPTCHA v2 needs its script and frame origins; uploaded pictures are data: URLs; CSV downloads use blob: URLs.
+# connect-src allows any https origin because the API host is not chosen yet: narrow it to that origin after deploying.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; frame-src https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()

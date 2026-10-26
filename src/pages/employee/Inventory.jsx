@@ -11,6 +11,7 @@ import Dialog from '../../components/shared/Dialog'
 import Pagination from '../../components/shared/Pagination'
 import SearchPicker from '../../components/shared/SearchPicker'
 import CategoryFilter from '../../components/shared/CategoryFilter'
+import Clock from '../../components/shared/Clock'
 import ReceiveStockDialog from '../../components/shared/ReceiveStockDialog'
 import { useConfirm } from '../../components/shared/ConfirmDialog'
 import { ActionsGuide, QuantityChangeHint, RowActions } from '../../components/shared/InventoryActions'
@@ -32,12 +33,6 @@ export default function Inventory() {
   const showToast = useToast()
   const { branch } = useEmployeeContext()
   const { raise } = useApprovalRequests()
-
-  const [now, setNow] = useState(() => new Date())
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30000)
-    return () => clearInterval(id)
-  }, [])
 
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategories, setActiveCategories] = useState(new Set())
@@ -159,10 +154,7 @@ export default function Inventory() {
     <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
         <h1>Inventory · {branch}</h1>
-        <div className="employee-datetime">
-          <p>{now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-          <p>{now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
-        </div>
+        <Clock />
       </div>
 
       <div className="scope-banner">
@@ -234,8 +226,8 @@ export default function Inventory() {
                     </tr>
                   )}
                   <tr>
-                    <td className="product-cell">{p.name}<small className="cell-sub">{p.category.toLowerCase()}</small></td>
-                    <td><span className="branch-count"><span><b>{p.quantity}</b> <small title="The item shows as Low stock at or below this count">· reorder at {p.reorderPoint}</small></span></span></td>
+                    <td className="product-cell">{p.name}<small className="cell-sub">{p.category}</small></td>
+                    <td><span className="branch-count"><span><b>{p.quantity}</b> <small>· reorder at {p.reorderPoint}</small></span></span></td>
                     <td><span className={`status-pill ${status.cls}`}>{status.label}</span></td>
                     <td>
                       <RowActions product={p} needsStock={status.rank > 0 && status.rank < 3} onRequest={handleRestockRequest}
@@ -268,7 +260,7 @@ export default function Inventory() {
                   {form.photo
                     ? <img className="photo-preview" src={form.photo} alt="Product photo preview" />
                     : <div className="photo-upload-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg></div>}
-                  <input type="file" ref={fileInputRef} accept="image/*" hidden onChange={handlePhotoChange} />
+                  <input type="file" ref={fileInputRef} accept="image/*" className="sr-only" aria-label="Product photo" onChange={handlePhotoChange} />
                 </label>
               </div>
 
@@ -286,8 +278,8 @@ export default function Inventory() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label" htmlFor="src-pages-employee-inventory-f3">Branch</label>
-                  <input id="src-pages-employee-inventory-f3" type="text" className="form-input" value={branch} disabled />
+                  <span className="form-label">Branch</span>
+                  <p className="form-static">{branch}<small>Staff add products to their own branch.</small></p>
                 </div>
 
                 <div className="form-row">

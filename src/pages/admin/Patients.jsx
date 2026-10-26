@@ -10,7 +10,7 @@ import AvailedItemsPicker, { toPayload } from '../../components/shared/AvailedIt
 import { useToast } from '../../components/shared/Toast'
 import { errorMessage } from '../../api/client'
 import '../../styles/admin/patients.css'
-import { formatDate, todayIso, formatPrice, dash, getStatusClass, isImageDataUrl } from '../../utils/format'
+import { ageFromDob, formatDate, todayIso, formatPrice, dash, getStatusClass, isImageDataUrl } from '../../utils/format'
 
 import Dialog from '../../components/shared/Dialog'
 import Pagination from '../../components/shared/Pagination'
@@ -567,7 +567,7 @@ export default function Patients() {
               ) : patients.length === 0 ? (
                 <tr><td colSpan="8" className="empty-state">No patients match your search or filter.</td></tr>
               ) : pagePatients.map(p => (
-                <tr className="patient-row" key={p.id} tabIndex={0} onKeyDown={onActivate(() => openPatientDetailModal(p))} onClick={() => openPatientDetailModal(p)}>
+                <tr className="patient-row" key={p.id} tabIndex={0} aria-label={`Open ${p.petName}'s record`} onKeyDown={onActivate(() => openPatientDetailModal(p))} onClick={() => openPatientDetailModal(p)}>
                   <td>
                     {dash(p.petName)}
                     {/* Nearly every pet is Active, so only a status worth noticing gets a pill. */}
@@ -682,12 +682,12 @@ export default function Patients() {
                   </div>
                   <div className="form-row">
                     <div className="form-group">
-                      <label className="form-label" htmlFor="petDob">Date of Birth <span className="required">*</span></label>
-                      <input type="date" id="petDob" className="form-input" required value={patientForm.petDob} onChange={(e) => updatePatientField('petDob', e.target.value)} />
+                      <label className="form-label" htmlFor="petDob">Date of birth <span className="required">*</span></label>
+                      <input type="date" id="petDob" className="form-input" required value={patientForm.petDob} onChange={(e) => { updatePatientField('petDob', e.target.value); updatePatientField('petAge', ageFromDob(e.target.value)) }} />
                     </div>
                     <div className="form-group">
-                      <label className="form-label" htmlFor="petAge">Age <span className="required">*</span></label>
-                      <input type="number" id="petAge" className="form-input" min="0" required value={patientForm.petAge} onChange={(e) => updatePatientField('petAge', e.target.value)} />
+                      <label className="form-label" htmlFor="petAge">Age in years <span className="optional">(from the birth date)</span></label>
+                      <input type="number" id="petAge" className="form-input" min="0" value={patientForm.petAge} onChange={(e) => updatePatientField('petAge', e.target.value)} />
                     </div>
                   </div>
                   <div className="form-row">

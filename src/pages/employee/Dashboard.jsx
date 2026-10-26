@@ -4,6 +4,8 @@ import { usePatients } from '../../hooks/usePatients'
 import { useInventory } from '../../hooks/useInventory'
 import { useSales } from '../../hooks/useSales'
 import { formatPrice } from '../../utils/format'
+import { getStatus } from '../../utils/stockOrder'
+import Clock from '../../components/shared/Clock'
 
 // ==================== HELPERS ====================
 // Read-only summary computed from the API-backed hooks.
@@ -27,15 +29,13 @@ function SalesTrendChart({ branch }) {
   const containerRef = useRef(null)
   const [width, setWidth] = useState(280)
 
+  // Follows the card's own width, so opening or closing the sidebar resizes the chart too.
   useEffect(() => {
-    function measure() {
-      if (containerRef.current) {
-        setWidth(Math.max(Math.round(containerRef.current.getBoundingClientRect().width), 280))
-      }
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.max(Math.round(entry.contentRect.width), 280)))
+    ro.observe(el)
+    return () => ro.disconnect()
   }, [])
 
   const branchSales = useMemo(() => sales.filter(s => s.branch === branch), [sales, branch])
@@ -45,7 +45,7 @@ function SalesTrendChart({ branch }) {
     for (let i = 6; i >= 0; i--) {
       const date = new Date()
       date.setDate(date.getDate() - i)
-      days.push({ iso: toIsoDate(date), label: date.toLocaleDateString('en-US', { weekday: 'short' }) })
+      days.push({ iso: toIsoDate(date), label: date.toLocaleDateString('en-PH', { weekday: 'short' }) })
     }
 
     const totalsByDay = days.map(day =>
@@ -98,7 +98,8 @@ function SalesTrendChart({ branch }) {
         <span className="chart-total">{formatPrice(chart.weekTotal)}</span>
       </div>
       <div className="line-chart" ref={containerRef}>
-        <svg className="line-chart-svg" viewBox={`0 0 ${chart.width} ${chart.height}`}>
+        <svg className="line-chart-svg" viewBox={`0 0 ${chart.width} ${chart.height}`} role="img"
+          aria-label={`Sales for the last 7 days: ${formatPrice(chart.weekTotal)} in total`}>
           <line className="line-chart-gridline" x1={chart.padLeft} y1={chart.baselineY} x2={chart.width - chart.padRight} y2={chart.baselineY}></line>
           <path className="line-chart-area" d={chart.areaPath}></path>
           <path className="line-chart-path" d={chart.linePath}></path>
@@ -128,29 +129,20 @@ export default function Dashboard() {
   const { stats: patientStats } = usePatients({ page: 1, pageSize: 1 })
   const { items: products } = useInventory()
 
-  // Ported from startEmployeeClock() - ticks every 30s, same as the
-  // original's setInterval(tick, 30000).
-  const [now, setNow] = useState(() => new Date())
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30000)
-    return () => clearInterval(id)
-  }, [])
 
   const branchProducts = useMemo(() => products.filter(p => p.branch === branch), [products, branch])
 
   const totalPatients = patientStats?.total ?? 0
   const followUps = patientStats?.followUpNeeded ?? 0
-  const lowStock = branchProducts.filter(p => p.quantity > 0 && p.quantity <= p.reorderPoint).length
-  const outOfStock = branchProducts.filter(p => p.quantity <= 0).length
+  // Same rules as the Inventory page, so the two counts always match.
+  const lowStock = branchProducts.filter(p => getStatus(p).rank === 2).length
+  const outOfStock = branchProducts.filter(p => getStatus(p).rank === 1).length
 
   return (
     <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
-        <h1>My Branch - {branch}</h1>
-        <div className="employee-datetime">
-          <p>{now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-          <p>{now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
-        </div>
+        <h1>Dashboard · {branch}</h1>
+        <Clock />
       </div>
 
       <p className="dashboard-greeting">Welcome back, {name}.</p>

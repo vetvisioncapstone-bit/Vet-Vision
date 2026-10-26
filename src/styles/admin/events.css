@@ -67,9 +67,9 @@
 
 .composer-input:focus {
     outline: none;
-    border-color: #4caf50;
+    border-color: #17693a;
     background: #ffffff;
-    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+    box-shadow: 0 0 0 3px rgba(23, 105, 58, 0.35);
 }
 
 .composer-photo-wrap {
@@ -254,6 +254,7 @@
 .post-photo {
     display: block;
     width: 100%;
+    aspect-ratio: 4 / 3; /* space is held before the picture loads, so the feed does not jump */
     max-height: 420px;
     object-fit: cover;
     border-radius: 10px;

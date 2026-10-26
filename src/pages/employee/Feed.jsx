@@ -15,16 +15,16 @@ function toIsoDate(date) {
 function formatDateLabel(isoString) {
   const [year, month, day] = isoString.split('-').map(Number)
   const date = new Date(year, month - 1, day)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function formatTimestamp(date) {
   const d = date instanceof Date ? date : new Date(date)
-  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return d.toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
 function Avatar({ name, photo }) {
-  if (photo) return <img src={photo} alt={name} className="avatar-photo-img" />
+  if (photo) return <img src={photo} alt="" className="avatar-photo-img" /> // the name is printed beside it
   return getInitialsFromName(name)
 }
 
@@ -87,7 +87,7 @@ export default function Feed() {
   return (
     <main id="main-content" tabIndex={-1} className="content">
       <div className="content-header">
-        <h1>My Branch - {branch}</h1>
+        <h1>Feed · {branch}</h1>
       </div>
 
       <div className="events-layout">
@@ -96,7 +96,7 @@ export default function Feed() {
           <div className={`table-card clinic-status-card${isClosed ? ' is-closed' : ''}`}>
             <span className="clinic-status-dot"></span>
             <div className="clinic-status-text">
-              <p className="clinic-status-label">{isClosed ? 'Clinic is Closed Today' : 'Clinic is Open Today'}</p>
+              <p className="clinic-status-label">{isClosed ? 'Clinic is closed today' : 'Clinic is open today'}</p>
               <p className="clinic-status-sub">{isClosed ? 'Marked unavailable by the admin for today.' : 'No closures scheduled for today.'}</p>
             </div>
           </div>
@@ -116,7 +116,7 @@ export default function Feed() {
                   </div>
                 </div>
                 {post.text && <p className="post-text">{post.text}</p>}
-                {post.photo && <img className="post-photo" src={post.photo} alt="Announcement photo" />}
+                {post.photo && <img className="post-photo" src={post.photo} alt="Announcement photo" loading="lazy" decoding="async" />}
               </div>
             ))}
           </div>
@@ -129,7 +129,7 @@ export default function Feed() {
               <button type="button" className="cal-nav-btn" aria-label="Previous month" onClick={goPrevMonth}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
               </button>
-              <h2>{calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h2>
+              <h2>{calendarViewDate.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })}</h2>
               <button type="button" className="cal-nav-btn" aria-label="Next month" onClick={goNextMonth}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
               </button>
@@ -150,12 +150,13 @@ export default function Feed() {
                 <div className="cal-cell" key={cell.key}>
                   <span className={`cal-day-btn${cell.isToday ? ' is-today' : ''}${cell.state === 'unavailable' ? ' is-unavailable' : ''}${cell.state === 'available' ? ' is-available' : ''}`}>
                     {cell.day}
+                    {cell.state && <span className="sr-only"> {cell.state}</span>}
                   </span>
                 </div>
               ))}
             </div>
 
-            <p className="availability-hint">View-only - ask the admin to change a date's availability.</p>
+            <p className="availability-hint">View-only — ask the admin to change a date's availability.</p>
           </div>
 
           <div className="table-card closures-card">

@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { dash, formatDate, formatPrice, getStatusClass, isImageDataUrl, todayIso } from './format'
+import { ageFromDob, dash, formatDate, formatPrice, getStatusClass, isImageDataUrl, todayIso } from './format'
 
 describe('format helpers', () => {
   it('formats an ISO date without shifting the day', () => {
     expect(formatDate('2026-09-24')).toBe('Sep 24, 2026')
     expect(formatDate('2026-01-01')).toBe('Jan 1, 2026')
     expect(formatDate('')).toBe('—')
+  })
+
+  it('works out a pet age from the birth date', () => {
+    const today = new Date(2026, 9, 26) // Oct 26, 2026
+    expect(ageFromDob('2020-10-26', today)).toBe(6)
+    expect(ageFromDob('2020-10-27', today)).toBe(5)
+    expect(ageFromDob('2026-05-01', today)).toBe(0)
+    expect(ageFromDob('', today)).toBe('')
   })
 
   it('returns today as YYYY-MM-DD', () => {
