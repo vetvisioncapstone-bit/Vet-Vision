@@ -18,7 +18,7 @@ from clinic.models import Customer
 from core import recaptcha
 from core.pagination import paginate, wants_page
 from core.ids import branch_letter, next_id
-from core.permissions import IsAdmin, branch_by_town
+from core.permissions import IsAdmin, abilities, branch_by_town
 
 from .audit import client_ip, is_locked, record
 from .models import AuditLog, User
@@ -39,6 +39,7 @@ def user_payload(user):
         "branch": branch,
         "staffId": user.staff_id,
         "position": user.staff.role if user.staff_id else None,
+        "abilities": sorted(abilities(user)),  # what this position may do (core/permissions.py); the pages hide the rest
         "customerId": user.customer_id,
     }
 

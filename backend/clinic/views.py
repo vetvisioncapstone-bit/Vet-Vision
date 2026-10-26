@@ -19,7 +19,7 @@ from accounts.views import revoke_sessions
 from core.ids import branch_letter, next_id
 from core.pagination import paginate, wants_page
 from core.validators import data_url
-from core.permissions import IsAdmin, IsClinicStaff, IsCustomer, branch_by_town, scope_branch
+from core.permissions import IsAdmin, IsClinicStaff, IsCustomer, branch_by_town, require, scope_branch
 
 from inventory.models import Inventory, Product, Service, ServiceBranchPrice, ServiceProductUsage
 from sales.models import Sale, ServiceDetail, ServiceTransaction
@@ -233,6 +233,7 @@ class PatientList(APIView):
 
     @transaction.atomic
     def post(self, request):
+        require(request.user, "patients.edit", "Your position cannot register patients.")
         s = PatientInput(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
@@ -269,6 +270,7 @@ class PatientDetail(APIView):
 
     @transaction.atomic
     def put(self, request, pk):
+        require(request.user, "patients.edit", "Your position cannot edit patient details.")
         pet = self._get(request, pk)
         s = PatientInput(data=request.data)
         s.is_valid(raise_exception=True)
@@ -422,12 +424,17 @@ class ConsultationCreate(APIView):
 
     @transaction.atomic
     def post(self, request, pk):
+        require(request.user, "consult", "Your position cannot log consultations.")
         pet = _pets(request).filter(pk=pk).first()
         if pet is None:
             raise NotFound()
         s = ConsultationInput(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
+        if d.get("prescription") or d.get("labResults"):
+            require(request.user, "clinical", "Only a veterinarian can add prescriptions or laboratory results.")
+        if any(i["type"] == "Product" for i in d.get("availedItems", [])):
+            require(request.user, "sales", "Your position can bill services only, not products.")
         follow_up = d.get("followUp", False)
         note = (d.get("followUpNote") or "").strip() if follow_up else ""
         if follow_up and not note:

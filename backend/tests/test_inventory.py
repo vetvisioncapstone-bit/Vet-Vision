@@ -10,7 +10,7 @@ def test_staff_only_sees_and_creates_in_own_branch(staff_ibaan, stocked):
     c = client_for(staff_ibaan)
     rows = c.get("/api/inventory/").data
     assert [r["branch"] for r in rows] == ["Ibaan"]
-    created = c.post("/api/inventory/", {**NEW, "branch": "San Jose"})
+    created = c.post("/api/inventory/", {**NEW, "quantity": 0, "branch": "San Jose"})  # staff start at 0, then Receive
     assert created.status_code == 201 and created.data["branch"] == "Ibaan"  # branch input is ignored for staff
 
 

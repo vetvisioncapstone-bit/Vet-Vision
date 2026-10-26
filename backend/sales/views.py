@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from core.pagination import paginate, wants_page
 from core.ids import branch_letter, ledger_id, next_id
 from accounts.audit import record
-from core.permissions import IsClinicStaff, branch_by_town, scope_branch
+from core.permissions import IsClinicStaff, branch_by_town, require, scope_branch
 from clinic.models import Customer
 from inventory.models import Inventory, InventoryTransaction, ProductBranchPrice
 
@@ -156,6 +156,7 @@ class SaleList(APIView):
 
     @transaction.atomic
     def post(self, request):
+        require(request.user, "sales", "Your position cannot record sales.")
         s = SaleInput(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data

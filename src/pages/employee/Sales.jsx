@@ -8,6 +8,7 @@ import '../../styles/employee/employee-sales.css'
 import { formatPrice, isExpired } from '../../utils/format'
 import OwnerPicker from '../../components/shared/OwnerPicker'
 import Clock from '../../components/shared/Clock'
+import SearchPicker from '../../components/shared/SearchPicker'
 
 // ==================== HELPERS ====================
 // Sales are recorded through the API; the server validates stock and the
@@ -30,6 +31,7 @@ export default function Sales() {
 
   const [cartItems, setCartItems] = useState([])
   const [selectedProductId, setSelectedProductId] = useState('')
+  const [productQuery, setProductQuery] = useState('') // text in the product search box
   const [quantity, setQuantity] = useState(1)
   const [price, setPrice] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -61,6 +63,7 @@ export default function Sales() {
   useEffect(() => {
     if (selectedProductId && !inStockProducts.some(p => String(p.id) === selectedProductId)) {
       setSelectedProductId('')
+      setProductQuery('')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inStockProducts])
@@ -154,20 +157,13 @@ export default function Sales() {
             <div className="sale-add-row">
               <div className="form-group">
                 <label className="form-label" htmlFor="saleProduct">Product</label>
-                <div className="form-select-wrapper">
-                  <select id="saleProduct" {...invalid('product', errors)}
-                    className="form-input"
-                    value={selectedProductId}
-                    disabled={inStockProducts.length === 0}
-                    onChange={(e) => pickProduct(e.target.value)}
-                  >
-                    <option value="" disabled hidden>{inStockProducts.length === 0 ? 'No products in stock' : 'Select a product'}</option>
-                    {inStockProducts.map(p => (
-                      <option value={p.id} key={p.id}>{p.name} ({p.quantity} in stock)</option>
-                    ))}
-                  </select>
-                  <svg className="form-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                </div>
+                {/* Type to search, or open the arrow to browse by category. Items already all in the cart drop off the list. */}
+                <SearchPicker id="saleProductList" items={inStockProducts.filter(p => getAvailableStock(p) > 0)} value={productQuery}
+                  onChange={(v) => { setProductQuery(v); setSelectedProductId(''); setErrors({}) }}
+                  onPick={(p) => { pickProduct(p.id); setProductQuery(p.name) }}
+                  currentId={selectedProductId} noun="products" meta={(p) => `${getAvailableStock(p)} in stock`} label="Product"
+                  placeholder={inStockProducts.length === 0 ? 'No products in stock' : 'Search or pick a product'}
+                  inputProps={{ id: 'saleProduct', className: 'form-input', disabled: inStockProducts.length === 0, ...invalid('product', errors) }} />
                 <FieldError field="product" errors={errors} />
               </div>
               <div className="form-group">
@@ -175,7 +171,12 @@ export default function Sales() {
                 <input id="saleQuantity" {...invalid('quantity', errors)}
                   type="number" className="form-input" min="1" step="1"
                   value={quantity} max={available === null ? undefined : available}
-                  onChange={(e) => { setQuantity(e.target.value); setErrors({}) }}
+                  onChange={(e) => {
+                    // Never more than the branch has on the shelf (minus what is already in the cart).
+                    const v = e.target.value
+                    setQuantity(available !== null && Number(v) > available ? String(Math.max(available, 0)) : v)
+                    setErrors({})
+                  }}
                 />
                 <FieldError field="quantity" errors={errors} />
               </div>
@@ -187,7 +188,7 @@ export default function Sales() {
                 />
                 <FieldError field="price" errors={errors} />
               </div>
-              <button type="button" className="new-btn" disabled={inStockProducts.length === 0} onClick={handleAddToCart}>
+              <button type="button" className="new-btn" disabled={inStockProducts.length === 0 || (selectedProduct && available <= 0)} onClick={handleAddToCart}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                 <span>Add to cart</span>
               </button>
@@ -196,7 +197,7 @@ export default function Sales() {
               {selectedProduct
                 ? (available <= 0
                   ? `No more "${selectedProduct.name}" left to sell.`
-                  : `${available} unit${available === 1 ? '' : 's'} available.`)
+                  : `${available} unit${available === 1 ? '' : 's'} in stock: the most you can add.`)
                 : ''}
             </p>
 

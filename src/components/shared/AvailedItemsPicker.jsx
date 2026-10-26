@@ -42,11 +42,12 @@ export function weightProblem(serviceName, weight) {
   return null
 }
 
-export default function AvailedItemsPicker({ branch, items, onChange, weight }) {
+// `servicesOnly`: for positions that bill services but not products (products handed out are a sale).
+export default function AvailedItemsPicker({ branch, items, onChange, weight, servicesOnly = false }) {
   const showToast = useToast()
   const { data: catalog } = useServiceCatalog()
   const { items: stock } = useInventory()
-  const [type, setType] = useState('')
+  const [type, setType] = useState(servicesOnly ? 'Service' : '')
   const [id, setId] = useState('')
   const [query, setQuery] = useState('') // what is typed in the item box
   const [price, setPrice] = useState('')
@@ -104,7 +105,7 @@ export default function AvailedItemsPicker({ branch, items, onChange, weight }) 
             <select id="availedType" className="form-input" value={type} onChange={(e) => { setType(e.target.value); setId(''); setQuery(''); setPrice('') }}>
               <option value="" disabled hidden>Select type</option>
               <option value="Service">Service</option>
-              <option value="Product">Product</option>
+              {!servicesOnly && <option value="Product">Product</option>}
             </select>
             <svg className="form-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
           </div>

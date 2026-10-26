@@ -18,12 +18,13 @@ import { onActivate } from '../../utils/a11y'
 import { useConfirm } from '../../components/shared/ConfirmDialog'
 import WeightInput, { withKg } from '../../components/shared/WeightInput'
 import Clock from '../../components/shared/Clock'
+import UploadList from '../../components/shared/UploadList'
+import { PrescriptionFields, newPrescription } from '../admin/Prescription'
 // ==================== HELPERS ====================
-// Ported from employee-patients.js - uses the same API-backed patients as the
-// admin Patients page; the server scopes them to this employee's own branch. The
-// consultation form is simpler than the admin's (no blood-test/waiver upload, no
-// follow-up flagging, no print) but bills services and products the same way, so
-// visits recorded at the counter count on the dashboard.
+// The same API-backed patients as the admin Patients page; the server scopes them to this employee's own branch.
+// What shows depends on the position (`can`, core/permissions.py): front desk registers and edits patients, vets and
+// assistants log visits, only vets add prescriptions and laboratory results, and positions without sales bill
+// services only. The form has no follow-up flagging or printing; visits still count on the dashboard.
 
 const PAGE_SIZE = 50
 
@@ -32,12 +33,12 @@ const EMPTY_PATIENT_FORM = {
   petName: '', petSpecie: '', petBreed: '', petSex: '', petDob: '', petAge: '', petMarking: ''
 }
 
-const EMPTY_CONSULT_FORM = { date: '', weight: '', notes: '', remarks: '', availedItems: [] }
+const EMPTY_CONSULT_FORM = { date: '', weight: '', notes: '', remarks: '', availedItems: [], prescription: null, labResults: [], waivers: [] }
 
 export default function Patients() {
   const [ask, confirmBox] = useConfirm() // styled "are you sure?" box for deletes
   const showToast = useToast()
-  const { branch } = useEmployeeContext()
+  const { branch, can } = useEmployeeContext()
   const { raise } = useApprovalRequests()
   const [saving, setSaving] = useState(false)
   const [page, setPage] = useState(1)
@@ -182,7 +183,10 @@ export default function Patients() {
         weight: withKg(consultForm.weight),
         notes: consultForm.notes.trim(),
         remarks: consultForm.remarks.trim(),
-        availedItems: toPayload(consultForm.availedItems)
+        availedItems: toPayload(consultForm.availedItems),
+        labResults: consultForm.labResults.map(({ name, dataUrl }) => ({ name, image: dataUrl })),
+        waivers: consultForm.waivers.map(({ name, dataUrl }) => ({ name, image: dataUrl })),
+        prescription: consultForm.prescription && { ...consultForm.prescription, nextAppointment: consultForm.prescription.nextAppointment || null }
       })
       clearConsultation()
       showToast('Consultation logged.')
@@ -242,10 +246,12 @@ export default function Patients() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
               <input type="text" aria-label="Search patients or owners" autoComplete="off" placeholder="Search patient or owner" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
             </div>
-            <button className="new-btn" onClick={openAddModal}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-              <span>New patient</span>
-            </button>
+            {can('patients.edit') && (
+              <button className="new-btn" onClick={openAddModal}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                <span>New patient</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -396,16 +402,19 @@ export default function Patients() {
                 <p className="detail-info-sub">Pet: {dash(detailPatient.petSpecie)} — {dash(detailPatient.petBreed)}</p>
                 <span className={`status-pill ${getStatusClass(detailPatient.status)}`}>{detailPatient.status}</span>
                 <div className="detail-action-btns">
-                  <button type="button" className="detail-edit-btn" onClick={() => { closeDetailModal(); openEditModal(detailPatient) }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" /></svg>
-                    <span>Edit info</span>
-                  </button>
+                  {can('patients.edit') && (
+                    <button type="button" className="detail-edit-btn" onClick={() => { closeDetailModal(); openEditModal(detailPatient) }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" /></svg>
+                      <span>Edit info</span>
+                    </button>
+                  )}
                   <button type="button" className="row-action-btn delete" aria-label="Request deletion" onClick={() => handleDeleteRequest(detailPatient)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                   </button>
                 </div>
               </div>
 
+              {can('consult') && <>
               <h3 className="detail-history-title">New consultation</h3>
               <form className="consultation-form" onSubmit={handleConsultationSubmit}>
                 <div className="form-row">
@@ -429,13 +438,34 @@ export default function Patients() {
                 <div className="form-group" role="group" aria-labelledby="staffConsultItems">
                   <span className="form-label" id="staffConsultItems">Services / products</span>
                   <AvailedItemsPicker key={pickerKey} branch={detailPatient.branch} weight={consultForm.weight} items={consultForm.availedItems}
-                    onChange={(availedItems) => setConsultForm(f => ({ ...f, availedItems }))} />
+                    servicesOnly={!can('sales')} onChange={(availedItems) => setConsultForm(f => ({ ...f, availedItems }))} />
                 </div>
+                {can('clinical') && <>
+                  <div className="form-group">
+                    <span className="form-label">Prescription</span>
+                    {consultForm.prescription
+                      ? <PrescriptionFields value={consultForm.prescription} onChange={(prescription) => setConsultForm(f => ({ ...f, prescription }))}
+                          onRemove={() => setConsultForm(f => ({ ...f, prescription: null }))} />
+                      : (
+                        <div className="file-upload-row">
+                          <button type="button" className="file-upload-btn" onClick={() => setConsultForm(f => ({ ...f, prescription: newPrescription() }))}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" /><path d="m8.5 8.5 7 7" /></svg>
+                            <span>Write prescription</span>
+                          </button>
+                        </div>
+                      )}
+                  </div>
+                  <UploadList id="staffLabResults" label="Laboratory test results" accept="image/*" noun="laboratory pictures"
+                    items={consultForm.labResults} onChange={(labResults) => setConsultForm(f => ({ ...f, labResults }))} onTooMany={showToast} />
+                </>}
+                <UploadList id="staffWaivers" label="Signed waiver" accept="image/*,.pdf" noun="waivers"
+                  items={consultForm.waivers} onChange={(waivers) => setConsultForm(f => ({ ...f, waivers }))} onTooMany={showToast} />
                 <div className="consultation-form-actions">
                   <button type="button" className="patient-cancel-btn" onClick={() => { clearConsultation(); showToast('Consultation entry cleared.') }}>Cancel</button>
                   <button type="submit" className="patient-save-btn" disabled={saving}>Save consultation</button>
                 </div>
               </form>
+              </>}
 
               <h3 className="detail-history-title">History</h3>
               <div className="consultation-history">
@@ -451,6 +481,12 @@ export default function Patients() {
                     </div>
                     <p className="consultation-field">{c.notes}</p>
                     {c.remarks && <p className="consultation-remarks">{c.remarks}</p>}
+                    {c.prescription && (
+                      <div className="consultation-rx">
+                        <p className="consultation-field-label">Prescription{c.diagnosis ? ` · ${c.diagnosis}` : ''}</p>
+                        <p className="consultation-rx-text">{c.prescription.rx}</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -5,6 +5,7 @@ import RequireRole from './components/shared/RequireRole'
 import ErrorBoundary from './components/shared/ErrorBoundary'
 import AdminLayout from './components/shared/AdminLayout'
 import EmployeeLayout from './components/shared/EmployeeLayout'
+import { useEmployeeContext } from './hooks/useEmployeeContext'
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
 const AdminSalesAnalytics = lazy(() => import('./pages/admin/SalesAnalytics'))
 const AdminInventory = lazy(() => import('./pages/admin/Inventory'))
@@ -52,7 +53,7 @@ function App() {
           <Route path="feed" element={<EmployeeFeed />} />
           <Route path="inventory" element={<EmployeeInventory />} />
           <Route path="patients" element={<EmployeePatients />} />
-          <Route path="sales" element={<EmployeeSales />} />
+          <Route path="sales" element={<NeedsAbility ability="sales"><EmployeeSales /></NeedsAbility>} />
         </Route>
 
         <Route path="/customer/*" element={<RequireRole role="customer"><CustomerApp /></RequireRole>} />
@@ -66,3 +67,9 @@ function App() {
 }
 
 export default App
+
+// A staff page the signed-in position may not use sends it back to the dashboard (the API refuses it anyway).
+function NeedsAbility({ ability, children }) {
+  const { can } = useEmployeeContext()
+  return can(ability) ? children : <Navigate to="/employee/dashboard" replace />
+}

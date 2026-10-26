@@ -24,8 +24,8 @@ def admin(db):
     return User.objects.create_superuser("owner@ecovet.ph", PASSWORD, name="Owner Admin")
 
 
-def make_staff(branch, staff_id, email):
-    st = Staff.objects.create(staff_id=staff_id, branch=branch, staff_name=f"Staff {staff_id}", role="Receptionist",
+def make_staff(branch, staff_id, email, position="Veterinarian"):
+    st = Staff.objects.create(staff_id=staff_id, branch=branch, staff_name=f"Staff {staff_id}", role=position,
                               email=email, is_active=True)
     return User.objects.create_user(email, PASSWORD, name=st.staff_name, role="staff", staff=st)
 

@@ -9,7 +9,8 @@ const ICONS = {
   request: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
 }
 
-// `needsStock` makes Receive the highlighted button on rows that are low or out of stock.
+// `needsStock` makes Receive the highlighted button on rows that are low or out of stock. Leave out onReceive or onEdit
+// to hide that button (a position that may not use it).
 export function RowActions({ product, needsStock, onReceive, onEdit, onDelete, deleteLabel = 'Delete', onRequest }) {
   return (
     <div className="row-actions" onClick={(e) => e.stopPropagation()}>
@@ -18,14 +19,18 @@ export function RowActions({ product, needsStock, onReceive, onEdit, onDelete, d
           {ICONS.request}<span>Ask to restock</span>
         </button>
       )}
-      <button type="button" className={`act-btn act-receive${needsStock ? ' act-primary' : ''}`} onClick={() => onReceive(product)}
-        title="A delivery arrived: add it to the stock" aria-label={`Receive a delivery of ${product.name}`}>
-        {ICONS.receive}<span>Receive</span>
-      </button>
-      <button type="button" className="act-btn" onClick={() => onEdit(product)}
-        title="Change details, price, dates, or correct the count" aria-label={`Edit ${product.name}`}>
-        {ICONS.edit}<span>Edit</span>
-      </button>
+      {onReceive && (
+        <button type="button" className={`act-btn act-receive${needsStock ? ' act-primary' : ''}`} onClick={() => onReceive(product)}
+          title="A delivery arrived: add it to the stock" aria-label={`Receive a delivery of ${product.name}`}>
+          {ICONS.receive}<span>Receive</span>
+        </button>
+      )}
+      {onEdit && (
+        <button type="button" className="act-btn" onClick={() => onEdit(product)}
+          title="Change details, price, dates, or correct the count" aria-label={`Edit ${product.name}`}>
+          {ICONS.edit}<span>Edit</span>
+        </button>
+      )}
       <button type="button" className="act-btn act-delete" onClick={() => onDelete(product)}
         title={deleteLabel === 'Delete' ? 'Remove this item from the branch' : 'Ask the admin to remove this item'} aria-label={`${deleteLabel} ${product.name}`}>
         {ICONS.delete}<span>{deleteLabel}</span>

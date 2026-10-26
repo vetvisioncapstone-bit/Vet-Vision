@@ -14,7 +14,7 @@ import CategoryFilter from '../../components/shared/CategoryFilter'
 import Clock from '../../components/shared/Clock'
 import ReceiveStockDialog from '../../components/shared/ReceiveStockDialog'
 import { useConfirm } from '../../components/shared/ConfirmDialog'
-import { ActionsGuide, QuantityChangeHint, RowActions } from '../../components/shared/InventoryActions'
+import { ActionsGuide, RowActions } from '../../components/shared/InventoryActions'
 import { getStatus, needsAction, urgency } from '../../utils/stockOrder'
 // ==================== HELPERS ====================
 // Rows come from the API, already scoped to this employee's branch by the server.
@@ -31,7 +31,7 @@ export default function Inventory() {
   const [receiving, setReceiving] = useState(null) // product whose delivery is being entered
   const [saving, setSaving] = useState(false)
   const showToast = useToast()
-  const { branch } = useEmployeeContext()
+  const { branch, can } = useEmployeeContext()
   const { raise } = useApprovalRequests()
 
   const [searchTerm, setSearchTerm] = useState('')
@@ -107,7 +107,8 @@ export default function Inventory() {
       name: form.name.trim(),
       category: form.category.trim(),
       branch, // ignored by the server; staff are forced to their own branch
-      quantity: Number(form.quantity),
+      // Staff never set the count: a new product starts at 0 and stock arrives through Receive (admin corrects counts).
+      quantity: editingId ? Number(editingProduct?.quantity ?? 0) : 0,
       reorderPoint: Number(form.reorderPoint),
       delivery: form.delivery || null, // blank: no date (e.g. items that do not expire)
       expiration: form.expiration || null,
@@ -186,10 +187,12 @@ export default function Inventory() {
               onPick={(p) => setSearchTerm(p.name)} noun="products" meta={(p) => `${p.quantity} in stock`}
               label="Search or pick a product" placeholder="Search or pick a product" />
             <CategoryFilter counts={categoryCounts} selected={activeCategories} onChange={setActiveCategories} />
-            <button className="new-btn" onClick={openAddModal}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-              <span>New product</span>
-            </button>
+            {can('inventory') && (
+              <button className="new-btn" onClick={openAddModal}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                <span>New product</span>
+              </button>
+            )}
           </div>
         </div>
         <ActionsGuide />
@@ -231,7 +234,8 @@ export default function Inventory() {
                     <td><span className={`status-pill ${status.cls}`}>{status.label}</span></td>
                     <td>
                       <RowActions product={p} needsStock={status.rank > 0 && status.rank < 3} onRequest={handleRestockRequest}
-                        onReceive={setReceiving} onEdit={openEditModal} onDelete={handleDeleteRequest} deleteLabel="Ask to delete" />
+                        onReceive={can('inventory') ? setReceiving : undefined} onEdit={can('inventory') ? openEditModal : undefined}
+                        onDelete={handleDeleteRequest} deleteLabel="Ask to delete" />
                     </td>
                   </tr>
                   </React.Fragment>
@@ -284,10 +288,10 @@ export default function Inventory() {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label" htmlFor="src-pages-employee-inventory-f4">Quantity</label>
-                    <input id="src-pages-employee-inventory-f4" type="number" className="form-input" min="0" step="1" placeholder="e.g. 25" required
-                      value={form.quantity} onChange={(e) => setForm(f => ({ ...f, quantity: e.target.value }))} />
-                    {editingId && <QuantityChangeHint before={editingProduct?.quantity} after={form.quantity} />}
+                    <span className="form-label">Quantity</span>
+                    <p className="form-static">{editingId ? (editingProduct?.quantity ?? 0) : 0}
+                      <small>{editingId ? 'Only the admin corrects a count. Deliveries go through Receive.' : 'Starts at 0. Use Receive when the delivery arrives.'}</small>
+                    </p>
                   </div>
                   <div className="form-group">
                     <label className="form-label" htmlFor="src-pages-employee-inventory-f5">Reorder point</label>

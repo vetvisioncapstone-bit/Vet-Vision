@@ -19,7 +19,7 @@ def test_admin_sets_price_and_cost_staff_cannot(admin, staff_ibaan, branches):
     r = client_for(admin).post("/api/inventory/", {**PRODUCT, "unitPrice": 320, "unitCost": 250}, format="json")
     assert r.status_code == 201 and r.data["unitPrice"] == 320 and r.data["unitCost"] == 250
     staff = client_for(staff_ibaan)
-    body = {**PRODUCT, "quantity": 6}
+    body = {**PRODUCT}  # staff keep the count as it is; only the admin corrects it
     assert staff.put(f"/api/inventory/{r.data['id']}/", {**body, "unitPrice": 1}, format="json").status_code == 403
     edited = staff.put(f"/api/inventory/{r.data['id']}/", body, format="json")  # no price fields: allowed
     assert edited.status_code == 200 and edited.data["unitPrice"] == 320

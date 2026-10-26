@@ -4,7 +4,8 @@ import '../../styles/shared/search-picker.css'
 // A search box that is also a dropdown: focusing it (or its arrow) lists every item grouped by category, typing
 // narrows the list, arrow keys move through it, Enter picks and Escape closes. Items: [{ id, name, category }].
 // `value` / `onChange` is the text in the box (the parent may also use it to filter its own table).
-export default function SearchPicker({ id, items, value, onChange, onPick, label, placeholder, meta, currentId, noun = 'items', className = '' }) {
+// `inputProps` go on the text box itself (id for a <label>, className, disabled, aria-invalid).
+export default function SearchPicker({ id, items, value, onChange, onPick, label, placeholder, meta, currentId, noun = 'items', className = '', inputProps = {} }) {
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
   const term = value.trim().toLowerCase()
@@ -43,7 +44,7 @@ export default function SearchPicker({ id, items, value, onChange, onPick, label
         onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(0) }}
         onFocus={() => { setOpen(true); setActive(0) }}
         onBlur={() => setOpen(false)}
-        onKeyDown={onKey} />
+        onKeyDown={onKey} {...inputProps} />
       <button type="button" className="search-picker-toggle" tabIndex={-1} aria-label={open ? 'Close the list' : 'Show all'}
         onMouseDown={(e) => { e.preventDefault(); setOpen((o) => !o) }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points={open ? '6 15 12 9 18 15' : '6 9 12 15 18 9'} /></svg>

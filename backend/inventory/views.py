@@ -13,7 +13,7 @@ from core.validators import data_url
 from core.ids import inventory_id, ledger_id, next_id
 from accounts.audit import record
 from accounts.models import AuditLog
-from core.permissions import IsClinicStaff, branch_by_town, scope_branch
+from core.permissions import IsClinicStaff, branch_by_town, require, scope_branch
 
 from .models import Inventory, InventoryTransaction, Product, ProductBranchPrice
 
@@ -132,12 +132,16 @@ class InventoryList(APIView):
 
     @transaction.atomic
     def post(self, request):
+        require(request.user, "inventory", "Your position cannot add products.")
         s = InventoryInput(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
         _expiry_field(d.get("expiration"))
         user = request.user
         if user.role == "staff":
+            # Stock only arrives through Receive, so every unit on the shelf has a delivery in the stock history.
+            if d["quantity"]:
+                raise serializers.ValidationError({"quantity": "Add the product with 0 stock, then use Receive."})
             branch = user.staff.branch
         else:
             if not d.get("branch"):
@@ -179,11 +183,14 @@ class InventoryDetail(APIView):
 
     @transaction.atomic
     def put(self, request, pk):
+        require(request.user, "inventory", "Your position cannot edit products.")
         inv = self._get(request, pk)
         s = InventoryInput(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
         before = inv.quantity_on_hand
+        if request.user.role != "admin" and d["quantity"] != before:
+            raise PermissionDenied("Only the admin can correct a stock count. Use Receive for deliveries.")
         product = inv.product
         product.product_name = d["name"].strip()
         product.category = d["category"].strip()
@@ -223,6 +230,7 @@ class InventoryReceive(APIView):
 
     @transaction.atomic
     def post(self, request, pk):
+        require(request.user, "inventory", "Your position cannot receive deliveries.")
         inv = _queryset(request).select_for_update(of=("self",)).filter(pk=pk).first()
         if inv is None:
             raise NotFound()

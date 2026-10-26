@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useEmployeeContext } from '../../hooks/useEmployeeContext'
 import { useSession } from '../../hooks/useSession'
 
 const ICONS = {
@@ -55,7 +56,7 @@ const EMPLOYEE_SECTIONS = [
     items: [
       { to: '/employee/dashboard', label: 'Dashboard', icon: ICONS.dashboard },
       { to: '/employee/feed', label: 'Feed', icon: ICONS.feed },
-      { to: '/employee/sales', label: 'Sales', icon: ICONS.sales },
+      { to: '/employee/sales', label: 'Sales', icon: ICONS.sales, need: 'sales' },
       { to: '/employee/inventory', label: 'Inventory', icon: ICONS.inventory },
       { to: '/employee/patients', label: 'Patients', icon: ICONS.patients }
     ]
@@ -65,6 +66,7 @@ const EMPLOYEE_SECTIONS = [
 export default function Sidebar({ role, open, onNavigate }) {
   const sections = role === 'admin' ? ADMIN_SECTIONS : EMPLOYEE_SECTIONS
   const { clearSession } = useSession()
+  const { can } = useEmployeeContext()
   const navigate = useNavigate()
   // Desktop only: the sidebar shows icons and opens on hover; pinned, it stays open. Remembered per browser.
   const [pinned, setPinned] = useState(() => { try { return localStorage.getItem('vvSidebarPinned') === '1' } catch { return false } })
@@ -103,7 +105,7 @@ export default function Sidebar({ role, open, onNavigate }) {
         {sections.map(section => (
           <div className="nav-section" key={section.label}>
             <p className="nav-label">{section.label}</p>
-            {section.items.map(item => (
+            {section.items.filter(item => !item.need || can(item.need)).map(item => (
               <NavLink
                 key={item.to}
                 to={item.to}

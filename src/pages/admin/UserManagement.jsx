@@ -49,6 +49,24 @@ function isValidStaffEmail(email) {
   return email.toLowerCase().endsWith('@ecovet.ph')
 }
 
+// What each position can do, shown under the Position field. Mirrors POSITION_ABILITIES in backend core/permissions.py
+// (the server enforces it); keep the two in step.
+const VET = 'Patients, consultations with prescriptions and lab results, sales, receiving deliveries.'
+const FRONT_DESK = 'Registers and edits patients, sales, receiving deliveries. No consultations.'
+const ASSISTANT = 'Logs visits with services only (no products, prescriptions or lab results). Patients and stock: view only.'
+const VIEW_ONLY = 'View only: patients, stock and the feed. Can send restock and delete requests.'
+const POSITION_ACCESS = {
+  Veterinarian: VET,
+  Owner: VET,
+  Secretary: FRONT_DESK,
+  Receptionist: FRONT_DESK,
+  Groomer: ASSISTANT,
+  'Groomer / Vet Assistant': ASSISTANT,
+  'Veterinary Assistant': ASSISTANT,
+  'Veterinary Technician': ASSISTANT,
+  'Inventory Clerk': 'Stock only: receiving deliveries and adding products. Patients: view only.'
+}
+
 export default function UserManagement() {
   const [ask, confirmBox] = useConfirm() // styled "are you sure?" box for deletes
   const { items: accounts, loading, create, update, remove } = useStaffAccounts()
@@ -503,12 +521,14 @@ export default function UserManagement() {
                       <option>Veterinary Technician</option>
                       <option>Veterinary Assistant</option>
                       <option>Groomer</option>
+                      <option>Groomer / Vet Assistant</option>
                       <option>Receptionist</option>
                       <option>Secretary</option>
                       <option>Inventory Clerk</option>
                     </select>
                     <svg className="form-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                   </div>
+                  {form.position && <p className="form-hint">{POSITION_ACCESS[form.position] || VIEW_ONLY}</p>}
                 </div>
 
                 <div className="form-checkbox-group">

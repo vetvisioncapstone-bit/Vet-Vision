@@ -180,7 +180,7 @@ export default function Topbar({ role, onToggleSidebar }) {
                 <div className="profile-avatar">{displayPhoto ? <img src={displayPhoto} alt={displayName} className="avatar-photo-img" /> : initials}</div>
                 <div>
                   <p className="profile-name">{displayName}</p>
-                  <p className="profile-role">Staff — {session ? session.branch : ''}</p>
+                  <p className="profile-role">{session?.position || 'Staff'} — {session ? session.branch : ''}</p>
                 </div>
               </div>
             )}

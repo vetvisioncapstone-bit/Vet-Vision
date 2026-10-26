@@ -124,7 +124,7 @@ function SalesTrendChart({ branch }) {
 // ==================== PAGE ====================
 
 export default function Dashboard() {
-  const { branch, name } = useEmployeeContext()
+  const { branch, name, session } = useEmployeeContext()
   // Only the headline counts are needed, so ask for a single row plus the server's stats.
   const { stats: patientStats } = usePatients({ page: 1, pageSize: 1 })
   const { items: products } = useInventory()
@@ -145,7 +145,7 @@ export default function Dashboard() {
         <Clock />
       </div>
 
-      <p className="dashboard-greeting">Welcome back, {name}.</p>
+      <p className="dashboard-greeting">Welcome back, {name}. Signed in as <b>{session?.position || 'Staff'}</b>: pages show only what this position can do.</p>
 
       <div className="stats-grid">
         <div className="stat-card">

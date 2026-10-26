@@ -1,5 +1,6 @@
 import React from 'react'
 import { formatDate } from '../../utils/format'
+import '../../styles/shared/consult-extras.css'
 
 // The vet's prescription: typed into the consultation form, saved with the visit, and printed on a copy of the
 // clinic's paper Rx pad (letterhead, patient lines, the Rx symbol, the faint veterinary caduceus and the vet's

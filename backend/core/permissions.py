@@ -26,6 +26,45 @@ class IsCustomer(BasePermission):
         return bool(u and u.is_authenticated and u.role == "customer" and u.customer_id)
 
 
+# What each staff position may do, besides viewing its own branch and sending requests to the admin (the admin may do
+# everything). Abilities:
+#   patients.edit  register owners and pets, edit their details
+#   consult        log a visit: findings, weight, services, signed waivers
+#   clinical       prescriptions and laboratory results on a visit
+#   sales          counter sales, and products handed out on a visit
+#   inventory      receive deliveries, add products, edit product details (never the stock count: admin only)
+VET = {"patients.edit", "consult", "clinical", "sales", "inventory"}
+FRONT_DESK = {"patients.edit", "sales", "inventory"}
+ASSISTANT = {"consult"}
+POSITION_ABILITIES = {
+    "Owner": VET,
+    "Veterinarian": VET,
+    "Secretary": FRONT_DESK,
+    "Receptionist": FRONT_DESK,
+    "Groomer": ASSISTANT,
+    "Groomer / Vet Assistant": ASSISTANT,
+    "Veterinary Assistant": ASSISTANT,
+    "Veterinary Technician": ASSISTANT,
+    "Inventory Clerk": {"inventory"},
+}  # a position not listed here can only view (least privilege)
+ALL_ABILITIES = sorted(VET)
+
+
+def abilities(user):
+    if user.role == "admin":
+        return set(ALL_ABILITIES)
+    if user.role == "staff" and user.staff_id:
+        return POSITION_ABILITIES.get(user.staff.role, set())
+    return set()
+
+
+def require(user, ability, message):
+    if ability not in abilities(user):
+        from rest_framework.exceptions import PermissionDenied
+
+        raise PermissionDenied(message)
+
+
 def branch_by_town(town):
     """The frontend identifies branches by town ('Ibaan' / 'San Jose')."""
     try:
