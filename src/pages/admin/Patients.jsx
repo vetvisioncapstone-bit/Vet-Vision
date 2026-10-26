@@ -551,7 +551,7 @@ export default function Patients() {
               <tr>
                 <th>Patient</th>
                 <th>Owner</th>
-                <th>Owner phone</th>
+                <th>Contact number</th>
                 <th>Species</th>
                 <th>Branch</th>
                 <th>Last visit</th>
