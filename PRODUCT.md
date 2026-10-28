@@ -9,7 +9,7 @@ web
 ## Users
 
 - **Clinic owner / admin (primary, wins design conflicts).** Reviews sales, inventory and demand across the EcoVet branches (Ibaan and San Jose) to decide what to stock and where.
-- **Branch staff (shown as "employee").** Work at the counter: complete sales, manage inventory for their own branch, keep patient records. Staff cannot delete directly; they raise a request that the admin approves.
+- **Branch staff (shown as "employee").** Work at their own branch. What each one can do follows their position (set in User Management): veterinarians (and the owner) do everything, including prescriptions and lab results; secretaries and receptionists register patients, sell and receive stock; groomers, vet assistants and technicians log service visits only; an inventory clerk handles stock only; any other position is view-only. Staff cannot delete directly; they raise a request that the admin approves.
 - **Pet owners (customers).** Sign up on the login page, register pets, see health history, vaccination reminders and the clinic calendar.
 
 ## Product Purpose
@@ -24,15 +24,16 @@ One system for the clinic's clinical records, point of sale, inventory and deman
 
 - One login page at `/` serves admin, staff and customers; each role lands in its own portal.
 - Data comes from a PostgreSQL database seeded from the clinic's legacy schema; recent volume was reshaped to about 13 to 20 transactions per day with closures (Sundays, Philippine holidays) and half days. Treat the data as sample data.
-- Forecast: Moving Average of the previous 6 complete months, with MAE and MAPE; products and services are ranked fast, moderate or slow by tercile.
+- Forecast: Moving Average of the previous 6 complete months, with MAE and MAPE; products and services are ranked fast, moderate or slow by tercile. Next to the forecast: order advice per branch (forecast + safety stock - stock on hand), last year's seasonal swing, the recent trend and stock-out days.
 - Stack in place: React 18 + Vite frontend, Django + DRF + PostgreSQL backend, JWT auth.
 
 ## Capabilities and Constraints
 
-- Admin: dashboard, sales analytics, forecasting, inventory, patients, events, reports, user management, system settings with an activity log.
-- Staff: dashboard, sales, inventory, patients, feed.
+- Admin: dashboard, sales analytics, forecasting, inventory, patients (with printable prescriptions), services and branch prices, events, approval requests, reports, user management, system settings with an activity log, and an AI assistant (Google Gemini, free tier, aggregates only).
+- Staff: dashboard, sales, inventory, patients, feed. The Sales page is hidden from positions that cannot sell; buttons a position cannot use are not shown. The dashboard says which position is signed in, and User Management shows what a position can do under the Position field.
+- Only the admin corrects a stock count. Staff add a product with 0 stock and record deliveries with Receive.
 - Customer: home, pets, reminders, clinic calendar, pet registration.
-- Not built yet: the AI chatbot (Gemini), real password reset (no mail service), deployment.
+- Not built yet: real password reset (no mail service), deployment.
 - Password recovery is handled by an admin resetting the account in User Management.
 - Images are stored as base64 in the database.
 

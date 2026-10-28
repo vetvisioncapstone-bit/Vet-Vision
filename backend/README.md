@@ -31,7 +31,8 @@ Build the schema, load the historical data from the dump, create the owner accou
 `load_legacy_data` refuses to run on a database that already has data. It disables the stock triggers while loading (history
 must not move stock) and validates every foreign key before re-enabling them.
 
-Staff logins are created from the admin UI (User Management). The 7 seeded staff have no login until an admin sets one.
+Staff logins are created from the admin UI (User Management): pick the staff member, their position and a password.
+A staff record without a login cannot sign in.
 
 ## Using an existing database
 
@@ -61,21 +62,71 @@ once" test — the database trigger does the deduction, the API must never do it
 | `GET/PATCH auth/me/` | signed-in |
 | `GET auth/audit/` (`?q=`, paged) | admin |
 | `GET health/` | anyone (host health check) |
-| `GET/POST inventory/`, `PUT/DELETE inventory/<id>/` | staff (own branch) / admin; delete = admin only |
+| `GET/POST inventory/`, `PUT/DELETE inventory/<id>/` | staff (own branch) / admin; delete = admin only; only the admin changes `quantity` |
+| `POST inventory/<id>/receive/` `{quantity, delivery?, expiration?, confirmRepeat?}` | staff (own branch) / admin: a delivery, logged as a restock. The same item received again within 10 minutes returns a warning first; resend with `confirmRepeat: true` |
 | `GET/POST patients/` (`?status=`, `?branch=`), `GET/PUT/DELETE patients/<id>/`, `POST patients/<id>/consultations/`, `DELETE consultations/<id>/` | staff (own branch) / admin; deletes = admin only |
-| `GET/POST sales/` (`?since=`, `?limit=`) | staff (own branch) / admin |
+| `GET/POST sales/` (`?since=`, `?limit=`), body `{items: [{inventoryId, quantity, price}], customerId?}` (blank = walk-in; the owner must be on that branch) | staff (own branch) / admin |
+| `GET services/` (each branch's price), `POST services/`, `PUT/DELETE services/<id>/` | read: staff+admin; write: admin. A service used by past visits is retired (hidden), not deleted |
 | `GET/POST staff-accounts/`, `PUT/DELETE staff-accounts/<id>/` | admin |
 | `GET/POST events/posts/`, `DELETE events/posts/<id>/`, `GET/PUT events/availability/` | read: staff+admin, write: admin |
 | `GET/POST requests/`, `POST requests/<id>/{approve,deny,dismiss}/` | staff raise, admin resolve |
 | `GET/POST seen-followups/`, `GET branches/` | staff / admin |
-
-| `GET analytics/{overview,live,sales,inventory,forecast,report}/` (`?branch=`, `?year=`, `?month=`) | admin |
+| `GET analytics/{overview,live,sales,inventory,forecast,report}/` (`?branch=`, `?year=`, `?month=`), `POST analytics/assistant/` | admin |
 | `GET/POST me/pets/`, `GET me/reminders/`, `GET events/posts/` | pet owner (own pets, registration, follow-up and vaccine reminders, announcements) |
 | `GET clinic/calendar/?from=&to=` | any signed-in user (open / half day / closed per date) |
 
 Analytics follow the thesis: KPIs from the `v_*` views, fast/moderate/slow movers by the tercile rule, and Moving Average
 forecasts (previous 6 months -> next month) with MAE/MAPE from a 12-month back-test. Figures are anchored on the latest
 complete month of recorded data and every response carries `asOf`.
+
+The forecast page also shows, without changing the forecast itself:
+
+- **Order advice** per product, worked out branch by branch and added up (one branch's surplus never hides the
+  other's shortage): `need = forecast + safety stock - stock on hand`, rounded up, never below 0. The safety stock is
+  the item's reorder point at that branch (about ten days of demand), covering the 3-8 day delivery time.
+- **Seasonal note:** last year's same month against the six months before it, and the trend of the latest three
+  months against the three before them (`analytics/forecast.py` `seasonal_check`).
+- **Stock-outs:** days a branch's shelf closed at zero and the units it probably could not sell, rebuilt from the
+  stock ledger.
+
+Prices are per branch (`product_branch_price`, `service_branch_price`); the admin sets them on the Inventory and
+Services pages. Product and service costs are shown to the admin only.
+
+### Consultations
+
+`POST patients/<id>/consultations/` takes `{date, weight?, notes, availedItems?, remarks?, labResults?, waivers?,
+followUp?, followUpNote?, prescription?}`:
+
+- `availedItems`: `[{type: "Service", serviceId, quantity, price}]` or `[{type: "Product", inventoryId, quantity,
+  price}]`. Services are billed as a service visit; products become a sale to the pet's owner (the trigger deducts
+  stock), so the visit shows up once on the dashboard, in forecasts, reports and the owner's history.
+- `labResults`, `waivers`: up to 10 files each, `[{name, image}]` (base64 data URLs, images downscaled in the browser).
+- `prescription`: `{diagnosis?, rx, nextAppointment?, veterinarian?, licenseNo?, ptr?}`, printed from the patient
+  page on the Rx pad.
+- `followUp: true` needs a `followUpNote`.
+
+## Staff positions (RBAC)
+
+The role (`admin` / `staff` / `customer`) decides the portal; for staff, the **position** on their staff record
+decides what they can change. `core/permissions.py` maps each position to abilities:
+
+| Ability | Allows | Positions |
+|---|---|---|
+| `patients.edit` | register and edit pets and owners | Owner, Veterinarian, Secretary, Receptionist |
+| `consult` | log a consultation (services) | Owner, Veterinarian, Groomer, Groomer / Vet Assistant, Veterinary Assistant, Veterinary Technician |
+| `clinical` | prescriptions and lab results on a consultation | Owner, Veterinarian |
+| `sales` | sell products (Sales page, products on a consultation) | Owner, Veterinarian, Secretary, Receptionist |
+| `inventory` | add products, receive deliveries, edit product details | Owner, Veterinarian, Secretary, Receptionist, Inventory Clerk |
+
+- The admin has every ability. A position not in the map (for example "Driver") is **view-only**.
+- Each write endpoint checks its ability with `require(user, ability, message)` and answers 403 with a plain message.
+- `GET auth/me/` returns `abilities`; the frontend (`useEmployeeContext().can(...)`) hides what a position cannot use
+  and sends a direct visit to `/employee/sales` back to the dashboard. The pages only hide; the server enforces.
+- **Stock count:** only the admin changes `quantity` (a correction). Staff add a product with quantity 0 (anything
+  else is a 400) and record deliveries with Receive; a staff `PUT` that changes the quantity is a 403.
+- Tests: `tests/test_positions.py`.
+- To change who can do what, edit `POSITION_ABILITIES` and the hint in `src/pages/admin/UserManagement.jsx`
+  (`POSITION_ACCESS`), which shows under the Position field.
 
 Staff cannot hard-delete: they raise an approval request and the admin's approval performs the delete.
 
@@ -140,8 +191,18 @@ python manage.py backup_db            # backups/<db>_<timestamp>.dump, keeps the
 pg_restore --clean --if-exists -d <database> backups\<file>.dump
 ```
 
-Schedule `backup_db` daily (Windows Task Scheduler or cron). It needs `pg_dump` (PostgreSQL client tools; set `PG_DUMP`
-if it is not on the PATH).
+The file name starts with the database name, so a backup of the hosted (Railway) database is
+`railway_<timestamp>.dump`. It needs `pg_dump` (PostgreSQL client tools; set `PG_DUMP` if it is not on the PATH), the
+same major version as the server or newer.
+
+Run it weekly. On Windows, register the task once from PowerShell (replace `<project>` with the project folder):
+
+```powershell
+Register-ScheduledTask -TaskName "VET Vision weekly backup" -Action (New-ScheduledTaskAction -Execute "<project>\backend\.venv\Scripts\python.exe" -Argument "manage.py backup_db" -WorkingDirectory "<project>\backend") -Trigger (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 8pm) -Settings (New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries)
+```
+
+`-StartWhenAvailable` runs a missed backup the next time the computer is on. Check it with
+`Get-ScheduledTask "VET Vision weekly backup"`, and copy the dumps off the computer now and then.
 
 ## Data tools
 
@@ -149,24 +210,44 @@ if it is not on the PATH).
 |---|---|
 | `reshape_transactions [--dry-run]` | Thins history to 13-20 transactions a day with closed Sundays/holidays and half days |
 | `seed_stock [--dry-run]` | Realistic stock, reorder points and an inventory movement history (feeds the stock-out KPI); refuses to run if movements already exist |
+| `extend_history --from 2026-08 --to 2026-09 [--dry-run]` | Adds whole months of demo transactions resampled from the same weekday a year earlier (the imported data ends 2026-07-31); back up first |
+| `seed_prescriptions [--dry-run]` | Gives past consultations a diagnosis and prescription, rule-based on the visit; never overwrites what a vet typed; leaves License No./PTR blank |
 | `seed_medical_records`, `fill_customer_fields`, `adopt_existing_db` | See above |
 | `forecast_report [--out file]` | Forecast accuracy (MAE / MAPE) per branch as Markdown for the thesis |
 | `python qa/load_test.py ...` | Response-time and concurrent-user check against a running server |
 
-## Deploying (Supabase + Render + a static host)
+## Deploying (hosted PostgreSQL + Render + a static host)
 
-1. **Database (Supabase):** create a project, restore your data (`pg_restore` a `backup_db` dump), copy the connection
-   string (Project settings -> Database -> URI).
-2. **API (Render):** New -> Blueprint from this repo (`render.yaml`). Set `DATABASE_URL` (the string above),
-   `CORS_ALLOWED_ORIGINS` (your Pages URL), `DJANGO_ALLOWED_HOSTS` and `RECAPTCHA_SECRET_KEY`. The build runs the
-   migrations.
+1. **Database:** the clinic data is on **Railway** PostgreSQL (`DATABASE_URL` in `backend/.env`). Any hosted
+   PostgreSQL works (Supabase too): restore a `backup_db` dump with `pg_restore` and copy its connection string.
+2. **API**, either host:
+   - **Railway (always on, next to the database):** in the database's project, New -> GitHub Repo -> this repo, then
+     in the service's Settings set Root Directory `backend` and Healthcheck Path `/api/health/`. No config file is
+     needed: Railway detects Django and runs `python manage.py migrate && gunicorn config.wsgi:application`;
+     `.python-version` picks Python 3.10 and `gunicorn.conf.py` sets the port, one worker and the 60 s timeout.
+     Variables: `DATABASE_URL=${{Postgres.DATABASE_URL}}` (private network), `DJANGO_DEBUG=False`,
+     `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS=<your-api-host>,healthcheck.railway.app`, `CORS_ALLOWED_ORIGINS`
+     (your Pages URL), `RECAPTCHA_SECRET_KEY`, `GEMINI_API_KEY`. Then Settings -> Networking -> Generate Domain (or
+     add `api.<your-domain>`).
+   - **Render (free, sleeps after 15 idle minutes):** New -> Blueprint from this repo (`render.yaml`). Set
+     `DATABASE_URL` (the string above), `CORS_ALLOWED_ORIGINS` (your Pages URL), `DJANGO_ALLOWED_HOSTS` and
+     `RECAPTCHA_SECRET_KEY`. The build runs the migrations.
 3. **Web app (any static host, for example Cloudflare Pages, Netlify or Vercel):** build command `npm run build`, output `dist`, environment variables
-   `VITE_API_URL=https://<your-api>.onrender.com/api` and `VITE_RECAPTCHA_SITE_KEY`. `public/_redirects` makes deep links
-   work. At https://www.google.com/recaptcha/admin create a v2 "I'm not a robot" key with the site's domain to get the
-   real site and secret keys.
-4. Create the admin login (`python manage.py createsuperuser` in the Render shell), then delete any test accounts.
+   `VITE_API_URL=https://<your-api-host>/api` and `VITE_RECAPTCHA_SITE_KEY`. `public/_redirects` makes deep links
+   work and `public/_headers` adds the security headers. At https://www.google.com/recaptcha/admin create a v2 "I'm
+   not a robot" key with the site's domain to get the real site and secret keys.
+4. In `public/_headers`, narrow `connect-src 'self' https:` to `connect-src 'self' https://<your-api-host>` and redeploy.
+5. Create the admin login (`python manage.py create_admin --email ... --name "..."`, run from your computer with `DATABASE_URL` set), then delete the test accounts
+   (`test.*@ecovet.ph`) and their staff records.
 
 Customer records are personal data (Data Privacy Act): use the real clinic data only on a host you control.
+
+## Troubleshooting
+
+- **Sign-in says "request failed" / the API stops with a database timeout:** the API cannot reach the hosted
+  database. Some routers' DNS return a wrong address for `*.proxy.rlwy.net`. Set the network adapter's DNS to
+  `1.1.1.1` and `8.8.8.8`, run `ipconfig /flushdns` and restart the API. Compare `nslookup <host> 1.1.1.1` with plain
+  `nslookup <host>` to confirm.
 
 ## Notes
 

@@ -184,6 +184,7 @@ LOGGING = {
 # Production hardening: everything below applies only when DJANGO_DEBUG is off.
 if not DEBUG:
     SECURE_SSL_REDIRECT = env_bool("DJANGO_SSL_REDIRECT", True)
+    SECURE_REDIRECT_EXEMPT = [r"^api/health/$"]  # the host's health check calls plain HTTP inside its network
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")  # the host's proxy terminates TLS
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
