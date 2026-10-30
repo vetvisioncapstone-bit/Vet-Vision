@@ -74,6 +74,41 @@ describe('api client', () => {
   })
 })
 
+describe('signing out', () => {
+  // A refresh answer the test can release at any moment, like one still crossing the network.
+  function slowRefresh() {
+    let answer
+    const fetchMock = vi.fn((url) => (String(url).endsWith('/auth/refresh/') ? new Promise((r) => { answer = r }) : Promise.resolve(json(204, null))))
+    vi.stubGlobal('fetch', fetchMock)
+    return { fetchMock, answer: (res) => answer(res) }
+  }
+
+  it('a token refresh still on its way cannot sign the user back in', async () => {
+    const { refreshAccess, setTokens, clearTokens, getRefreshToken } = await freshClient()
+    const { answer } = slowRefresh()
+    setTokens({ access: 'A1', refresh: 'R1' })
+    const pending = refreshAccess()
+    clearTokens()
+    answer(json(200, { access: 'A2', refresh: 'R2' }))
+    expect(await pending).toBe(false)
+    expect(getRefreshToken()).toBeNull()
+  })
+
+  it('revokes the token in a request that outlives the page, and the rotated one if a refresh was on its way', async () => {
+    const { refreshAccess, setTokens, signOut, getRefreshToken } = await freshClient()
+    const { fetchMock, answer } = slowRefresh()
+    setTokens({ access: 'A1', refresh: 'R1' })
+    const pending = refreshAccess()
+    signOut()
+    answer(json(200, { access: 'A2', refresh: 'R2' }))
+    await pending
+    const revoked = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/auth/logout/'))
+    expect(revoked.map(([, o]) => JSON.parse(o.body).refresh)).toEqual(['R1', 'R2'])
+    expect(revoked.every(([, o]) => o.keepalive)).toBe(true)
+    expect(getRefreshToken()).toBeNull()
+  })
+})
+
 describe('server error messages', () => {
   it('finds the message in nested field errors', async () => {
     const { ApiError } = await import('./client')

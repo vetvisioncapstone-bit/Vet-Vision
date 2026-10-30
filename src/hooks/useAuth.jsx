@@ -1,8 +1,17 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { api, clearTokens, errorMessage, getRefreshToken, refreshAccess, setTokens } from '../api/client'
+import { api, clearTokens, errorMessage, getRefreshToken, refreshAccess, setTokens, signOut } from '../api/client'
 import { clearCache } from '../api/store'
 
 const AuthContext = createContext(null)
+const SIGNED_OUT_KEY = 'vvSignedOut' // written on sign-out so every other open tab signs out too
+
+// Ends the session in this tab. A fresh page at the sign-in screen replaces the current one in the history, and the
+// memory of the old page goes with it.
+function leaveSession() {
+  signOut()
+  clearCache()
+  window.location.replace('/')
+}
 
 // The API calls non-admin clinic users "staff"; the React pages have always called them "employee".
 function toSession(user) {
@@ -42,6 +51,12 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('vv-auth-expired', onExpired)
   }, [])
 
+  useEffect(() => {
+    const onStorage = (e) => { if (e.key === SIGNED_OUT_KEY && window.location.pathname !== '/') leaveSession() }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
   const login = useCallback(async (email, password, captcha, remember = false) => {
     try {
       const data = await api.post('/auth/login/', { email, password, captcha })
@@ -68,13 +83,9 @@ export function AuthProvider({ children }) {
   }, [])
 
   const logout = useCallback(() => {
-    const refresh = getRefreshToken()
-    if (refresh) api.post('/auth/logout/', { refresh }).catch(() => {}) // revoke it server-side, best effort
-    clearTokens()
-    clearCache()
+    try { localStorage.setItem(SIGNED_OUT_KEY, String(Date.now())) } catch { /* storage blocked: this tab only */ }
     setUser(null)
-    // A fresh page at the sign-in screen, replacing this one in the history: Back cannot show the app again.
-    window.location.replace('/')
+    leaveSession()
   }, [])
 
   const value = useMemo(

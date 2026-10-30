@@ -22,6 +22,11 @@
 		-Server
 	}
 
+	# The page itself is never stored, so Back after signing out and the first visit after a deploy always fetch it.
+	# Built files in /assets have a new name each build and stay cacheable.
+	@page not path /assets/* /Images/*
+	header @page Cache-Control "no-store"
+
 	root * /app/dist
 	encode gzip zstd
 	try_files {path} /index.html # deep links such as /admin/patients load the app, which does its own routing

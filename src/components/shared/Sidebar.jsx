@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useEmployeeContext } from '../../hooks/useEmployeeContext'
 import { useSession } from '../../hooks/useSession'
 
@@ -67,7 +67,6 @@ export default function Sidebar({ role, open, onNavigate }) {
   const sections = role === 'admin' ? ADMIN_SECTIONS : EMPLOYEE_SECTIONS
   const { clearSession } = useSession()
   const { can } = useEmployeeContext()
-  const navigate = useNavigate()
   // Desktop only: the sidebar shows icons and opens on hover; pinned, it stays open. Remembered per browser.
   const [pinned, setPinned] = useState(() => { try { return localStorage.getItem('vvSidebarPinned') === '1' } catch { return false } })
 
@@ -81,7 +80,6 @@ export default function Sidebar({ role, open, onNavigate }) {
   function handleLogout(e) {
     e.preventDefault()
     clearSession()
-    navigate('/')
   }
 
   return (

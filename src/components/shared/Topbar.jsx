@@ -64,7 +64,6 @@ export default function Topbar({ role, onToggleSidebar }) {
   function handleLogout(e) {
     e.preventDefault()
     clearSession()
-    navigate('/')
   }
 
   function openRequest(id) { // the Staff requests page, scrolled to this one

@@ -7,6 +7,7 @@ const REFRESH_KEY = 'vvRefreshToken'
 
 let accessToken = null
 let refreshing = null
+let sessionId = 0 // changes when the tokens are cleared, so a refresh still on its way cannot sign the user back in
 
 export class ApiError extends Error {
   constructor(status, data) {
@@ -55,11 +56,28 @@ export function setTokens({ access, refresh }, remember) {
 }
 
 export function clearTokens() {
+  sessionId += 1
   accessToken = null
   try {
     sessionStorage.removeItem(REFRESH_KEY)
     localStorage.removeItem(REFRESH_KEY)
   } catch { /* ignore */ }
+}
+
+// keepalive: signing out leaves the page at once, which would cancel a normal request and leave the token valid.
+function revoke(refresh) {
+  if (!refresh) return
+  fetch(`${BASE}/auth/logout/`, {
+    method: 'POST',
+    keepalive: true,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh })
+  }).catch(() => {}) // best effort: the token is already gone from this browser
+}
+
+export function signOut() {
+  revoke(getRefreshToken())
+  clearTokens()
 }
 
 async function raw(method, path, body, withAuth = true) {
@@ -82,8 +100,13 @@ export async function refreshAccess() {
   const refresh = getRefreshToken()
   if (!refresh) return false
   if (!refreshing) {
+    const session = sessionId
     refreshing = raw('POST', '/auth/refresh/', { refresh }, false)
       .then(({ res, data }) => {
+        if (session !== sessionId) { // signed out meanwhile: the server rotated the token, so revoke the new one too
+          revoke(data?.refresh)
+          return false
+        }
         if (!res.ok) return false
         setTokens({ access: data.access, refresh: data.refresh })
         return true
