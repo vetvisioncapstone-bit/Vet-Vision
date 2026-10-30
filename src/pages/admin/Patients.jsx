@@ -403,7 +403,7 @@ export default function Patients() {
       <div className="content-header">
         <h1>Patient records</h1>
         <div className="select-wrapper">
-          <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)}>
+          <select aria-label="Branch" value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)}>
             <option>All Branches</option>
             <option>Ibaan</option>
             <option>San Jose</option>

@@ -63,7 +63,7 @@
     border-radius: 50%;
     border: none;
     background: transparent;
-    color: #6b736f;
+    color: #5f6763;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -108,7 +108,7 @@
 .form-input {
     width: 100%;
     padding: 12px 14px;
-    border: 1px solid #dde3e0;
+    border: 1px solid #858f8a;
     border-radius: 10px;
     font-size: 14px;
     font-family: inherit;
@@ -119,7 +119,7 @@
 
 .form-input:focus {
     outline: none;
-    border-color: #4caf50;
+    border-color: #2d7a4d;
     background: #ffffff;
     box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.12);
 }
@@ -145,7 +145,7 @@ select.form-input {
     right: 12px;
     width: 15px;
     height: 15px;
-    color: #6b736f;
+    color: #5f6763;
     pointer-events: none;
 }
 
@@ -268,7 +268,7 @@ textarea.form-input {
 
 .detail-owner-sub {
     font-size: 13px;
-    color: #6b736f;
+    color: #5f6763;
     margin-top: 2px;
 }
 
@@ -305,7 +305,7 @@ textarea.form-input {
 
 .detail-info-sub {
     font-size: 12.5px;
-    color: #6b736f;
+    color: #5f6763;
     line-height: 1.6;
 }
 
@@ -634,7 +634,7 @@ textarea.form-input {
 
 .search-wrapper input {
     width: 100%;
-    border: 1px solid #dfe3e1;
+    border: 1px solid #858f8a;
     background: #ffffff;
     border-radius: 8px;
     padding: 9px 12px 9px 34px;
@@ -645,7 +645,7 @@ textarea.form-input {
 
 .search-wrapper input:focus {
     outline: none;
-    border-color: #4caf50;
+    border-color: #2d7a4d;
     box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
 }
 
@@ -690,7 +690,7 @@ textarea.form-input {
     align-items: center;
     gap: 8px;
     background: #ffffff;
-    border: 1px solid #dfe3e1;
+    border: 1px solid #858f8a;
     border-radius: 8px;
     padding: 8px 14px;
     font-size: 14px;
@@ -775,7 +775,7 @@ textarea.form-input {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    color: #6b736f;
+    color: #5f6763;
     transition: background 0.2s ease, color 0.2s ease;
 }
 
@@ -808,10 +808,10 @@ textarea.form-input {
 
 .status-inactive {
     background: #eef0ef;
-    color: #6b736f;
+    color: #5f6763;
 }
 
-.filter-year { width: 100%; margin: 4px 0 12px; padding: 8px 10px; border: 1px solid #dfe3e1; border-radius: 8px; font: inherit; background: #fff; }
+.filter-year { width: 100%; margin: 4px 0 12px; padding: 8px 10px; border: 1px solid #858f8a; border-radius: 8px; font: inherit; background: #fff; }
 .filter-clear { background: none; border: none; color: #2d7a4d; font: inherit; font-weight: 600; cursor: pointer; padding: 0; text-decoration: underline; }
 
 /* ==================== PRINT SHEET (clinic chart) ==================== */
@@ -842,7 +842,7 @@ textarea.form-input {
 .cs-attach-label { font-weight: 700; font-size: 12px; margin: 14px 0 4px; }
 .cs-attach-img { max-width: 100%; max-height: 320px; border: 1px solid #ccc; border-radius: 6px; }
 .cs-note { font-size: 12px; color: #666; }
-.cs-footer { margin-top: 20px; font-size: 10.5px; color: #888; text-align: center; }
+.cs-footer { margin-top: 20px; font-size: 10.5px; color: #5f6763; text-align: center; }
 @media print {
   .clinic-sheet { max-width: none; padding: 0; border-radius: 0; }
 }

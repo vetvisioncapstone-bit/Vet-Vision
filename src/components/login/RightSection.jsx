@@ -9,7 +9,7 @@ function RightSection({ onLogin, onSignedUp }) {
   const signingIn = mode === 'signin'
 
   return (
-    <div className="right-section">
+    <main className="right-section">
       <div className="login-card">
         <div className="welcome-text">
           <h1>{signingIn ? 'Welcome back' : 'Create your account'}</h1>
@@ -23,7 +23,7 @@ function RightSection({ onLogin, onSignedUp }) {
           </button>
         </p>
       </div>
-    </div>
+    </main>
   )
 }
 

@@ -1,5 +1,5 @@
-import React, { lazy, Suspense } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import React, { lazy, Suspense, useEffect } from 'react'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import RequireRole from './components/shared/RequireRole'
 import ErrorBoundary from './components/shared/ErrorBoundary'
@@ -24,9 +24,19 @@ const EmployeePatients = lazy(() => import('./pages/employee/Patients'))
 const EmployeeSales = lazy(() => import('./pages/employee/Sales'))
 const CustomerApp = lazy(() => import('./pages/customer/CustomerApp'))
 
+// Each page gets its own browser tab title, which is also the first thing a screen reader announces.
+function PageTitle() {
+  const page = useLocation().pathname.split('/').filter(Boolean).pop()?.replace(/-/g, ' ')
+  useEffect(() => {
+    document.title = page ? `${page[0].toUpperCase()}${page.slice(1)} · Vet Vision` : 'Vet Vision'
+  }, [page])
+  return null
+}
+
 function App() {
   return (
     <Router>
+      <PageTitle />
       <ErrorBoundary>
       <Suspense fallback={<div className="skeleton" style={{ height: 120, margin: 24 }} />}>
       <Routes>

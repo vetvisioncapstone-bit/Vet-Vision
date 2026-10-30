@@ -1,7 +1,7 @@
 // Bell + notifications panel: reminders for the owner's pets (vet follow-ups, vaccine boosters) and the clinic's
 // announcements. The badge counts what has not been opened yet.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BellIcon, CloseIcon } from "./icons";
 
 function formatWhen(iso) {
@@ -9,6 +9,13 @@ function formatWhen(iso) {
 }
 
 export default function NotificationButton({ open, onToggle, onClose, announcements, reminders, enabled = true }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   const unreadCount = announcements.unreadCount + reminders.unreadCount;
   // Keep the "new" highlight for the items that were unread when the panel opened.
   const [newIds, setNewIds] = useState(() => new Set());

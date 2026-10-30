@@ -365,7 +365,7 @@ a {
     border-radius: 50%;
     border: none;
     background: transparent;
-    color: #6b736f;
+    color: #5f6763;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -477,7 +477,7 @@ a {
 
 .notif-item-sub {
     font-size: 12px;
-    color: #6b736f;
+    color: #5f6763;
 }
 
 /* Delete / restock requests - not follow-ups, so not part of the seen/new
@@ -574,7 +574,7 @@ a {
 
 .profile-role {
     font-size: 12px;
-    color: #6b736f;
+    color: #5f6763;
     margin-top: 2px;
 }
 
@@ -644,7 +644,7 @@ a {
     appearance: none;
     -webkit-appearance: none;
     background: #ffffff;
-    border: 1px solid #dfe3e1;
+    border: 1px solid #858f8a;
     border-radius: 8px;
     padding: 8px 34px 8px 14px;
     font-size: 14px;
@@ -655,7 +655,7 @@ a {
 
 .select-wrapper select:focus {
     outline: none;
-    border-color: #4caf50;
+    border-color: #2d7a4d;
 }
 
 .select-chevron {
@@ -708,7 +708,7 @@ a {
 
 .stat-label {
     font-size: 13px;
-    color: #6b736f;
+    color: #5f6763;
     margin-bottom: 8px;
 }
 
@@ -724,7 +724,7 @@ a {
 }
 
 .stat-change.positive {
-    color: #2d9e4f;
+    color: #2d7a4d;
 }
 
 .stat-change.negative {
@@ -791,7 +791,7 @@ a {
 
 .kpi-label {
     font-size: 13px;
-    color: #6b736f;
+    color: #5f6763;
     margin-bottom: 6px;
 }
 
@@ -1106,7 +1106,7 @@ tbody tr:hover .status-pill {
 
 .chat-panel-input input {
     flex: 1;
-    border: 1px solid #e6e6e6;
+    border: 1px solid #858f8a;
     background: #fafafa;
     border-radius: 20px;
     padding: 10px 16px;
@@ -1391,10 +1391,10 @@ tbody tr:hover .status-pill {
 .donut-list li { display: flex; align-items: center; gap: 8px; }
 .donut-list i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .donut-list b { margin-left: auto; padding-left: 16px; }
-.as-of { font-size: 12.5px; color: #6b736f; margin: -6px 0 18px; }
+.as-of { font-size: 12.5px; color: #5f6763; margin: -6px 0 18px; }
 .load-error { background: #fff4f2; color: #b3392f; border: 1px solid #f3cfca; border-radius: 10px; padding: 12px 14px; font-size: 13.5px; margin-bottom: 16px; }
 .trend-up { color: #2d7a4d; font-weight: 600; }
-.trend-down { color: #d64545; font-weight: 600; }
+.trend-down { color: #c0392b; font-weight: 600; }
 .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
 .pill-fast { background: #e4f4ea; color: #1f6b41; }
 .pill-moderate { background: #eef1ef; color: #4a524e; }
@@ -1404,12 +1404,12 @@ tbody tr:hover .status-pill {
 .month-cells { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 0; }
 .month-cell { padding: 14px 12px; border-right: 1px solid #ececec; text-align: center; }
 .month-cell:last-child { border-right: none; }
-.month-cell-label { font-size: 12px; color: #6b736f; margin-bottom: 4px; }
+.month-cell-label { font-size: 12px; color: #5f6763; margin-bottom: 4px; }
 .month-cell-value { font-size: 18px; font-weight: 700; }
 .month-cell.is-forecast { background: #f4f1fd; }
 .month-cell.is-forecast .month-cell-value { color: #6a48c9; }
-.accuracy-note { font-size: 12.5px; color: #6b736f; margin-top: 10px; line-height: 1.5; }
-.stat-sub { font-size: 12px; color: #6b736f; margin-top: 4px; }
+.accuracy-note { font-size: 12.5px; color: #5f6763; margin-top: 10px; line-height: 1.5; }
+.stat-sub { font-size: 12px; color: #5f6763; margin-top: 4px; }
 
 /* ==================== LIVE PANEL ==================== */
 .live-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; margin-right: 8px; border-radius: 999px; background: #e4f4ea; color: #1f6b41; font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; }

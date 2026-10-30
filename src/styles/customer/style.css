@@ -11,10 +11,11 @@
   --lg-bg: #f5f9f6;
   --lg-text: #14251c;
   --lg-tagline: #1b4332;
-  --lg-muted: #7c8f84;
+  --lg-muted: #5b6b62;
   --lg-blob-a: #dceedf;
   --lg-blob-b: #cde7d2;
   --lg-border: #e3eae6;
+  --lg-input-border: #858f8a;
 }
 
 * { box-sizing: border-box; }
@@ -117,7 +118,7 @@ button, input {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.03em;
-  color: #a9b7af;
+  color: var(--lg-muted);
   white-space: nowrap;
   opacity: 0;
   transition: opacity 0.15s ease;
@@ -1001,6 +1002,7 @@ button, input {
   --lg-text: #e4ede8;
   --lg-muted: #9fb3a7;
   --lg-border: #3a4a42;
+  --lg-input-border: #7a8d83;
   --mint-50: #263630;
   --green-700: #5fdba0;
   background: linear-gradient(180deg, #212c26 0%, var(--lg-bg) 100%);
@@ -1106,7 +1108,7 @@ button, input {
   width: 100%;
   height: 46px;
   padding: 0 14px;
-  border: 1.5px solid var(--lg-border);
+  border: 1.5px solid var(--lg-input-border);
   border-radius: 12px;
   font-size: 14.5px;
   background: #fafcfb;
@@ -1172,14 +1174,14 @@ button, input {
 /* Sign-up form, pet registration and reminders */
 .ll-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .ll-field select {
-  width: 100%; padding: 11px 12px; border: 1px solid var(--lg-border, #dfe6e2); border-radius: 10px;
+  width: 100%; padding: 11px 12px; border: 1px solid var(--lg-input-border); border-radius: 10px;
   background: #f7faf8; font: inherit; color: inherit;
 }
 .ll-field select:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px rgba(47, 169, 104, 0.15); background: #fff; }
 .pet-form { text-align: left; max-height: 90vh; overflow-y: auto; }
 .pet-form .pet-modal__eyebrow, .pet-form .pet-modal__title { text-align: center; }
 .pet-add-btn { margin-top: 12px; width: 100%; }
-.notif-section-title { margin: 14px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #6b7a72; }
+.notif-section-title { margin: 14px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--lg-muted); }
 .notif-item--reminder { border-left: 3px solid #f2a33a; }
 .notif-item--overdue { border-left-color: #d64545; }
 @media (max-width: 480px) { .ll-row { grid-template-columns: 1fr; } }

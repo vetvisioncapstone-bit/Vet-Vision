@@ -194,6 +194,7 @@ export default function Events() {
               <textarea
                 id="postComposerInput"
                 className="composer-input"
+                aria-label="Announcement text"
                 placeholder="Share an announcement or update with pet owners…"
                 rows="2"
                 value={composerText}

@@ -21,9 +21,9 @@
 }
 .search-results li button:hover, .search-results li button:focus-visible, .search-results li button.is-active { background: #f4f8f5; outline: none; }
 .search-results li button.is-current span { font-weight: 700; color: #17693a; }
-.search-results small { color: #6b736f; font-size: 12px; white-space: nowrap; }
-.search-results .search-group { padding: 8px 12px 4px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; color: #6b736f; text-transform: uppercase; }
-.search-empty { padding: 10px 12px; font-size: 13.5px; color: #6b736f; }
+.search-results small { color: #5f6763; font-size: 12px; white-space: nowrap; }
+.search-results .search-group { padding: 8px 12px 4px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; color: #5f6763; text-transform: uppercase; }
+.search-empty { padding: 10px 12px; font-size: 13.5px; color: #5f6763; }
 
 @media (pointer: coarse) {
   .search-picker-toggle { width: 44px; height: 44px; right: 0; }

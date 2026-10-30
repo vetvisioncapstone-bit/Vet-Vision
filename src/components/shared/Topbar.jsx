@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../hooks/useSession'
 import { useNotifications } from '../../hooks/useNotifications'
@@ -34,6 +34,12 @@ export default function Topbar({ role, onToggleSidebar }) {
     }
   }
   const initials = getInitialsFromName(displayName)
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') closeAllPopovers() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   function closeAllPopovers() {
     setNotifOpen(false)

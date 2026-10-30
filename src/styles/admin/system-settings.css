@@ -254,7 +254,7 @@
 .form-input {
     width: 100%;
     padding: 11px 14px;
-    border: 1px solid #dde3e0;
+    border: 1px solid #858f8a;
     border-radius: 10px;
     font-size: 14px;
     font-family: inherit;
@@ -265,7 +265,7 @@
 
 .form-input:focus {
     outline: none;
-    border-color: #4caf50;
+    border-color: #2d7a4d;
     background: #ffffff;
     box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.12);
 }
@@ -333,7 +333,7 @@
 }
 
 .toggle-password:hover {
-    color: #4caf50;
+    color: #2d7a4d;
 }
 
 /* ==================== MODAL ==================== */
@@ -400,7 +400,7 @@
     border-radius: 50%;
     border: none;
     background: transparent;
-    color: #6b736f;
+    color: #5f6763;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -515,7 +515,7 @@
 
 .audit-search {
     padding: 8px 12px;
-    border: 1px solid #dfe3e1;
+    border: 1px solid #858f8a;
     border-radius: 8px;
     font: inherit;
     font-size: 13px;

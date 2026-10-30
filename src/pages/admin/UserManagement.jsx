@@ -313,7 +313,7 @@ export default function UserManagement() {
               ) : visibleAccounts.length === 0 ? (
                 <tr><td colSpan="6" className="empty-state">No accounts match your search.</td></tr>
               ) : visibleAccounts.map(a => (
-                <tr className="account-row" key={a.id} tabIndex={0} onKeyDown={onActivate(() => openEditAccountModal(a))} onClick={() => openEditAccountModal(a)}>
+                <tr className="account-row" key={a.id} tabIndex={0} aria-label={`Edit ${a.name}`} onKeyDown={onActivate(() => openEditAccountModal(a))} onClick={() => openEditAccountModal(a)}>
                   <td>
                     {a.photo
                       ? <img className="account-avatar" src={a.photo} alt={a.name} />

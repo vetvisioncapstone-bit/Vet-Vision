@@ -1,7 +1,7 @@
 /* ==================== FORM VALIDATION STATES ==================== */
 
 .form-input.error {
-    border-color: #ff6b6b;
+    border-color: #c92a2a;
     background: #fff5f5;
 }
 
@@ -14,7 +14,7 @@
 }
 
 .form-input.success {
-    border-color: #51cf66;
+    border-color: #2d7a4d;
     background: #f1fdf4;
 }
 
@@ -60,7 +60,7 @@
 }
 
 .checkbox-group input[type="checkbox"] {
-    accent-color: #4caf50;
+    accent-color: #2d7a4d;
     cursor: pointer;
     transition: transform 0.2s ease;
     width: 18px;
