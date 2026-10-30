@@ -94,7 +94,9 @@ if os.getenv("DATABASE_URL") and "pytest" not in sys.modules:
         NAME=_u.path.lstrip("/"), USER=unquote(_u.username or ""), PASSWORD=unquote(_u.password or ""),
         HOST=_u.hostname, PORT=str(_u.port or 5432),
         # connect_timeout: an unreachable database fails a request in 10 s with an error instead of hanging it.
-        OPTIONS={"sslmode": os.getenv("DB_SSLMODE", "require"), "connect_timeout": 10},
+        OPTIONS={"sslmode": os.getenv("DB_SSLMODE", "require"), "connect_timeout": 10,
+                 # ponytail: a fixed IP for a network whose DNS gives the wrong address; update it if the host's IP changes.
+                 **({"hostaddr": os.environ["DB_HOSTADDR"]} if os.getenv("DB_HOSTADDR") else {})},
         CONN_MAX_AGE=60,
     )
 

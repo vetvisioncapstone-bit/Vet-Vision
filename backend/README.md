@@ -247,9 +247,10 @@ Customer records are personal data (Data Privacy Act): use the real clinic data 
 ## Troubleshooting
 
 - **Sign-in says "request failed" / the API stops with a database timeout:** the API cannot reach the hosted
-  database. Some routers' DNS return a wrong address for `*.proxy.rlwy.net`. Set the network adapter's DNS to
-  `1.1.1.1` and `8.8.8.8`, run `ipconfig /flushdns` and restart the API. Compare `nslookup <host> 1.1.1.1` with plain
-  `nslookup <host>` to confirm.
+  database. Some routers' DNS return a wrong address for `*.proxy.rlwy.net`. Compare `nslookup <host> 1.1.1.1` with
+  plain `nslookup <host>` to confirm. To fix it without touching the computer's DNS, put the real IP in `backend/.env`
+  as `DB_HOSTADDR=<ip>` and restart the API; `backup_db` uses it too. If the connection times out later, look the IP
+  up again. Local only: never set it on Railway.
 
 ## Notes
 

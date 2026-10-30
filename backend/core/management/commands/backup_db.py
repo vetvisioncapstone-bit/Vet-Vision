@@ -38,7 +38,10 @@ class Command(BaseCommand):
         out_dir.mkdir(parents=True, exist_ok=True)
         target = out_dir / f"{db['NAME']}_{datetime.now():%Y%m%d_%H%M%S}.dump"
         cmd = [find_pg_dump(), "-h", db["HOST"], "-p", str(db["PORT"]), "-U", db["USER"], "-Fc", "-f", str(target), db["NAME"]]
-        result = subprocess.run(cmd, env={**os.environ, "PGPASSWORD": db["PASSWORD"]}, capture_output=True, text=True)
+        env = {**os.environ, "PGPASSWORD": db["PASSWORD"]}
+        if db.get("OPTIONS", {}).get("hostaddr"):
+            env["PGHOSTADDR"] = db["OPTIONS"]["hostaddr"]
+        result = subprocess.run(cmd, env=env, capture_output=True, text=True)
         if result.returncode != 0:
             target.unlink(missing_ok=True)
             raise CommandError(f"pg_dump failed: {result.stderr.strip()[:300]}")
