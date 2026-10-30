@@ -1,0 +1,29 @@
+# Web server for the React app on Railway. Railpack builds `npm run build` and uses this file in place of its default.
+{
+	admin off
+	persist_config off
+	auto_https off # Railway's proxy terminates TLS
+
+	servers {
+		trusted_proxies static private_ranges 100.0.0.0/8
+	}
+}
+
+:{$PORT:80} {
+	respond /health 200
+
+	# reCAPTCHA v2 needs its script and frame origins; uploaded pictures are data: URLs; CSV downloads use blob: URLs.
+	# connect-src allows only the API on Railway: change it when the API moves (for example to api.<your-domain>).
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; frame-src https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://vet-vision-production.up.railway.app; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	root * /app/dist
+	encode gzip zstd
+	try_files {path} /index.html # deep links such as /admin/patients load the app, which does its own routing
+	file_server
+}

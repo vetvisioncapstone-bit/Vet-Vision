@@ -31,8 +31,8 @@ Open http://127.0.0.1:5173 (not localhost: the reCAPTCHA key does not accept tha
 | `/admin`, `/employee`, `/customer` | The three portals; a signed-out visitor or the wrong role is sent back to `/` or to their own home |
 
 Production build: `npm run build` (output in `dist/`). Frontend tests: `npm test`. Backend tests: see
-`backend/README.md`. `public/_headers` sets the security headers (Content-Security-Policy, nosniff, Referrer-Policy,
-Permissions-Policy) on Cloudflare Pages or Netlify.
+`backend/README.md`. `Caddyfile` is the web server config on Railway: it serves `dist/`, sends deep links to the app and
+sets the security headers (Content-Security-Policy, nosniff, Referrer-Policy, Permissions-Policy).
 
 ## Roles and staff positions
 

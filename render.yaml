@@ -1,5 +1,5 @@
 # Render Blueprint: the Django API. The database is hosted PostgreSQL (Railway; paste its connection string as DATABASE_URL) and the
-# React app is a static site on any static host - see backend/README.md "Deploying".
+# React app is a separate Railway service - see backend/README.md "Deploying".
 services:
   - type: web
     name: vet-vision-api
@@ -19,7 +19,7 @@ services:
       - key: DJANGO_ALLOWED_HOSTS
         value: vet-vision-api.onrender.com
       - key: CORS_ALLOWED_ORIGINS
-        sync: false   # e.g. https://vet-vision.pages.dev
+        sync: false   # the website's address
       - key: RECAPTCHA_SECRET_KEY
         sync: false   # Google reCAPTCHA v2 secret key (the site key goes in the frontend build as VITE_RECAPTCHA_SITE_KEY)
       - key: GEMINI_API_KEY

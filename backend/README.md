@@ -216,7 +216,7 @@ Register-ScheduledTask -TaskName "VET Vision weekly backup" -Action (New-Schedul
 | `forecast_report [--out file]` | Forecast accuracy (MAE / MAPE) per branch as Markdown for the thesis |
 | `python qa/load_test.py ...` | Response-time and concurrent-user check against a running server |
 
-## Deploying (hosted PostgreSQL + Render + a static host)
+## Deploying (Railway)
 
 1. **Database:** the clinic data is on **Railway** PostgreSQL (`DATABASE_URL` in `backend/.env`). Any hosted
    PostgreSQL works (Supabase too): restore a `backup_db` dump with `pg_restore` and copy its connection string.
@@ -227,16 +227,18 @@ Register-ScheduledTask -TaskName "VET Vision weekly backup" -Action (New-Schedul
      `.python-version` picks Python 3.10 and `gunicorn.conf.py` sets the port, one worker and the 60 s timeout.
      Variables: `DATABASE_URL=${{Postgres.DATABASE_URL}}` (private network), `DJANGO_DEBUG=False`,
      `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS=<your-api-host>,healthcheck.railway.app`, `CORS_ALLOWED_ORIGINS`
-     (your Pages URL), `RECAPTCHA_SECRET_KEY`, `GEMINI_API_KEY`. Then Settings -> Networking -> Generate Domain (or
+     (your website URL), `RECAPTCHA_SECRET_KEY`, `GEMINI_API_KEY`. Then Settings -> Networking -> Generate Domain (or
      add `api.<your-domain>`).
    - **Render (free, sleeps after 15 idle minutes):** New -> Blueprint from this repo (`render.yaml`). Set
-     `DATABASE_URL` (the string above), `CORS_ALLOWED_ORIGINS` (your Pages URL), `DJANGO_ALLOWED_HOSTS` and
+     `DATABASE_URL` (the string above), `CORS_ALLOWED_ORIGINS` (your website URL), `DJANGO_ALLOWED_HOSTS` and
      `RECAPTCHA_SECRET_KEY`. The build runs the migrations.
-3. **Web app (any static host, for example Cloudflare Pages, Netlify or Vercel):** build command `npm run build`, output `dist`, environment variables
-   `VITE_API_URL=https://<your-api-host>/api` and `VITE_RECAPTCHA_SITE_KEY`. `public/_redirects` makes deep links
-   work and `public/_headers` adds the security headers. At https://www.google.com/recaptcha/admin create a v2 "I'm
+3. **Web app (Railway):** in the same project, New -> GitHub Repo -> this repo again. Leave Root Directory empty and
+   set Healthcheck Path `/health`. Variables (read at build time): `VITE_API_URL=https://<your-api-host>/api` and
+   `VITE_RECAPTCHA_SITE_KEY`. Railway builds `npm run build`; the `Caddyfile` at the repo root serves `dist`, sends deep
+   links to the app and adds the security headers. Then Settings -> Networking -> Generate Domain, and put that
+   address in the API's `CORS_ALLOWED_ORIGINS`. At https://www.google.com/recaptcha/admin create a v2 "I'm
    not a robot" key with the site's domain to get the real site and secret keys.
-4. In `public/_headers`, narrow `connect-src 'self' https:` to `connect-src 'self' https://<your-api-host>` and redeploy.
+4. If the API host changes, update `connect-src` in the `Caddyfile` and redeploy: the browser blocks any other origin.
 5. Create the admin login (`python manage.py create_admin --email ... --name "..."`, run from your computer with `DATABASE_URL` set), then delete the test accounts
    (`test.*@ecovet.ph`) and their staff records.
 
