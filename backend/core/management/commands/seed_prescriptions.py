@@ -1,6 +1,6 @@
 """Give past consultations a diagnosis and a prescription, so the Rx pad has history to print.
 
-    python manage.py seed_prescriptions [--dry-run] [--seed 2026]
+    python manage.py seed_prescriptions [--dry-run] [--seed 2026] [--since 2026-10-01]
 
 Rule-based on what each visit actually was: its services, lab results noted in the remarks, the pet's species and
 weight, and any medicine bought at the visit (that medicine leads the prescription). Medicines are the clinic's own
@@ -11,6 +11,7 @@ The prescribing vet is the visit's vet when it was a veterinarian, else a veteri
 and PTR are left blank: those are real professional numbers and are not invented here.
 
 Only fills records with no diagnosis and no prescription, so it never overwrites what a vet typed. Seeded.
+Use --since after adding a month: without it, the plain consultations skipped on an earlier run are rolled again.
 """
 import random
 import re
@@ -173,8 +174,9 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--seed", type=int, default=2026)
+        parser.add_argument("--since", help="Only records on or after this date, YYYY-MM-DD.")
 
-    def handle(self, *args, dry_run, seed, **_):
+    def handle(self, *args, dry_run, seed, since, **_):
         rng = random.Random(seed)
         vets = {}
         for s in Staff.objects.filter(role="Veterinarian").order_by("staff_id"):
@@ -186,6 +188,8 @@ class Command(BaseCommand):
                 .select_related("pet", "staff").order_by("record_date", "record_id")
                 .only("record_id", "record_date", "record_type", "services", "remarks", "weight", "availed_items",
                       "branch_id", "pet__species", "staff__role", "staff__staff_name"))
+        if since:
+            todo = todo.filter(record_date__gte=since)
         changed, counts = [], {}
         for rec in todo.iterator(chunk_size=2000):
             cat = (rec.pet.species or "").lower().startswith("cat")
