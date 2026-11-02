@@ -112,11 +112,11 @@ decides what they can change. `core/permissions.py` maps each position to abilit
 
 | Ability | Allows | Positions |
 |---|---|---|
-| `patients.edit` | register and edit pets and owners | Owner, Veterinarian, Secretary, Receptionist |
-| `consult` | log a consultation (services) | Owner, Veterinarian, Groomer, Groomer / Vet Assistant, Veterinary Assistant, Veterinary Technician |
-| `clinical` | prescriptions and lab results on a consultation | Owner, Veterinarian |
-| `sales` | sell products (Sales page, products on a consultation) | Owner, Veterinarian, Secretary, Receptionist |
-| `inventory` | add products, receive deliveries, edit product details | Owner, Veterinarian, Secretary, Receptionist, Inventory Clerk |
+| `patients.edit` | register and edit pets and owners | Veterinarian, Secretary, Receptionist |
+| `consult` | log a consultation (services) | Veterinarian, Groomer, Groomer / Vet Assistant, Veterinary Assistant, Veterinary Technician |
+| `clinical` | prescriptions and lab results on a consultation | Veterinarian |
+| `sales` | sell products (Sales page, products on a consultation) | Veterinarian, Secretary, Receptionist |
+| `inventory` | add products, receive deliveries, edit product details | Veterinarian, Secretary, Receptionist, Inventory Clerk |
 
 - The admin has every ability. A position not in the map (for example "Driver") is **view-only**.
 - Each write endpoint checks its ability with `require(user, ability, message)` and answers 403 with a plain message.

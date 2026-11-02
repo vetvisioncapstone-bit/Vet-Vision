@@ -37,7 +37,6 @@ VET = {"patients.edit", "consult", "clinical", "sales", "inventory"}
 FRONT_DESK = {"patients.edit", "sales", "inventory"}
 ASSISTANT = {"consult"}
 POSITION_ABILITIES = {
-    "Owner": VET,
     "Veterinarian": VET,
     "Secretary": FRONT_DESK,
     "Receptionist": FRONT_DESK,

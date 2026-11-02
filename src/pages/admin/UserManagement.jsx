@@ -59,7 +59,6 @@ const ADMIN = 'Admin'
 const POSITION_ACCESS = {
   [ADMIN]: 'Full access: every page in both branches, including user accounts, reports and system settings.',
   Veterinarian: VET,
-  Owner: VET,
   Secretary: FRONT_DESK,
   Receptionist: FRONT_DESK,
   Groomer: ASSISTANT,
@@ -526,7 +525,6 @@ export default function UserManagement() {
                     >
                       <option value="" disabled hidden></option>
                       <option>{ADMIN}</option>
-                      <option>Owner</option>
                       <option>Veterinarian</option>
                       <option>Veterinary Technician</option>
                       <option>Veterinary Assistant</option>

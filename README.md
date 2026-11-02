@@ -41,7 +41,7 @@ pets only). A staff member's **position** (set in User Management) decides what 
 
 | Position | Register / edit patients | Log visits | Prescriptions, lab results | Sell products | Stock (add, receive, edit) |
 |---|---|---|---|---|---|
-| Owner, Veterinarian | yes | yes | yes | yes | yes |
+| Veterinarian | yes | yes | yes | yes | yes |
 | Secretary, Receptionist | yes | | | yes | yes |
 | Groomer, Groomer / Vet Assistant, Veterinary Assistant, Veterinary Technician | | services only | | | |
 | Inventory Clerk | | | | | yes |
