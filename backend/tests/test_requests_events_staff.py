@@ -1,5 +1,6 @@
 from rest_framework.test import APIClient
 
+from accounts.models import AuditLog, User
 from clinic.models import Staff
 from inventory.models import Inventory
 
@@ -70,3 +71,27 @@ def test_staff_account_management(admin, branches):
     assert sid not in [s["id"] for s in c.get("/api/staff-accounts/").data]
     relog = APIClient().post("/api/auth/login/", {"email": "carla@ecovet.ph", "password": PASSWORD}, format="json")
     assert relog.status_code == 401
+
+
+def test_admin_position_grants_and_removes_admin_access(admin, branches):
+    c = client_for(admin)
+    body = {"name": "Ana Reyes", "email": "ana@ecovet.ph", "branch": "Ibaan", "position": "Admin", "password": PASSWORD}
+    r = c.post("/api/staff-accounts/", body)
+    assert r.status_code == 201 and r.data["role"] == "Admin"
+    sid = r.data["id"]
+    login = APIClient().post("/api/auth/login/", {"email": "ana@ecovet.ph", "password": PASSWORD}, format="json")
+    assert login.data["user"]["role"] == "admin" and login.data["user"]["branch"] is None  # both branches, not Ibaan
+    ana = User.objects.get(email="ana@ecovet.ph")
+    assert client_for(ana).get("/api/staff-accounts/").status_code == 200
+
+    # An admin cannot lock themselves out, which also means the last admin can never be removed.
+    assert client_for(ana).put(f"/api/staff-accounts/{sid}/", {**body, "position": "Secretary"}).status_code == 400
+    assert client_for(ana).delete(f"/api/staff-accounts/{sid}/").status_code == 400
+
+    # Another admin can take it away: the access ends at once and the old session stops working.
+    assert c.put(f"/api/staff-accounts/{sid}/", {**body, "position": "Secretary", "password": ""}).status_code == 200
+    ana.refresh_from_db()
+    assert ana.role == User.ROLE_STAFF
+    assert client_for(ana).get("/api/staff-accounts/").status_code == 403
+    assert APIClient().post("/api/auth/refresh/", {"refresh": login.data["refresh"]}, format="json").status_code == 401
+    assert AuditLog.objects.filter(action="staff.update", detail="admin access removed").exists()

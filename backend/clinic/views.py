@@ -638,6 +638,12 @@ class ServiceDetailView(APIView):
 
 # ---------------- staff accounts (admin only) ----------------
 
+ADMIN_POSITION = "Admin"  # the one position that gives a full admin account; every other position is staff
+
+
+def account_role(position):
+    return User.ROLE_ADMIN if position == ADMIN_POSITION else User.ROLE_STAFF
+
 
 def staff_row(st):
     user = getattr(st, "user", None)
@@ -650,7 +656,7 @@ def staff_row(st):
         "branch": st.branch.town,
         "position": st.role,
         "photo": user.photo if user and user.photo else st.photo,
-        "role": "Staff",
+        "role": "Admin" if user and user.role == User.ROLE_ADMIN else "Staff",
         "lastLogin": st.last_login.isoformat() if st.last_login else "Never",
         "hasLogin": bool(user),
     }
@@ -713,11 +719,13 @@ class StaffList(APIView):
             photo=d.get("photo") or None,
             is_active=True,
         )
+        role = account_role(d["position"])
         User.objects.create_user(
-            email=email, password=d["password"], name=st.staff_name, role=User.ROLE_STAFF,
+            email=email, password=d["password"], name=st.staff_name, role=role,
             photo=d.get("photo") or None, staff=st,
         )
-        record(request, "staff.create", target=st.staff_id)
+        record(request, "staff.create", target=st.staff_id,
+               detail="admin access granted" if role == User.ROLE_ADMIN else "")
         return Response(staff_row(_staff_qs().get(pk=st.pk)), status=status.HTTP_201_CREATED)
 
 
@@ -738,6 +746,10 @@ class StaffDetail(APIView):
         d = s.validated_data
         email = d["email"].strip().lower()
         _validate_email_domain(email)
+        role = account_role(d["position"])
+        # Admins cannot lock themselves out, so the admin making this change always remains: there is always one left.
+        if st.pk == request.user.staff_id and role != User.ROLE_ADMIN:
+            raise serializers.ValidationError({"position": "You cannot remove your own admin access."})
         user = getattr(st, "user", None)
         if User.objects.filter(email=email).exclude(pk=user.pk if user else None).exists():
             raise serializers.ValidationError({"email": "That email is already in use."})
@@ -755,8 +767,13 @@ class StaffDetail(APIView):
                 raise serializers.ValidationError({"password": "Set a password to create this person's login."})
             _validated_password(d["password"])
             user = User.objects.create_user(
-                email=email, password=d["password"], name=st.staff_name, role=User.ROLE_STAFF, staff=st
+                email=email, password=d["password"], name=st.staff_name, role=role, staff=st
             )
+        notes = []
+        if user.role != role:
+            notes.append("admin access granted" if role == User.ROLE_ADMIN else "admin access removed")
+            user.role = role
+            revoke_sessions(user)  # the old session ends with the old access
         user.email, user.name = email, st.staff_name
         if "photo" in d:
             user.photo = d["photo"] or None
@@ -764,8 +781,9 @@ class StaffDetail(APIView):
             _validated_password(d["password"], user)
             user.set_password(d["password"])
             revoke_sessions(user)  # an admin reset signs that person out everywhere
+            notes.append("password reset")
         user.save()
-        record(request, "staff.update", target=st.staff_id, detail="password reset" if d.get("password") else "")
+        record(request, "staff.update", target=st.staff_id, detail=", ".join(notes))
         return Response(staff_row(_staff_qs().get(pk=st.pk)))
 
     patch = put
@@ -774,6 +792,8 @@ class StaffDetail(APIView):
     def delete(self, request, pk):
         # Deactivate instead of deleting so historical sales/consultations keep their attribution.
         st = self._get(pk)
+        if st.pk == request.user.staff_id:
+            raise serializers.ValidationError({"detail": "You cannot remove your own account."})
         st.is_active = False
         st.save(update_fields=["is_active"])
         User.objects.filter(staff=st).update(is_active=False)

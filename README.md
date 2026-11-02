@@ -37,7 +37,7 @@ sets the security headers (Content-Security-Policy, nosniff, Referrer-Policy, Pe
 ## Roles and staff positions
 
 Three roles: **admin** (everything, both branches), **staff** (own branch only) and **customer** (pet owners, own
-pets only). A staff member's **position** (set in User Management) decides what they can do:
+pets only). A staff member's **position** (set in User Management) decides what they can do. Choosing **Admin** there gives a full admin account instead; admins cannot remove their own access or account:
 
 | Position | Register / edit patients | Log visits | Prescriptions, lab results | Sell products | Stock (add, receive, edit) |
 |---|---|---|---|---|---|

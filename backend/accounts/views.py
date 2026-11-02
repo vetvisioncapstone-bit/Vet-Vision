@@ -26,7 +26,9 @@ from .models import AuditLog, User
 
 def user_payload(user):
     branch = None
-    if user.staff_id:
+    if user.role == User.ROLE_ADMIN:
+        pass  # an admin works across both branches, even with a staff record
+    elif user.staff_id:
         branch = user.staff.branch.town
     elif user.customer_id:
         branch = user.customer.branch.town

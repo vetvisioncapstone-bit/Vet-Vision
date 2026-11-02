@@ -55,7 +55,9 @@ const VET = 'Patients, consultations with prescriptions and lab results, sales, 
 const FRONT_DESK = 'Registers and edits patients, sales, receiving deliveries. No consultations.'
 const ASSISTANT = 'Logs visits with services only (no products, prescriptions or lab results). Patients and stock: view only.'
 const VIEW_ONLY = 'View only: patients, stock and the feed. Can send restock and delete requests.'
+const ADMIN = 'Admin'
 const POSITION_ACCESS = {
+  [ADMIN]: 'Full access: every page in both branches, including user accounts, reports and system settings.',
   Veterinarian: VET,
   Owner: VET,
   Secretary: FRONT_DESK,
@@ -232,6 +234,12 @@ export default function UserManagement() {
       accountData.password = password
     }
 
+    if (form.position === ADMIN && editingAccount?.position !== ADMIN && !(await ask({
+      title: 'Give full admin access?',
+      message: <p><strong>{accountData.name}</strong> will be able to see and change everything, including other accounts.</p>,
+      confirmLabel: 'Give access'
+    }))) return
+
     setSubmitting(true)
     try {
       if (isEditing) {
@@ -239,7 +247,7 @@ export default function UserManagement() {
         showToast(`"${accountData.name}"'s account was updated.`)
       } else {
         await create(accountData)
-        showToast(`"${accountData.name}" was added as staff.`)
+        showToast(`"${accountData.name}" was added.`)
       }
       closeAccountModal()
     } catch (err) {
@@ -504,7 +512,7 @@ export default function UserManagement() {
                   {form.branch && (
                     <span className="access-badge">
                       <span className="access-badge-dot"></span>
-                      <span>{form.branch} — Staff access</span>
+                      <span>{form.position === ADMIN ? 'All branches — Admin access' : `${form.branch} — Staff access`}</span>
                     </span>
                   )}
                 </div>
@@ -517,6 +525,8 @@ export default function UserManagement() {
                       value={form.position} onChange={(e) => setForm(f => ({ ...f, position: e.target.value }))}
                     >
                       <option value="" disabled hidden></option>
+                      <option>{ADMIN}</option>
+                      <option>Owner</option>
                       <option>Veterinarian</option>
                       <option>Veterinary Technician</option>
                       <option>Veterinary Assistant</option>
