@@ -122,13 +122,14 @@ export default function Reports() {
   const { data, loading, error } = useAnalytics('report', { month, year, branch })
 
   // Default the pickers to the latest complete month of data.
+  // Each picker is filled only if still empty: a month picked before the first load must keep a year, or the
+  // server, given a month without a year, falls back to the latest month while the pickers show the picked one.
   useEffect(() => {
-    if (data?.period && !month) {
-      const [y, m] = data.period.month.split('-')
-      setYear(y)
-      setMonth(String(Number(m)))
-    }
-  }, [data, month])
+    if (!data?.period) return
+    const [y, m] = data.period.month.split('-')
+    if (!year) setYear(y)
+    if (!month) setMonth(String(Number(m)))
+  }, [data, month, year])
 
   const generate = (type) => {
     if (!data || data.empty) { showToast('There is no data to report on yet.'); return }

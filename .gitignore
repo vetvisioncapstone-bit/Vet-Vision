@@ -5,3 +5,6 @@ Thumbs.db
 .claude/
 .env.local
 .impeccable/live/
+
+# Selenium IDE project: holds the local sample password
+docs/thesis/testing/*.side

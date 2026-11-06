@@ -86,6 +86,7 @@ export default function Sales() {
     const errs = {}
     if (!product) errs.product = 'Pick a product first.'
     if (!qty || qty < 1) errs.quantity = 'Enter a quantity of at least 1.'
+    else if (!Number.isInteger(qty)) errs.quantity = 'Enter a whole number of units.'
     else if (product && qty > avail) errs.quantity = `Only ${avail} unit${avail === 1 ? '' : 's'} left.`
     if (price === '' || unitPrice < 0) errs.price = 'Enter a unit price.'
     setErrors(errs)
@@ -105,8 +106,7 @@ export default function Sales() {
       return [...prev, { inventoryId, name: product.name, quantity: qty, price: unitPrice }]
     })
 
-    setQuantity(1)
-    setPrice('')
+    setQuantity(1) // the product and its price stay picked, so the same item can be added again
   }
 
   function handleRemoveCartItem(index) {
@@ -237,7 +237,9 @@ export default function Sales() {
               <span>{formatPrice(cartTotal)}</span>
             </div>
 
-            <button type="button" className="complete-sale-btn" disabled={cartItems.length === 0 || submitting} onClick={handleCompleteSale}>{submitting ? 'Completing…' : 'Complete sale'}</button>
+            <button type="button" className="complete-sale-btn" disabled={cartItems.length === 0 || submitting} onClick={handleCompleteSale}
+              aria-describedby={cartItems.length === 0 ? 'saleEmptyHint' : undefined}>{submitting ? 'Completing…' : 'Complete sale'}</button>
+            {cartItems.length === 0 && <p className="form-hint" id="saleEmptyHint">Click Add to cart to put an item in the cart, then complete the sale.</p>}
           </div>
         </div>
 
