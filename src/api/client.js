@@ -65,18 +65,19 @@ export function clearTokens() {
 }
 
 // keepalive: signing out leaves the page at once, which would cancel a normal request and leave the token valid.
-function revoke(refresh) {
+// The access token goes too, so the server refuses it at once instead of when it expires.
+function revoke(refresh, access) {
   if (!refresh) return
   fetch(`${BASE}/auth/logout/`, {
     method: 'POST',
     keepalive: true,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh })
+    body: JSON.stringify({ refresh, access })
   }).catch(() => {}) // best effort: the token is already gone from this browser
 }
 
 export function signOut() {
-  revoke(getRefreshToken())
+  revoke(getRefreshToken(), accessToken)
   clearTokens()
 }
 

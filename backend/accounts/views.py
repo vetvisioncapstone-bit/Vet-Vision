@@ -1,3 +1,5 @@
+from datetime import datetime, timezone as dt_timezone
+
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -10,7 +12,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from clinic.models import Customer
@@ -149,8 +151,9 @@ class LoginView(APIView):
 
 
 class LogoutView(APIView):
-    """Blacklist the refresh token so a copied one stops working. Holding the token is the proof, so no access
-    token is needed (it may already have expired)."""
+    """Blacklist the refresh token so a copied one stops working, and the access token sent with it so it stops
+    working now rather than when it expires (accounts/authentication.py checks it). Holding the refresh token is
+    the proof, so the access token is optional (it may already have expired)."""
 
     authentication_classes = []
     permission_classes = []
@@ -163,7 +166,16 @@ class LogoutView(APIView):
             if user:
                 record(request, "logout", user=user)
         except (TokenError, KeyError):
-            pass  # already invalid: nothing to revoke
+            return Response(status=status.HTTP_204_NO_CONTENT)  # already invalid: nothing to revoke
+        try:
+            access = AccessToken(request.data.get("access", ""))
+            if user and access["user_id"] == token["user_id"]:  # only the same user's session can be ended this way
+                expires = datetime.fromtimestamp(access["exp"], tz=dt_timezone.utc)
+                held, _ = OutstandingToken.objects.get_or_create(
+                    jti=access["jti"], defaults={"user": user, "token": str(access), "expires_at": expires})
+                BlacklistedToken.objects.get_or_create(token=held)
+        except (TokenError, KeyError):
+            pass  # missing or expired: nothing left to stop
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

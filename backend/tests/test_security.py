@@ -108,6 +108,22 @@ def test_logout_revokes_the_refresh_token(api, staff_ibaan):
     assert AuditLog.objects.filter(action="logout").exists()
 
 
+def test_logout_stops_the_access_token_at_once(api, staff_ibaan):
+    tokens, other = _login(api), _login(APIClient())
+    c = APIClient()
+    c.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+    assert c.get("/api/auth/me/").status_code == 200
+    # Only the access token named in the request is ended; a bad one is ignored.
+    api.post("/api/auth/logout/", {"refresh": tokens["refresh"], "access": "garbage"})
+    assert c.get("/api/auth/me/").status_code == 200
+    mine = _login(api)
+    c.credentials(HTTP_AUTHORIZATION=f"Bearer {mine['access']}")
+    assert api.post("/api/auth/logout/", {"refresh": mine["refresh"], "access": mine["access"]}).status_code == 204
+    assert c.get("/api/auth/me/").status_code == 401
+    c.credentials(HTTP_AUTHORIZATION=f"Bearer {other['access']}")
+    assert c.get("/api/auth/me/").status_code == 200  # another open session stays signed in
+
+
 def test_password_change_signs_other_sessions_out(api, staff_ibaan):
     other = _login(APIClient())
     mine = _login(api)
