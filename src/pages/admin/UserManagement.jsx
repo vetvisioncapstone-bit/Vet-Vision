@@ -137,7 +137,7 @@ export default function UserManagement() {
       email: account.email,
       mobile: account.mobile || '',
       branch: account.branch,
-      position: account.position || '',
+      position: POSITION_ACCESS[account.position] ? account.position : '', // a retired position must be chosen again, or the select would show its first option instead
       password: '',
       confirmPassword: '',
       agreeTerms: true,
