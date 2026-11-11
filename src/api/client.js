@@ -6,6 +6,7 @@ const BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
 const REFRESH_KEY = 'vvRefreshToken'
 
 let accessToken = null
+let store = null // where this tab's refresh token lives; another account in another tab may use the other one
 let refreshing = null
 let sessionId = 0 // changes when the tokens are cleared, so a refresh still on its way cannot sign the user back in
 
@@ -41,7 +42,10 @@ export function errorMessage(err, fallback = 'Something went wrong. Please try a
 }
 
 export function getRefreshToken() {
-  try { return sessionStorage.getItem(REFRESH_KEY) || localStorage.getItem(REFRESH_KEY) } catch { return null }
+  try {
+    store ??= sessionStorage.getItem(REFRESH_KEY) ? sessionStorage : localStorage.getItem(REFRESH_KEY) ? localStorage : null
+    return store?.getItem(REFRESH_KEY) || null
+  } catch { return null }
 }
 
 // `remember` true/false picks the store at sign-in; left out (a token refresh), the token stays where it was.
@@ -49,19 +53,20 @@ export function setTokens({ access, refresh }, remember) {
   if (access) accessToken = access
   if (!refresh) return
   try {
-    const keep = remember ?? !!localStorage.getItem(REFRESH_KEY)
-    ;(keep ? sessionStorage : localStorage).removeItem(REFRESH_KEY)
-    ;(keep ? localStorage : sessionStorage).setItem(REFRESH_KEY, refresh)
+    if (remember !== undefined || !store) {
+      store?.removeItem(REFRESH_KEY)
+      store = remember ? localStorage : sessionStorage
+    }
+    store.setItem(REFRESH_KEY, refresh)
   } catch { /* private mode: stays in memory only */ }
 }
 
+// Only this tab's own token goes: another account signed in elsewhere in this browser stays signed in.
 export function clearTokens() {
   sessionId += 1
   accessToken = null
-  try {
-    sessionStorage.removeItem(REFRESH_KEY)
-    localStorage.removeItem(REFRESH_KEY)
-  } catch { /* ignore */ }
+  try { store?.removeItem(REFRESH_KEY) } catch { /* ignore */ }
+  store = null
 }
 
 // keepalive: signing out leaves the page at once, which would cancel a normal request and leave the token valid.

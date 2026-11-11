@@ -108,8 +108,9 @@ def test_logout_revokes_the_refresh_token(api, staff_ibaan):
     assert AuditLog.objects.filter(action="logout").exists()
 
 
-def test_logout_stops_the_access_token_at_once(api, staff_ibaan):
+def test_logout_stops_the_access_token_at_once(api, staff_ibaan, admin):
     tokens, other = _login(api), _login(APIClient())
+    boss = _login(APIClient(), "owner@ecovet.ph")
     c = APIClient()
     c.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
     assert c.get("/api/auth/me/").status_code == 200
@@ -122,6 +123,9 @@ def test_logout_stops_the_access_token_at_once(api, staff_ibaan):
     assert c.get("/api/auth/me/").status_code == 401
     c.credentials(HTTP_AUTHORIZATION=f"Bearer {other['access']}")
     assert c.get("/api/auth/me/").status_code == 200  # another open session stays signed in
+    c.credentials(HTTP_AUTHORIZATION=f"Bearer {boss['access']}")
+    assert c.get("/api/auth/me/").status_code == 200  # and so does every other user
+    assert APIClient().post("/api/auth/refresh/", {"refresh": boss["refresh"]}).status_code == 200
 
 
 def test_password_change_signs_other_sessions_out(api, staff_ibaan):

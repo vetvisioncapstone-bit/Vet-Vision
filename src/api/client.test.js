@@ -134,4 +134,15 @@ describe('remember me', () => {
     clearTokens()
     expect(getRefreshToken()).toBeNull()
   })
+
+  it('leaves alone another account remembered in the same browser', async () => {
+    const { setTokens, getRefreshToken, clearTokens } = await freshClient()
+    setTokens({ access: 'A', refresh: 'R1' }, false) // this tab: signed in without Remember me
+    localStorage.setItem('vvRefreshToken', 'OTHER') // then another tab signs someone else in with Remember me
+    setTokens({ access: 'A', refresh: 'R2' }) // token rotation in this tab
+    expect(getRefreshToken()).toBe('R2')
+    expect(localStorage.getItem('vvRefreshToken')).toBe('OTHER')
+    clearTokens() // signing out here must not end the other account's session
+    expect(localStorage.getItem('vvRefreshToken')).toBe('OTHER')
+  })
 })

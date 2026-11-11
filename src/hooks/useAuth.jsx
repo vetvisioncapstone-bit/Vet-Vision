@@ -3,7 +3,7 @@ import { api, clearTokens, errorMessage, getRefreshToken, refreshAccess, setToke
 import { clearCache } from '../api/store'
 
 const AuthContext = createContext(null)
-const SIGNED_OUT_KEY = 'vvSignedOut' // written on sign-out so every other open tab signs out too
+const SIGNED_OUT_KEY = 'vvSignedOut' // "<user id>|<time>", written on sign-out so that person's other open tabs sign out too
 
 // Ends the session in this tab. A fresh page at the sign-in screen replaces the current one in the history, and the
 // memory of the old page goes with it.
@@ -51,11 +51,13 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('vv-auth-expired', onExpired)
   }, [])
 
+  // Another account signed in on another tab of this browser stays signed in.
   useEffect(() => {
-    const onStorage = (e) => { if (e.key === SIGNED_OUT_KEY && window.location.pathname !== '/') leaveSession() }
+    if (!user) return undefined
+    const onStorage = (e) => { if (e.key === SIGNED_OUT_KEY && e.newValue?.split('|')[0] === String(user.id)) leaveSession() }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
-  }, [])
+  }, [user])
 
   const login = useCallback(async (email, password, captcha, remember = false) => {
     try {
@@ -83,10 +85,10 @@ export function AuthProvider({ children }) {
   }, [])
 
   const logout = useCallback(() => {
-    try { localStorage.setItem(SIGNED_OUT_KEY, String(Date.now())) } catch { /* storage blocked: this tab only */ }
+    try { localStorage.setItem(SIGNED_OUT_KEY, `${user?.id}|${Date.now()}`) } catch { /* storage blocked: this tab only */ }
     setUser(null)
     leaveSession()
-  }, [])
+  }, [user])
 
   const value = useMemo(
     () => ({ user, session: toSession(user), loading, login, register, logout, setUser }),
